@@ -1,0 +1,40 @@
+body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    margin: 0;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+#container {
+    text-align: center;
+}
+
+h1 {
+    color: #3480D7;
+    font-weight: bold;
+}
+
+canvas {
+    border: 2px solid #3480D7;
+    border-radius: 8px;
+}
+
+#controls {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+}
+
+label {
+    font-size: 16px;
+}
+
+input[type="range"] {
+    width: 200px;
+}
