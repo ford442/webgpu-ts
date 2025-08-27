@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU Galaxy Spiral</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="container">
+        <h1>WebGPU Galaxy Spiral</h1>
+        <canvas id="webgpu-canvas" width="800" height="600"></canvas>
+        <div id="controls">
+            <label for="zoom-slider">Zoom:</label>
+            <input type="range" id="zoom-slider" min="50" max="200" value="100">
+            <label for="pan-x-slider">Pan X:</label>
+            <input type="range" id="pan-x-slider" min="0" max="200" value="100">
+            <label for="pan-y-slider">Pan Y:</label>
+            <input type="range" id="pan-y-slider" min="0" max="200" value="100">
+        </div>
+        <video id="video" src="https://www.w3schools.com/html/mov_bbb.mp4" muted loop autoplay playsinline style="display:none;"></video>
+    </div>
+    <script src="main.bundle.js"></script>
+</body>
+</html>
