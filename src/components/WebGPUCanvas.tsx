@@ -22,13 +22,17 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY }) =
             if (success) {
                 rendererRef.current = renderer;
                 videoRef.current = document.createElement('video');
-                videoRef.current.src = 'https://www.w3schools.com/html/mov_bbb.mp4';
+                // --- UPDATE THIS LINE ---
+                videoRef.current.src = 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4';
+                videoRef.current.crossOrigin = 'anonymous'; // Good practice for CORS media
+                // ---
                 videoRef.current.muted = true;
                 videoRef.current.loop = true;
-                videoRef.current.crossOrigin = "anonymous";
                 videoRef.current.autoplay = true;
                 videoRef.current.playsInline = true;
-                videoRef.current.play();
+                videoRef.current.play().catch(err => {
+                    console.error("Video play failed:", err);
+                });
 
                 const animate = () => {
                     if (rendererRef.current && videoRef.current) {
@@ -44,13 +48,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY }) =
             // Cleanup logic if needed
         };
     }, []); // Empty dependency array ensures this runs only once on mount
-
-    // Re-trigger render when props change
-    useEffect(() => {
-        if (rendererRef.current && videoRef.current) {
-            rendererRef.current.render(mode, videoRef.current, zoom, panX, panY);
-        }
-    }, [mode, zoom, panX, panY]);
 
     return <canvas ref={canvasRef} width="800" height="600" />;
 };
