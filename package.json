@@ -1,0 +1,19 @@
+{
+  "name": "webgpu-galaxy",
+  "version": "1.0.0",
+  "description": "A WebGPU-based galaxy spiral renderer.",
+  "main": "src/main.ts",
+  "scripts": {
+    "build": "webpack",
+    "watch": "webpack --watch"
+  },
+  "dependencies": {
+    "@webgpu/types": "^0.1.40"
+  },
+  "devDependencies": {
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.4.5",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4"
+  }
+}
