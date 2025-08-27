@@ -12,42 +12,64 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY }) =
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<Renderer | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
+    const animationFrameId = useRef<number>(0);
 
     useEffect(() => {
         if (!canvasRef.current) return;
 
         const canvas = canvasRef.current;
         const renderer = new Renderer(canvas);
-        renderer.init().then(success => {
+        
+        // This is an IIFE (Immediately Invoked Function Expression) to use async/await
+        (async () => {
+            const success = await renderer.init();
             if (success) {
                 rendererRef.current = renderer;
                 videoRef.current = document.createElement('video');
-                // --- UPDATE THIS LINE ---
-                videoRef.current.src = 'https://test.1ink.us/webgputs/big_buck_bunny_720p_surround.mp4';
-                videoRef.current.crossOrigin = 'anonymous'; // Good practice for CORS media
-                // ---
+                videoRef.current.src = 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4';
+                videoRef.current.crossOrigin = 'anonymous';
                 videoRef.current.muted = true;
                 videoRef.current.loop = true;
                 videoRef.current.autoplay = true;
                 videoRef.current.playsInline = true;
-                videoRef.current.play().catch(err => {
+                await videoRef.current.play().catch(err => {
                     console.error("Video play failed:", err);
                 });
 
                 const animate = () => {
                     if (rendererRef.current && videoRef.current) {
-                        rendererRef.current.render(mode, videoRef.current, zoom, panX, panY);
+                        // We will pass props directly in the render call
                     }
-                    requestAnimationFrame(animate);
+                    animationFrameId.current = requestAnimationFrame(animate);
                 };
-                animate();
+                // We will control the animation loop from the other useEffect
             }
-        });
+        })();
 
         return () => {
-            // Cleanup logic if needed
+            cancelAnimationFrame(animationFrameId.current);
         };
-    }, []); // Empty dependency array ensures this runs only once on mount
+    }, []);
+
+    // This useEffect will now handle the rendering loop, re-starting it when props change.
+    useEffect(() => {
+        let active = true;
+
+        const animate = () => {
+            if (!active) return;
+            if (rendererRef.current && videoRef.current) {
+                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY);
+            }
+            animationFrameId.current = requestAnimationFrame(animate);
+        };
+        
+        animate();
+
+        return () => {
+            active = false;
+            cancelAnimationFrame(animationFrameId.current);
+        };
+    }, [mode, zoom, panX, panY]);
 
     return <canvas ref={canvasRef} width="800" height="600" />;
 };
