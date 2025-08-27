@@ -1,6 +1,5 @@
-// NOTE: We no longer import the shaders directly
-// import galaxyShader from './shaders/galaxy.wgsl';
-// import imageVideoShader from './shaders/imageVideo.wgsl';
+import galaxyShader from './shaders/galaxy.wgsl';
+import imageVideoShader from './shaders/imageVideo.wgsl';
 
 export type RenderMode = 'shader' | 'image' | 'video';
 
@@ -15,7 +14,8 @@ export class Renderer {
     private imageVideoPipeline!: GPURenderPipeline;
 
     // Resources
-    private uniformBuffer!: GPUBuffer;
+    private galaxyUniformBuffer!: GPUBuffer;
+    private imageVideoUniformBuffer!: GPUBuffer; // New uniform buffer
     private sampler!: GPUSampler;
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
@@ -43,16 +43,19 @@ export class Renderer {
         });
 
         await this.createResources();
-        await this.createPipelines(); // This is now async
+        await this.createPipelines();
         
         return true;
     }
 
     private async createResources(): Promise<void> {
-        // ... (This function remains the same as before)
-        // Uniform Buffer
-        this.uniformBuffer = this.device.createBuffer({
+        // Uniform Buffers
+        this.galaxyUniformBuffer = this.device.createBuffer({
             size: 4 * 4, // 4 floats: time, zoom, panX, panY
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        this.imageVideoUniformBuffer = this.device.createBuffer({
+            size: 4 * 4, // 4 floats: canvas.width, canvas.height, source.width, source.height
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
@@ -62,8 +65,7 @@ export class Renderer {
             minFilter: 'linear',
         });
         
-        // Image Texture
-        const imageUrl = 'https://i.imgur.com/vCNL2sT.jpeg'; // A placeholder image
+        const imageUrl = 'https://i.imgur.com/vCNL2sT.jpeg';
         const response = await fetch(imageUrl, { mode: 'cors' });
         const imageBitmap = await createImageBitmap(await response.blob());
         
@@ -80,12 +82,8 @@ export class Renderer {
     }
 
     private async createPipelines(): Promise<void> {
-        // Fetch the shader code from the public folder
-        const galaxyShaderResponse = await fetch('shaders/galaxy.wgsl');
-        const galaxyShaderCode = await galaxyShaderResponse.text();
-
-        const imageVideoShaderResponse = await fetch('shaders/imageVideo.wgsl');
-        const imageVideoShaderCode = await imageVideoShaderResponse.text();
+        const galaxyShaderCode = await (await fetch('shaders/galaxy.wgsl')).text();
+        const imageVideoShaderCode = await (await fetch('shaders/imageVideo.wgsl')).text();
 
         const galaxyShaderModule = this.device.createShaderModule({ code: galaxyShaderCode });
         const imageVideoShaderModule = this.device.createShaderModule({ code: imageVideoShaderCode });
@@ -93,7 +91,6 @@ export class Renderer {
         const vertexEntryPoint = 'vs_main';
         const fragmentEntryPoint = 'fs_main';
 
-        // Galaxy Pipeline
         this.galaxyPipeline = this.device.createRenderPipeline({
             layout: 'auto',
             vertex: { module: galaxyShaderModule, entryPoint: vertexEntryPoint },
@@ -105,7 +102,6 @@ export class Renderer {
             primitive: { topology: 'triangle-list' },
         });
 
-        // Image/Video Passthrough Pipeline
         this.imageVideoPipeline = this.device.createRenderPipeline({
             layout: 'auto',
             vertex: { module: imageVideoShaderModule, entryPoint: vertexEntryPoint },
@@ -122,12 +118,12 @@ export class Renderer {
             entries: [
                 { binding: 0, resource: this.sampler },
                 { binding: 1, resource: this.imageTexture.createView() },
+                { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } },
             ],
         });
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
-        // ... (The rest of this function remains the same as before)
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
              if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
@@ -141,12 +137,13 @@ export class Renderer {
                     entries: [
                         { binding: 0, resource: this.sampler },
                         { binding: 1, resource: this.videoTexture.createView() },
+                        { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } },
                     ],
                 });
                 this.galaxyBindGroup = this.device.createBindGroup({
                     layout: this.galaxyPipeline.getBindGroupLayout(0),
                     entries: [
-                        { binding: 0, resource: { buffer: this.uniformBuffer } },
+                        { binding: 0, resource: { buffer: this.galaxyUniformBuffer } },
                         { binding: 1, resource: this.sampler },
                         { binding: 2, resource: this.videoTexture.createView() },
                     ],
@@ -159,11 +156,6 @@ export class Renderer {
             );
         }
 
-        this.device.queue.writeBuffer(
-            this.uniformBuffer, 0,
-            new Float32Array([performance.now() / 1000.0, zoom, panX, panY])
-        );
-
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = this.context.getCurrentTexture().createView();
         const renderPassDescriptor: GPURenderPassDescriptor = {
@@ -174,11 +166,11 @@ export class Renderer {
                 storeOp: 'store' as GPUStoreOp,
             }],
         };
-
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
         switch (mode) {
             case 'shader':
+                this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([performance.now() / 1000.0, zoom, panX, panY]));
                 if (this.galaxyPipeline && this.galaxyBindGroup) {
                     passEncoder.setPipeline(this.galaxyPipeline);
                     passEncoder.setBindGroup(0, this.galaxyBindGroup);
@@ -186,6 +178,7 @@ export class Renderer {
                 }
                 break;
             case 'image':
+                this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, new Float32Array([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height]));
                 if (this.imageVideoPipeline && this.imageBindGroup) {
                     passEncoder.setPipeline(this.imageVideoPipeline);
                     passEncoder.setBindGroup(0, this.imageBindGroup);
@@ -193,10 +186,13 @@ export class Renderer {
                 }
                 break;
             case 'video':
-                if (this.imageVideoPipeline && this.videoBindGroup) {
-                    passEncoder.setPipeline(this.imageVideoPipeline);
-                    passEncoder.setBindGroup(0, this.videoBindGroup);
-                    passEncoder.draw(4);
+                if (this.videoTexture) {
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, new Float32Array([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height]));
+                    if (this.imageVideoPipeline && this.videoBindGroup) {
+                        passEncoder.setPipeline(this.imageVideoPipeline);
+                        passEncoder.setBindGroup(0, this.videoBindGroup);
+                        passEncoder.draw(4);
+                    }
                 }
                 break;
         }
