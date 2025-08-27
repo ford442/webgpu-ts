@@ -25,7 +25,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY }) =
                 videoRef.current.src = 'https://www.w3schools.com/html/mov_bbb.mp4';
                 videoRef.current.muted = true;
                 videoRef.current.loop = true;
-                videoRef.current.crossOrigin = true;
+                videoRef.current.crossOrigin = "anonymous";
                 videoRef.current.autoplay = true;
                 videoRef.current.playsInline = true;
                 videoRef.current.play();
