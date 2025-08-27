@@ -1,5 +1,6 @@
-import galaxyShader from './shaders/galaxy.wgsl';
-import imageVideoShader from './shaders/imageVideo.wgsl';
+// NOTE: We no longer import the shaders directly
+// import galaxyShader from './shaders/galaxy.wgsl';
+// import imageVideoShader from './shaders/imageVideo.wgsl';
 
 export type RenderMode = 'shader' | 'image' | 'video';
 
@@ -18,7 +19,7 @@ export class Renderer {
     private sampler!: GPUSampler;
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
-
+    
     // Bind Groups
     private galaxyBindGroup!: GPUBindGroup;
     private videoBindGroup!: GPUBindGroup;
@@ -42,12 +43,13 @@ export class Renderer {
         });
 
         await this.createResources();
-        this.createPipelines();
-
+        await this.createPipelines(); // This is now async
+        
         return true;
     }
 
     private async createResources(): Promise<void> {
+        // ... (This function remains the same as before)
         // Uniform Buffer
         this.uniformBuffer = this.device.createBuffer({
             size: 4 * 4, // 4 floats: time, zoom, panX, panY
@@ -59,12 +61,12 @@ export class Renderer {
             magFilter: 'linear',
             minFilter: 'linear',
         });
-
+        
         // Image Texture
         const imageUrl = 'https://i.imgur.com/vCNL2sT.jpeg'; // A placeholder image
         const response = await fetch(imageUrl, { mode: 'cors' });
         const imageBitmap = await createImageBitmap(await response.blob());
-
+        
         this.imageTexture = this.device.createTexture({
             size: [imageBitmap.width, imageBitmap.height],
             format: 'rgba8unorm',
@@ -77,10 +79,17 @@ export class Renderer {
         );
     }
 
-    private createPipelines(): void {
-        const galaxyShaderModule = this.device.createShaderModule({ code: galaxyShader });
-        const imageVideoShaderModule = this.device.createShaderModule({ code: imageVideoShader });
+    private async createPipelines(): Promise<void> {
+        // Fetch the shader code from the public folder
+        const galaxyShaderResponse = await fetch('shaders/galaxy.wgsl');
+        const galaxyShaderCode = await galaxyShaderResponse.text();
 
+        const imageVideoShaderResponse = await fetch('shaders/imageVideo.wgsl');
+        const imageVideoShaderCode = await imageVideoShaderResponse.text();
+
+        const galaxyShaderModule = this.device.createShaderModule({ code: galaxyShaderCode });
+        const imageVideoShaderModule = this.device.createShaderModule({ code: imageVideoShaderCode });
+        
         const vertexEntryPoint = 'vs_main';
         const fragmentEntryPoint = 'fs_main';
 
@@ -118,16 +127,15 @@ export class Renderer {
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
-        // Update video texture if it exists and is ready
+        // ... (The rest of this function remains the same as before)
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-            if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
+             if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
                 this.videoTexture = this.device.createTexture({
                     size: [videoElement.videoWidth, videoElement.videoHeight],
                     format: 'rgba8unorm',
                     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
                 });
-                // Re-create bind groups that depend on the video texture
                 this.videoBindGroup = this.device.createBindGroup({
                     layout: this.imageVideoPipeline.getBindGroupLayout(0),
                     entries: [
@@ -143,7 +151,7 @@ export class Renderer {
                         { binding: 2, resource: this.videoTexture.createView() },
                     ],
                 });
-            }
+             }
             this.device.queue.copyExternalImageToTexture(
                 { source: videoElement },
                 { texture: this.videoTexture },
@@ -151,7 +159,6 @@ export class Renderer {
             );
         }
 
-        // Update uniforms
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
             new Float32Array([performance.now() / 1000.0, zoom, panX, panY])
@@ -159,13 +166,12 @@ export class Renderer {
 
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = this.context.getCurrentTexture().createView();
-
         const renderPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
                 clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                loadOp: 'clear' as GPULoadOp,       // <-- FIX HERE
-                storeOp: 'store' as GPUStoreOp,     // <-- FIX HERE
+                loadOp: 'clear' as GPULoadOp,
+                storeOp: 'store' as GPUStoreOp,
             }],
         };
 
