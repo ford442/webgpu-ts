@@ -26,7 +26,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY }) =
             if (success) {
                 rendererRef.current = renderer;
                 videoRef.current = document.createElement('video');
-                videoRef.current.src = 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4';
+                videoRef.current.src = 'https://test.1ink.us/webgputs/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4';
                 videoRef.current.crossOrigin = 'anonymous';
                 videoRef.current.muted = true;
                 videoRef.current.loop = true;
