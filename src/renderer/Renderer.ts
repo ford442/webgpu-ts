@@ -48,21 +48,18 @@ export class Renderer {
     }
 
     private async createResources(): Promise<void> {
-        // Uniform Buffer
         this.uniformBuffer = this.device.createBuffer({
             size: 4 * 4, // 4 floats: time, zoom, panX, panY
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-        // Sampler
         this.sampler = this.device.createSampler({
             magFilter: 'linear',
             minFilter: 'linear',
         });
         
-        // Image Texture
         const imageUrl = 'https://i.imgur.com/vCNL2sT.jpeg'; // A placeholder image
-        const response = await fetch(imageUrl);
+        const response = await fetch(imageUrl, { mode: 'cors' });
         const imageBitmap = await createImageBitmap(await response.blob());
         
         this.imageTexture = this.device.createTexture({
@@ -96,15 +93,6 @@ export class Renderer {
             primitive: { topology: 'triangle-list' },
         });
 
-        this.galaxyBindGroup = this.device.createBindGroup({
-            layout: this.galaxyPipeline.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: { buffer: this.uniformBuffer } },
-                { binding: 1, resource: this.sampler },
-                { binding: 2, resource: this.videoTexture.createView() },
-            ],
-        });
-
         // Image/Video Passthrough Pipeline
         this.imageVideoPipeline = this.device.createRenderPipeline({
             layout: 'auto',
@@ -127,8 +115,7 @@ export class Renderer {
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
-        // Update video texture if it exists
-        if (videoElement.readyState >= 2) {
+        if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
              if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
                 this.videoTexture = this.device.createTexture({
@@ -143,7 +130,6 @@ export class Renderer {
                         { binding: 1, resource: this.videoTexture.createView() },
                     ],
                 });
-                // Re-create galaxy bind group with new video texture view
                 this.galaxyBindGroup = this.device.createBindGroup({
                     layout: this.galaxyPipeline.getBindGroupLayout(0),
                     entries: [
@@ -160,7 +146,6 @@ export class Renderer {
             );
         }
 
-        // Update uniforms
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
             new Float32Array([performance.now() / 1000.0, zoom, panX, panY])
@@ -168,7 +153,6 @@ export class Renderer {
 
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = this.context.getCurrentTexture().createView();
-
         const renderPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
@@ -177,7 +161,6 @@ export class Renderer {
                 storeOp: 'store',
             }],
         };
-
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
         switch (mode) {
