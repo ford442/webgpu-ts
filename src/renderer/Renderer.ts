@@ -1,5 +1,3 @@
-import galaxyShader from './shaders/galaxy.wgsl';
-import imageVideoShader from './shaders/imageVideo.wgsl';
 
 export type RenderMode = 'shader' | 'image' | 'video';
 
