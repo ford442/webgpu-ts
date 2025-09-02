@@ -1,5 +1,15 @@
+import * as tf from '@tensorflow/tfjs';
+import * as tflite from '@tensorflow/tfjs-tflite';
 
-const MODEL_URL = './midas.tflite'
+// Path to the TFLite model in the public folder
+const MODEL_URL = '/tflite_model/midas.tflite';
+const MODEL_INPUT_SIZE = 256;
+
+// Set the path to the WebAssembly backend files for TFLite
+// This is necessary for the TFLite package to work.
+tflite.setWasmPath(
+    'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.8/dist/'
+);
 
 export class DepthModel {
     private model: tflite.TFLiteModel | null = null;
