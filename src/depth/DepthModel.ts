@@ -1,17 +1,17 @@
 import * as tf from '@tensorflow/tfjs';
-import * as tflite from '@tensorflow/tfjs-tflite';
 
-const MODEL_URL = 'https://github.com/isl-org/MiDaS/releases/download/v2_1/model_opt.tflite';
+const MODEL_URL = 'https://tfhub.dev/intel/midas-v2-1-small/1/webgl1/model.json?tfjs-graph-model=true';
 const MODEL_INPUT_SIZE = 256;
 
 export class DepthModel {
-    private model: tflite.TFLiteModel | null = null;
+    private model: tf.GraphModel | null = null;
 
     public async init(): Promise<boolean> {
         try {
             await tf.setBackend('webgpu');
             await tf.ready();
-            this.model = await tflite.loadTFLiteModel(MODEL_URL);
+            // Use loadGraphModel instead
+            this.model = await tf.loadGraphModel(MODEL_URL);
             console.log('MiDaS model loaded and WebGPU backend ready.');
             return true;
         } catch (error) {
