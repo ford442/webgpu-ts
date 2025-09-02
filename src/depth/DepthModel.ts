@@ -1,21 +1,13 @@
-import * as tf from '@tensorflow/tfjs';
-import * as tflite from '@tensorflow/tfjs-tflite';
-
 // Path to the TFLite model in the public folder
 const MODEL_URL = '/tflite_model/midas.tflite';
 const MODEL_INPUT_SIZE = 256;
 
-// Set the path to the WebAssembly backend files for TFLite
-// This is necessary for the TFLite package to work.
-tflite.setWasmPath(
-    'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.8/dist/'
-);
-
 export class DepthModel {
-    private model: tflite.TFLiteModel | null = null;
+    private model: any | null = null;
 
     public async init(): Promise<boolean> {
         try {
+            await tf.setBackend('wasm');
             await tf.ready();
             this.model = await tflite.loadTFLiteModel(MODEL_URL);
             console.log('MiDaS TFLite model loaded successfully.');
@@ -41,7 +33,7 @@ export class DepthModel {
             const inputTensor = resized.toFloat().expandDims(0);
 
             // 3. Run inference
-            let depth = this.model!.predict(inputTensor) as tf.Tensor;
+            let depth = this.model!.predict(inputTensor) as any;
 
             // 4. Post-process the output tensor to normalize it for visualization
             const min = depth.min();
@@ -52,7 +44,7 @@ export class DepthModel {
             return normalizedDepth.squeeze().expandDims(2);
         });
 
-        await tf.browser.toPixels(depthMap as tf.Tensor3D, canvas);
+        await tf.browser.toPixels(depthMap, canvas);
         depthMap.dispose();
     }
 }
