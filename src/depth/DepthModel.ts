@@ -2,7 +2,7 @@ import type * as tf from '@tensorflow/tfjs';
 import type * as tflite from '@tensorflow/tfjs-tflite';
 
 // Path to the TFLite model in the public folder
-const MODEL_URL = '/tflite_model/midas.tflite';
+const MODEL_URL = './tflite_model/midas.tflite';
 const MODEL_INPUT_SIZE = 256;
 
 // Type assertion for the global objects
