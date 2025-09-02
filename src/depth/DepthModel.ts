@@ -8,6 +8,7 @@ const MODEL_INPUT_SIZE = 256;
 // Type assertion for the global objects
 const tfModule = (window as any).tf as typeof tf;
 const tfliteModule = (window as any).tflite as typeof tflite;
+tflite.setWasmPath('./');
 
 export class DepthModel {
     private model: tflite.TFLiteModel | null = null;
