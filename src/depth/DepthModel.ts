@@ -1,27 +1,20 @@
 import * as tf from '@tensorflow/tfjs';
-import * as tflite from '@tensorflow/tfjs-tflite';
 
-// Path to the TFLite model in the public folder
-const MODEL_URL = '/tflite_model/midas.tflite';
+const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/midas/dist/v2_1_small/model.json';
 const MODEL_INPUT_SIZE = 256;
 
-// Set the path to the WebAssembly backend files for TFLite
-// This is necessary for the TFLite package to work.
-tflite.setWasmPath(
-    'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.8/dist/'
-);
-
 export class DepthModel {
-    private model: tflite.TFLiteModel | null = null;
+    private model: tf.GraphModel | null = null;
 
     public async init(): Promise<boolean> {
         try {
+            await tf.setBackend('webgpu');
             await tf.ready();
-            this.model = await tflite.loadTFLiteModel(MODEL_URL);
-            console.log('MiDaS TFLite model loaded successfully.');
+            this.model = await tf.loadGraphModel(MODEL_URL);
+            console.log('MiDaS model loaded and WebGPU backend ready.');
             return true;
         } catch (error) {
-            console.error('Failed to initialize TFLite DepthModel:', error);
+            console.error('Failed to initialize DepthModel:', error);
             return false;
         }
     }
@@ -33,23 +26,20 @@ export class DepthModel {
         }
 
         const depthMap = tf.tidy(() => {
-            // 1. Create a tensor from the video frame and resize it
-            const frame = tf.browser.fromPixels(videoElement);
+            const frame = tf.browser.fromPixels(videoElement).expandDims(0);
             const resized = tf.image.resizeBilinear(frame, [MODEL_INPUT_SIZE, MODEL_INPUT_SIZE]);
-            
-            // 2. Pre-process the tensor (casting and expanding dimensions)
-            const inputTensor = resized.toFloat().expandDims(0);
 
-            // 3. Run inference
-            let depth = this.model!.predict(inputTensor) as tf.Tensor;
+            // The TFJS Graph Model from TF Hub expects input in the range [0, 255]
+            // and the output is also a tensor that needs to be normalized for visualization.
+            let depth = this.model!.predict(resized) as tf.Tensor;
 
-            // 4. Post-process the output tensor to normalize it for visualization
-            const min = depth.min();
+            depth = depth.squeeze();
             const max = depth.max();
+            const min = depth.min();
             const normalizedDepth = depth.sub(min).div(max.sub(min));
-            
-            // Squeeze and expand dimensions to make it a 3-channel image for toPixels
-            return normalizedDepth.squeeze().expandDims(2);
+
+            // We need to expand dims to 3 so toPixels works
+            return normalizedDepth.expandDims(2);
         });
 
         await tf.browser.toPixels(depthMap as tf.Tensor3D, canvas);

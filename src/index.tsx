@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import '@tensorflow/tfjs-backend-webgpu';
 import App from './App';
-import '@tensorflow/tfjs-backend-webgpu'; // Add this line
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
