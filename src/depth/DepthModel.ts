@@ -1,5 +1,5 @@
 
-MODEL_URL = './midas.tflite'
+const MODEL_URL = './midas.tflite'
 
 export class DepthModel {
     private model: tflite.TFLiteModel | null = null;
