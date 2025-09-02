@@ -1,5 +1,5 @@
 import type * as tf from '@tensorflow/tfjs';
-import type * as tflite from '@tensorflow/tfjs-tflite';
+import * as tflite from '@tensorflow/tfjs-tflite';
 
 // Path to the TFLite model in the public folder
 const MODEL_URL = './tflite_model/midas.tflite';
