@@ -2,7 +2,7 @@ import type * as tf from '@tensorflow/tfjs';
 import type * as tflite from '@tensorflow/tfjs-tflite';
 
 // Path to the TFLite model in the public folder
-const MODEL_URL = './tflite_model/midas.tflite';
+const MODEL_URL = '/tflite_model/midas.tflite';
 const MODEL_INPUT_SIZE = 256;
 
 // Type assertion for the global objects
@@ -32,14 +32,16 @@ export class DepthModel {
         }
 
         const depthMap = tfModule.tidy(() => {
-            // 1. Create a tensor from the video frame and resize it
+            // 1. Create a tensor from the video frame
             const frame = tfModule.browser.fromPixels(videoElement);
+
+            // 2. Resize it
             const resized = tfModule.image.resizeBilinear(frame, [MODEL_INPUT_SIZE, MODEL_INPUT_SIZE]);
             
-            // 2. Pre-process the tensor (casting and expanding dimensions)
+            // 3. Pre-process the tensor (casting and expanding dimensions)
             const inputTensor = resized.toFloat().expandDims(0);
 
-            // 3. Run inference
+            // 4. Run inference
             const output = this.model!.predict(inputTensor);
             if (!(output instanceof tfModule.Tensor)) {
                 console.error('The output of the model is not a tensor.');
