@@ -1,5 +1,5 @@
 
-export type RenderMode = 'shader' | 'image' | 'video';
+export type RenderMode = 'shader' | 'image' | 'video' | 'depthMerge';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -10,18 +10,22 @@ export class Renderer {
     // Pipelines
     private galaxyPipeline!: GPURenderPipeline;
     private imageVideoPipeline!: GPURenderPipeline;
+    private depthMergePipeline!: GPURenderPipeline;
 
     // Resources
     private galaxyUniformBuffer!: GPUBuffer;
     private imageVideoUniformBuffer!: GPUBuffer; // New uniform buffer
     private sampler!: GPUSampler;
     private videoTexture!: GPUTexture;
+    private videoTexture2!: GPUTexture;
+    private depthTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
     
     // Bind Groups
     private galaxyBindGroup!: GPUBindGroup;
     private videoBindGroup!: GPUBindGroup;
     private imageBindGroup!: GPUBindGroup;
+    private depthMergeBindGroup!: GPUBindGroup;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -111,6 +115,20 @@ export class Renderer {
             primitive: { topology: 'triangle-strip' },
         });
 
+        const depthMergeShaderCode = await (await fetch('shaders/depthMerge.wgsl')).text();
+        const depthMergeShaderModule = this.device.createShaderModule({ code: depthMergeShaderCode });
+
+        this.depthMergePipeline = this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: { module: depthMergeShaderModule, entryPoint: vertexEntryPoint },
+            fragment: {
+                module: depthMergeShaderModule,
+                entryPoint: fragmentEntryPoint,
+                targets: [{ format: this.presentationFormat }],
+            },
+            primitive: { topology: 'triangle-strip' },
+        });
+
         this.imageBindGroup = this.device.createBindGroup({
             layout: this.imageVideoPipeline.getBindGroupLayout(0),
             entries: [
@@ -121,9 +139,10 @@ export class Renderer {
         });
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
+    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, videoElement2?: HTMLVideoElement, depthCanvas?: HTMLCanvasElement): void {
+        // Handle first video texture
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-             if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
+            if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
                 this.videoTexture = this.device.createTexture({
                     size: [videoElement.videoWidth, videoElement.videoHeight],
@@ -146,12 +165,46 @@ export class Renderer {
                         { binding: 2, resource: this.videoTexture.createView() },
                     ],
                 });
-             }
-            this.device.queue.copyExternalImageToTexture(
-                { source: videoElement },
-                { texture: this.videoTexture },
-                [videoElement.videoWidth, videoElement.videoHeight]
-            );
+            }
+            this.device.queue.copyExternalImageToTexture({ source: videoElement }, { texture: this.videoTexture }, [videoElement.videoWidth, videoElement.videoHeight]);
+        }
+
+        // Handle second video texture and depth texture for merge mode
+        if (mode === 'depthMerge' && videoElement2 && videoElement2.readyState >= 2 && videoElement2.videoWidth > 0 && depthCanvas) {
+            // Video 2
+            if (!this.videoTexture2 || this.videoTexture2.width !== videoElement2.videoWidth || this.videoTexture2.height !== videoElement2.videoHeight) {
+                if (this.videoTexture2) this.videoTexture2.destroy();
+                this.videoTexture2 = this.device.createTexture({
+                    size: [videoElement2.videoWidth, videoElement2.videoHeight],
+                    format: 'rgba8unorm',
+                    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                });
+            }
+            this.device.queue.copyExternalImageToTexture({ source: videoElement2 }, { texture: this.videoTexture2 }, [videoElement2.videoWidth, videoElement2.videoHeight]);
+
+            // Depth Canvas
+            if (!this.depthTexture || this.depthTexture.width !== depthCanvas.width || this.depthTexture.height !== depthCanvas.height) {
+                if (this.depthTexture) this.depthTexture.destroy();
+                this.depthTexture = this.device.createTexture({
+                    size: [depthCanvas.width, depthCanvas.height],
+                    format: 'rgba8unorm',
+                    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                });
+            }
+            this.device.queue.copyExternalImageToTexture({ source: depthCanvas }, { texture: this.depthTexture }, [depthCanvas.width, depthCanvas.height]);
+
+            // Create bind group for merging
+            if (this.videoTexture && this.videoTexture2 && this.depthTexture) {
+                this.depthMergeBindGroup = this.device.createBindGroup({
+                    layout: this.depthMergePipeline.getBindGroupLayout(0),
+                    entries: [
+                        { binding: 0, resource: this.sampler },
+                        { binding: 1, resource: this.videoTexture.createView() },
+                        { binding: 2, resource: this.videoTexture2.createView() },
+                        { binding: 3, resource: this.depthTexture.createView() },
+                    ],
+                });
+            }
         }
 
         const commandEncoder = this.device.createCommandEncoder();
@@ -191,6 +244,13 @@ export class Renderer {
                         passEncoder.setBindGroup(0, this.videoBindGroup);
                         passEncoder.draw(4);
                     }
+                }
+                break;
+            case 'depthMerge':
+                if (this.depthMergePipeline && this.depthMergeBindGroup) {
+                    passEncoder.setPipeline(this.depthMergePipeline);
+                    passEncoder.setBindGroup(0, this.depthMergeBindGroup);
+                    passEncoder.draw(4);
                 }
                 break;
         }

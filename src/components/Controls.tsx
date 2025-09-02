@@ -10,9 +10,11 @@ interface ControlsProps {
     setPanX: (panX: number) => void;
     panY: number;
     setPanY: (panY: number) => void;
+    onVideo1Change: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    onVideo2Change: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-const Controls: React.FC<ControlsProps> = ({ mode, setMode, zoom, setZoom, panX, setPanX, panY, setPanY }) => {
+const Controls: React.FC<ControlsProps> = ({ mode, setMode, zoom, setZoom, panX, setPanX, panY, setPanY, onVideo1Change, onVideo2Change }) => {
     return (
         <div className="controls">
             <div className="control-group">
@@ -21,7 +23,16 @@ const Controls: React.FC<ControlsProps> = ({ mode, setMode, zoom, setZoom, panX,
                     <option value="shader">Galaxy Shader</option>
                     <option value="image">Static Image</option>
                     <option value="video">Video Texture</option>
+                    <option value="depthMerge">Depth Merge</option>
                 </select>
+            </div>
+            <div className="control-group">
+                <label htmlFor="video1-upload">Video 1 (with depth):</label>
+                <input type="file" id="video1-upload" accept="video/*" onChange={onVideo1Change} />
+            </div>
+            <div className="control-group">
+                <label htmlFor="video2-upload">Video 2 (background):</label>
+                <input type="file" id="video2-upload" accept="video/*" onChange={onVideo2Change} />
             </div>
             <div className="control-group">
                 <label htmlFor="zoom-slider">Zoom:</label>
