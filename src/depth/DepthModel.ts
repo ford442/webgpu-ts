@@ -1,6 +1,6 @@
 import * as tf from '@tensorflow/tfjs';
 
-const MODEL_URL = 'https://tfhub.dev/intel/midas-v2-1-small/1/webgl1/model.json?tfjs-graph-model=true';
+const MODEL_URL = 'https://storage.googleapis.com/tfjs-models/saved_models/midas/model.json';
 const MODEL_INPUT_SIZE = 256;
 
 export class DepthModel {
