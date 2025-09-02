@@ -1,4 +1,3 @@
-import * as tf from '@tensorflow/tfjs';
 
 MODEL_URL = './midas.tflite'
 
