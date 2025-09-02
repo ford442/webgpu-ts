@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "devDependencies": {
-    "typescript": "latest",
+    "typescript": "^5.4.5"
   },
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
