@@ -1,21 +1,22 @@
 import * as tf from '@tensorflow/tfjs';
+import * as tflite from '@tensorflow/tfjs-tflite';
 
-const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/midas/dist/v2_1_small/model.json';
-const MODEL_INPUT_SIZE = 256;
+tflite.setWasmPath(
+    'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.8/dist/'
+);
+
 
 export class DepthModel {
-    private model: tf.GraphModel | null = null;
+    private model: tflite.TFLiteModel | null = null;
 
     public async init(): Promise<boolean> {
         try {
-            await tf.setBackend('webgpu');
             await tf.ready();
-            // Use loadGraphModel instead
-            this.model = await tf.loadGraphModel(MODEL_URL);
-            console.log('MiDaS model loaded and WebGPU backend ready.');
+            this.model = await tflite.loadTFLiteModel(MODEL_URL);
+            console.log('MiDaS TFLite model loaded successfully.');
             return true;
         } catch (error) {
-            console.error('Failed to initialize DepthModel:', error);
+            console.error('Failed to initialize TFLite DepthModel:', error);
             return false;
         }
     }
@@ -27,25 +28,23 @@ export class DepthModel {
         }
 
         const depthMap = tf.tidy(() => {
-            // 1. Create a tensor from the video frame
+            // 1. Create a tensor from the video frame and resize it
             const frame = tf.browser.fromPixels(videoElement);
-
-            // 2. Pre-process the tensor
             const resized = tf.image.resizeBilinear(frame, [MODEL_INPUT_SIZE, MODEL_INPUT_SIZE]);
-            const normalized = resized.div(127.5).sub(1);
-            const batched = normalized.expandDims(0);
+            
+            // 2. Pre-process the tensor (casting and expanding dimensions)
+            const inputTensor = resized.toFloat().expandDims(0);
 
             // 3. Run inference
-            let depth = this.model!.predict(batched) as tf.Tensor;
+            let depth = this.model!.predict(inputTensor) as tf.Tensor;
 
-            // 4. Post-process the output
-            depth = depth.squeeze([0]);
-            const max = depth.max();
+            // 4. Post-process the output tensor to normalize it for visualization
             const min = depth.min();
+            const max = depth.max();
             const normalizedDepth = depth.sub(min).div(max.sub(min));
-
-            // We need to expand dims to 3 so toPixels works
-            return normalizedDepth.expandDims(2);
+            
+            // Squeeze and expand dimensions to make it a 3-channel image for toPixels
+            return normalizedDepth.squeeze().expandDims(2);
         });
 
         await tf.browser.toPixels(depthMap as tf.Tensor3D, canvas);
