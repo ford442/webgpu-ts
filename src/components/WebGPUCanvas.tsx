@@ -7,11 +7,13 @@ interface WebGPUCanvasProps {
     zoom: number;
     panX: number;
     panY: number;
+    depthCutoffMin: number;
+    depthCutoffMax: number;
     videoSrc1: string;
     videoSrc2: string;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, videoSrc1, videoSrc2 }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, depthCutoffMin, depthCutoffMax, videoSrc1, videoSrc2 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const depthCanvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<Renderer | null>(null);
@@ -79,8 +81,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, vid
             if (rendererRef.current && videoRef1.current && videoRef1.current.readyState >= 2) {
                 if (mode === 'depthMerge' && depthModelRef.current && depthCanvasRef.current && videoRef2.current) {
                     await depthModelRef.current.renderDepthMap(videoRef1.current, depthCanvasRef.current);
-                    // @ts-ignore: Hiding type error until renderer is updated
-                    rendererRef.current.render(mode, videoRef1.current, zoom, panX, panY, videoRef2.current, depthCanvasRef.current);
+                    rendererRef.current.render(mode, videoRef1.current, zoom, panX, panY, videoRef2.current, depthCanvasRef.current, depthCutoffMin, depthCutoffMax);
                 } else {
                     rendererRef.current.render(mode, videoRef1.current, zoom, panX, panY);
                 }
@@ -92,7 +93,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, vid
             active = false;
             cancelAnimationFrame(animationFrameId.current);
         };
-    }, [mode, zoom, panX, panY, videoSrc1, videoSrc2]);
+    }, [mode, zoom, panX, panY, depthCutoffMin, depthCutoffMax, videoSrc1, videoSrc2]);
 
     return (
         <div>

@@ -10,11 +10,23 @@ interface ControlsProps {
     setPanX: (panX: number) => void;
     panY: number;
     setPanY: (panY: number) => void;
+    depthCutoffMin: number;
+    setDepthCutoffMin: (min: number) => void;
+    depthCutoffMax: number;
+    setDepthCutoffMax: (max: number) => void;
     onVideo1Change: (event: React.ChangeEvent<HTMLInputElement>) => void;
     onVideo2Change: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-const Controls: React.FC<ControlsProps> = ({ mode, setMode, zoom, setZoom, panX, setPanX, panY, setPanY, onVideo1Change, onVideo2Change }) => {
+const Controls: React.FC<ControlsProps> = ({
+    mode, setMode,
+    zoom, setZoom,
+    panX, setPanX,
+    panY, setPanY,
+    depthCutoffMin, setDepthCutoffMin,
+    depthCutoffMax, setDepthCutoffMax,
+    onVideo1Change, onVideo2Change
+}) => {
     return (
         <div className="controls">
             <div className="control-group">
@@ -46,6 +58,18 @@ const Controls: React.FC<ControlsProps> = ({ mode, setMode, zoom, setZoom, panX,
                 <label htmlFor="pan-y-slider">Pan Y:</label>
                 <input type="range" id="pan-y-slider" min="0" max="200" value={panY * 100} onChange={(e) => setPanY(parseFloat(e.target.value) / 100)} />
             </div>
+            {mode === 'depthMerge' && (
+                <>
+                    <div className="control-group">
+                        <label htmlFor="depth-min-slider">Depth Min:</label>
+                        <input type="range" id="depth-min-slider" min="0" max="100" value={depthCutoffMin * 100} onChange={(e) => setDepthCutoffMin(parseFloat(e.target.value) / 100)} />
+                    </div>
+                    <div className="control-group">
+                        <label htmlFor="depth-max-slider">Depth Max:</label>
+                        <input type="range" id="depth-max-slider" min="0" max="100" value={depthCutoffMax * 100} onChange={(e) => setDepthCutoffMax(parseFloat(e.target.value) / 100)} />
+                    </div>
+                </>
+            )}
         </div>
     );
 };

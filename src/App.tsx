@@ -9,6 +9,8 @@ function App() {
     const [zoom, setZoom] = useState(1.0);
     const [panX, setPanX] = useState(0.5);
     const [panY, setPanY] = useState(0.5);
+    const [depthCutoffMin, setDepthCutoffMin] = useState(0.0);
+    const [depthCutoffMax, setDepthCutoffMax] = useState(1.0);
     const [videoSrc1, setVideoSrc1] = useState<string>('');
     const [videoSrc2, setVideoSrc2] = useState<string>('');
 
@@ -34,6 +36,8 @@ function App() {
                 zoom={zoom} setZoom={setZoom}
                 panX={panX} setPanX={setPanX}
                 panY={panY} setPanY={setPanY}
+                depthCutoffMin={depthCutoffMin} setDepthCutoffMin={setDepthCutoffMin}
+                depthCutoffMax={depthCutoffMax} setDepthCutoffMax={setDepthCutoffMax}
                 onVideo1Change={handleVideo1Change}
                 onVideo2Change={handleVideo2Change}
             />
@@ -42,6 +46,8 @@ function App() {
                 zoom={zoom}
                 panX={panX}
                 panY={panY}
+                depthCutoffMin={depthCutoffMin}
+                depthCutoffMax={depthCutoffMax}
                 videoSrc1={videoSrc1}
                 videoSrc2={videoSrc2}
             />

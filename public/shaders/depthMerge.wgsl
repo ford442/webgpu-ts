@@ -3,6 +3,12 @@
 @group(0) @binding(2) var u_texture2: texture_2d<f32>;
 @group(0) @binding(3) var u_depthTexture: texture_2d<f32>;
 
+struct Uniforms {
+    depthCutoffMin: f32,
+    depthCutoffMax: f32,
+};
+@group(0) @binding(4) var<uniform> u_uniforms: Uniforms;
+
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) fragUV: vec2<f32>,
@@ -26,13 +32,9 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     let color2 = textureSample(u_texture2, u_sampler, fragUV);
     let depthValue = textureSample(u_depthTexture, u_sampler, fragUV).r;
 
-    // A simple threshold for merging.
-    // If the depth value is high (object is far), show the second video.
-    // Otherwise, show the first video.
-    let threshold = 0.5;
-    if (depthValue > threshold) {
-        return color2;
-    } else {
-        return color1;
-    }
+    // Use smoothstep for a smoother transition between the two videos
+    let mixFactor = smoothstep(u_uniforms.depthCutoffMin, u_uniforms.depthCutoffMax, depthValue);
+
+    // Mix the two colors based on the mix factor
+    return mix(color1, color2, mixFactor);
 }

@@ -14,7 +14,8 @@ export class Renderer {
 
     // Resources
     private galaxyUniformBuffer!: GPUBuffer;
-    private imageVideoUniformBuffer!: GPUBuffer; // New uniform buffer
+    private imageVideoUniformBuffer!: GPUBuffer;
+    private depthMergeUniformBuffer!: GPUBuffer;
     private sampler!: GPUSampler;
     private videoTexture!: GPUTexture;
     private videoTexture2!: GPUTexture;
@@ -58,6 +59,10 @@ export class Renderer {
         });
         this.imageVideoUniformBuffer = this.device.createBuffer({
             size: 4 * 4, // 4 floats: canvas.width, canvas.height, source.width, source.height
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        this.depthMergeUniformBuffer = this.device.createBuffer({
+            size: 2 * 4, // 2 floats: depthCutoffMin, depthCutoffMax
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
@@ -139,7 +144,7 @@ export class Renderer {
         });
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, videoElement2?: HTMLVideoElement, depthCanvas?: HTMLCanvasElement): void {
+    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, videoElement2?: HTMLVideoElement, depthCanvas?: HTMLCanvasElement, depthCutoffMin?: number, depthCutoffMax?: number): void {
         // Handle first video texture
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
             if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
@@ -202,6 +207,7 @@ export class Renderer {
                         { binding: 1, resource: this.videoTexture.createView() },
                         { binding: 2, resource: this.videoTexture2.createView() },
                         { binding: 3, resource: this.depthTexture.createView() },
+                        { binding: 4, resource: { buffer: this.depthMergeUniformBuffer } },
                     ],
                 });
             }
@@ -248,6 +254,7 @@ export class Renderer {
                 break;
             case 'depthMerge':
                 if (this.depthMergePipeline && this.depthMergeBindGroup) {
+                    this.device.queue.writeBuffer(this.depthMergeUniformBuffer, 0, new Float32Array([depthCutoffMin!, depthCutoffMax!]));
                     passEncoder.setPipeline(this.depthMergePipeline);
                     passEncoder.setBindGroup(0, this.depthMergeBindGroup);
                     passEncoder.draw(4);
