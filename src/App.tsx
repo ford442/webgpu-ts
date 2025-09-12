@@ -9,6 +9,11 @@ function App() {
     const [zoom, setZoom] = useState(1.0);
     const [panX, setPanX] = useState(0.5);
     const [panY, setPanY] = useState(0.5);
+    const [imageVersion, setImageVersion] = useState(0);
+
+    const handleNewImage = () => {
+        setImageVersion(v => v + 1);
+    };
 
     return (
         <div id="app-container">
@@ -18,12 +23,14 @@ function App() {
                 zoom={zoom} setZoom={setZoom}
                 panX={panX} setPanX={setPanX}
                 panY={panY} setPanY={setPanY}
+                onNewImage={handleNewImage}
             />
             <WebGPUCanvas
                 mode={mode}
                 zoom={zoom}
                 panX={panX}
                 panY={panY}
+                imageVersion={imageVersion}
             />
         </div>
     );
