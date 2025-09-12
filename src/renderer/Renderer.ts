@@ -49,7 +49,7 @@ export class Renderer {
 
     private async fetchImageUrls(): Promise<void> {
         // IMPORTANT: Replace this with your actual bucket name.
-        const bucketName = 'YOUR_BUCKET_NAME'; 
+        const bucketName = 'my-sd35-space-images-2025'; 
         const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
 
         try {
