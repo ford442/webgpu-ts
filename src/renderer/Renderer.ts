@@ -1,4 +1,3 @@
-
 export type RenderMode = 'shader' | 'image' | 'video';
 
 export class Renderer {
@@ -13,10 +12,11 @@ export class Renderer {
 
     // Resources
     private galaxyUniformBuffer!: GPUBuffer;
-    private imageVideoUniformBuffer!: GPUBuffer; // New uniform buffer
+    private imageVideoUniformBuffer!: GPUBuffer;
     private sampler!: GPUSampler;
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
+    private imageUrls: string[] = []; // Will be populated from Google Bucket
     
     // Bind Groups
     private galaxyBindGroup!: GPUBindGroup;
@@ -40,11 +40,83 @@ export class Renderer {
             alphaMode: 'premultiplied',
         });
 
+        await this.fetchImageUrls(); // Fetch the list from our Google Bucket
         await this.createResources();
         await this.createPipelines();
         
         return true;
     }
+
+    private async fetchImageUrls(): Promise<void> {
+        // IMPORTANT: Replace this with your actual bucket name.
+        const bucketName = 'YOUR_BUCKET_NAME'; 
+        const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
+
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                throw new Error(`Google Cloud Storage API returned status ${response.status}`);
+            }
+            const data = await response.json();
+            
+            if (data.items) {
+                this.imageUrls = data.items.map((item: { name: string }) => `https://storage.googleapis.com/${bucketName}/${item.name}`);
+            } else {
+                this.imageUrls = [];
+            }
+            
+            if (this.imageUrls.length === 0) {
+                console.warn("No images found in bucket or bucket is empty.");
+            }
+
+        } catch (e) {
+            console.error("Failed to fetch image list from Google Bucket:", e);
+            console.error("Please ensure the bucket name is correct, is public, and has the correct CORS policy and permissions (Storage Legacy Bucket Reader).");
+            // Fallback to a default image if the API fails
+            this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
+        }
+    }
+    
+    public async loadRandomImage(): Promise<void> {
+        try {
+            if (this.imageUrls.length === 0) {
+                console.warn("Image URL list is empty. Cannot load a random image.");
+                return;
+            }
+            const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
+            const response = await fetch(imageUrl);
+            const imageBitmap = await createImageBitmap(await response.blob());
+
+            if (this.imageTexture) {
+                this.imageTexture.destroy();
+            }
+
+            this.imageTexture = this.device.createTexture({
+                size: [imageBitmap.width, imageBitmap.height],
+                format: 'rgba8unorm',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+            });
+            this.device.queue.copyExternalImageToTexture(
+                { source: imageBitmap },
+                { texture: this.imageTexture },
+                [imageBitmap.width, imageBitmap.height]
+            );
+
+            if (this.imageVideoPipeline) {
+                this.imageBindGroup = this.device.createBindGroup({
+                    layout: this.imageVideoPipeline.getBindGroupLayout(0),
+                    entries: [
+                        { binding: 0, resource: this.sampler },
+                        { binding: 1, resource: this.imageTexture.createView() },
+                        { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } },
+                    ],
+                });
+            }
+        } catch (e) {
+            console.error("Failed to load image:", e);
+        }
+    }
+
 
     private async createResources(): Promise<void> {
         // Uniform Buffers
@@ -63,20 +135,8 @@ export class Renderer {
             minFilter: 'linear',
         });
         
-        const imageUrl = 'https://i.imgur.com/vCNL2sT.jpeg';
-        const response = await fetch(imageUrl, { mode: 'cors' });
-        const imageBitmap = await createImageBitmap(await response.blob());
-        
-        this.imageTexture = this.device.createTexture({
-            size: [imageBitmap.width, imageBitmap.height],
-            format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-        });
-        this.device.queue.copyExternalImageToTexture(
-            { source: imageBitmap },
-            { texture: this.imageTexture },
-            [imageBitmap.width, imageBitmap.height]
-        );
+        // Load the initial random image
+        await this.loadRandomImage();
     }
 
     private async createPipelines(): Promise<void> {
@@ -111,17 +171,21 @@ export class Renderer {
             primitive: { topology: 'triangle-strip' },
         });
 
-        this.imageBindGroup = this.device.createBindGroup({
-            layout: this.imageVideoPipeline.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: this.sampler },
-                { binding: 1, resource: this.imageTexture.createView() },
-                { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } },
-            ],
-        });
+        // This check is important because loadRandomImage runs before this
+        if (this.imageTexture) {
+            this.imageBindGroup = this.device.createBindGroup({
+                layout: this.imageVideoPipeline.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: this.sampler },
+                    { binding: 1, resource: this.imageTexture.createView() },
+                    { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } },
+                ],
+            });
+        }
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
+        // ... (The rest of the render method remains unchanged)
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
              if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
@@ -176,8 +240,8 @@ export class Renderer {
                 }
                 break;
             case 'image':
-                this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, new Float32Array([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height]));
-                if (this.imageVideoPipeline && this.imageBindGroup) {
+                if (this.imageVideoPipeline && this.imageBindGroup && this.imageTexture) {
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, new Float32Array([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height]));
                     passEncoder.setPipeline(this.imageVideoPipeline);
                     passEncoder.setBindGroup(0, this.imageBindGroup);
                     passEncoder.draw(4);
