@@ -84,8 +84,8 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     let textureColor = textureSample(u_texture, u_sampler, finalUV);
     let outOfBounds = f32(scaledUV.x < 0.0 || scaledUV.x > 1.0 || scaledUV.y < 0.0 || scaledUV.y > 1.0);
     var finalColor = mix(vec4(0.0, 0.0, 0.0, 1.0), textureColor, 1.0 - outOfBounds);
-
-    var lighting = vec4((0.2 * length(totalDisplacement) / 0.01),1.0);
+    var light = (0.2 * length(totalDisplacement) / 0.01);
+    var lighting = vec4(light,light,light,1.0);
     finalColor += lighting;
 
     return finalColor;
