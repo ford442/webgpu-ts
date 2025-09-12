@@ -6,9 +6,10 @@ interface WebGPUCanvasProps {
     zoom: number;
     panX: number;
     panY: number;
+    imageVersion: number;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<Renderer | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -20,7 +21,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY }) =
         const canvas = canvasRef.current;
         const renderer = new Renderer(canvas);
         
-        // This is an IIFE (Immediately Invoked Function Expression) to use async/await
         (async () => {
             const success = await renderer.init();
             if (success) {
@@ -35,14 +35,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY }) =
                 await videoRef.current.play().catch(err => {
                     console.error("Video play failed:", err);
                 });
-
-                const animate = () => {
-                    if (rendererRef.current && videoRef.current) {
-                        // We will pass props directly in the render call
-                    }
-                    animationFrameId.current = requestAnimationFrame(animate);
-                };
-                // We will control the animation loop from the other useEffect
             }
         })();
 
@@ -51,7 +43,14 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY }) =
         };
     }, []);
 
-    // This useEffect will now handle the rendering loop, re-starting it when props change.
+    // This useEffect handles loading a new random image when the button is clicked
+    useEffect(() => {
+        if (rendererRef.current && imageVersion > 0) { // imageVersion > 0 ensures it doesn't run on initial load
+            rendererRef.current.loadRandomImage();
+        }
+    }, [imageVersion]);
+
+
     useEffect(() => {
         let active = true;
 
