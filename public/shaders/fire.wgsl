@@ -86,4 +86,3 @@ fn fs_main(@builtin(position) frag_coord: vec4<f32>) -> @location(0) vec4<f32> {
 
     return vec4<f32>(final_color, 1.0);
 }
-}
