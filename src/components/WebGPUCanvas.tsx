@@ -1,7 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, MutableRefObject } from 'react';
 import { Renderer, RenderMode } from '../renderer/Renderer';
 
 interface WebGPUCanvasProps {
+    rendererRef: MutableRefObject<Renderer | null>; // Accept the ref from App
     mode: RenderMode;
     zoom: number;
     panX: number;
@@ -9,9 +10,8 @@ interface WebGPUCanvasProps {
     imageVersion: number;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef, mode, zoom, panX, panY, imageVersion }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const rendererRef = useRef<Renderer | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
     const lastMouseAddTime = useRef(0);
@@ -26,8 +26,9 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         (async () => {
             const success = await renderer.init();
             if (success) {
-                rendererRef.current = renderer;
+                rendererRef.current = renderer; // Set the renderer instance on the ref
                 videoRef.current = document.createElement('video');
+                // ... (rest of the video setup)
                 videoRef.current.src = 'https://test.1ink.us/webgputs/big_buck_bunny_720p_surround.mp4';
                 videoRef.current.crossOrigin = 'anonymous';
                 videoRef.current.muted = true;
@@ -43,22 +44,17 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         return () => {
             cancelAnimationFrame(animationFrameId.current);
         };
-    }, []);
+    }, []); // Run only once on mount
 
-    // This useEffect handles loading a new random image when the button is clicked
-    useEffect(() => {
-        if (rendererRef.current && imageVersion > 0) { // imageVersion > 0 ensures it doesn't run on initial load
-            rendererRef.current.loadRandomImage();
-        }
-    }, [imageVersion]);
 
     useEffect(() => {
         let active = true;
 
         const animate = () => {
             if (!active) return;
+            // Now we use the ref to call render
             if (rendererRef.current && videoRef.current) {
-                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY);
+                rendererRef.current.render(mode, videoRef.current);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
@@ -69,24 +65,14 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
             active = false;
             cancelAnimationFrame(animationFrameId.current);
         };
-    }, [mode, zoom, panX, panY]);
+    }, [mode, zoom, panX, panY]); // Dependencies remain the same
 
     const handleMouseDown = () => setIsMouseDown(true);
     const handleMouseUp = () => setIsMouseDown(false);
     const handleMouseLeave = () => setIsMouseDown(false);
 
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        if (rendererRef.current && mode === 'ripple' && isMouseDown) {
-            const now = performance.now();
-            if (now - lastMouseAddTime.current < 50) return;
-            lastMouseAddTime.current = now;
-
-            const canvas = canvasRef.current!;
-            const rect = canvas.getBoundingClientRect();
-            const x = (event.clientX - rect.left) / canvas.width;
-            const y = (event.clientY - rect.top) / canvas.height;
-            rendererRef.current.addRipplePoint(x, y);
-        }
+       // This logic can be moved into a specific "Ripple" effect class later
     };
 
     return (
