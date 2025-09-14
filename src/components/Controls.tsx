@@ -33,11 +33,12 @@ const Controls: React.FC<ControlsProps> = ({
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
                 <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
-                    <option value="shader">Galaxy Shader</option>
-                    <option value="image">Static Image</option>
-                    <option value="ripple">Ripple Effect</option>
-                    <option value="video">Video Texture</option>
-                </select>
+    <option value="shader">Galaxy Shader</option>
+    <option value="image">Static Image</option>
+    <option value="ripple">Ripple Effect</option>
+    <option value="video">Video Texture</option>
+    <option value="fire">Fire</option>
+</select>
             </div>
              {isImageMode && (
                 <>
