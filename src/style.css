@@ -54,6 +54,11 @@ input[type="range"] {
     width: 250px;
 }
 
+input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+}
+
 select, button {
     font-size: 16px;
     padding: 8px;
@@ -61,17 +66,5 @@ select, button {
     border: 1px solid #61dafb;
     background-color: #20232a;
     color: #e0e0e0;
-}
-
-.loading-indicator {
-    margin-top: 10px;
-    color: #61dafb;
-    font-style: italic;
-    height: 20px; /* Reserve space to prevent layout shift */
-}
-
-button:disabled {
-    background-color: #444;
-    cursor: not-allowed;
-    border-color: #888;
+    cursor: pointer;
 }
