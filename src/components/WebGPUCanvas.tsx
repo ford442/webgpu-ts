@@ -71,23 +71,35 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         };
     }, [mode, zoom, panX, panY]);
 
-    const handleMouseDown = () => setIsMouseDown(true);
+const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    setIsMouseDown(true);
+    if (rendererRef.current) {
+        const canvas = canvasRef.current!;
+        const rect = canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / canvas.width;
+        const y = (event.clientY - rect.top) / canvas.height;
+
+        if (mode === 'fire') {
+            rendererRef.current.addFirePoint(x, y);
+        }
+    }
+};
     const handleMouseUp = () => setIsMouseDown(false);
     const handleMouseLeave = () => setIsMouseDown(false);
 
-    const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        if (rendererRef.current && mode === 'ripple' && isMouseDown) {
-            const now = performance.now();
-            if (now - lastMouseAddTime.current < 50) return;
-            lastMouseAddTime.current = now;
+   const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (rendererRef.current && mode === 'ripple' && isMouseDown) {
+        const now = performance.now();
+        if (now - lastMouseAddTime.current < 50) return;
+        lastMouseAddTime.current = now;
 
-            const canvas = canvasRef.current!;
-            const rect = canvas.getBoundingClientRect();
-            const x = (event.clientX - rect.left) / canvas.width;
-            const y = (event.clientY - rect.top) / canvas.height;
-            rendererRef.current.addRipplePoint(x, y);
-        }
-    };
+        const canvas = canvasRef.current!;
+        const rect = canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / canvas.width;
+        const y = (event.clientY - rect.top) / canvas.height;
+        rendererRef.current.addRipplePoint(x, y);
+    }
+};
 
     return (
         <canvas 
