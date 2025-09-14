@@ -310,11 +310,34 @@ this.firePipeline = this.device.createRenderPipeline({
                     passEncoder.draw(4);
                 }
                 break;
-           case 'fire':
-    // For this simple debug shader, we don't need to update a buffer or set a bind group.
-    if (this.firePipeline) {
+          case 'fire':
+    const currentTimeFire = performance.now() / 1000.0;
+
+    // Prune old fire points
+    this.firePoints = this.firePoints.filter(p => (currentTimeFire - p.startTime) < 4.0);
+    if (this.firePoints.length > this.MAX_FIRE_POINTS) {
+        this.firePoints.splice(0, this.firePoints.length - this.MAX_FIRE_POINTS);
+    }
+
+    const fireUniformData = new Float32Array(4 + (this.MAX_FIRE_POINTS * 4));
+    fireUniformData[0] = currentTimeFire;
+    fireUniformData[1] = this.firePoints.length;
+
+    const firePointsData = new Float32Array(this.MAX_FIRE_POINTS * 4);
+    for (let i = 0; i < this.firePoints.length; i++) {
+        const point = this.firePoints[i];
+        firePointsData[i * 4 + 0] = point.x;
+        firePointsData[i * 4 + 1] = point.y;
+        firePointsData[i * 4 + 2] = point.startTime;
+    }
+    fireUniformData.set(firePointsData, 4); 
+
+    this.device.queue.writeBuffer(this.fireUniformBuffer, 0, fireUniformData);
+
+    if (this.firePipeline && this.fireBindGroup) {
         passEncoder.setPipeline(this.firePipeline);
-        passEncoder.draw(6); // Draw 6 vertices to make two triangles that cover the screen.
+        passEncoder.setBindGroup(0, this.fireBindGroup);
+        passEncoder.draw(6);
     }
     break;
             case 'video':
