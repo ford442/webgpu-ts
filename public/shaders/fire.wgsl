@@ -54,27 +54,17 @@ fn fs_main(@builtin(position) frag_coord: vec4<f32>) -> @location(0) vec4<f32> {
     var final_color = vec3<f32>(0.0);
     let currentTime = u.time;
 
-    for (var i = 0u; i < u.firePointCount; i = i + 1u) {
-        let fp = u.firePoints[i];
+    // NO LOOP: We will only check the first fire point, if it exists.
+    if (u.firePointCount > 0u) {
+        let fp = u.firePoints[0]; // Only read from the first element
         let time_since_click = currentTime - fp.startTime;
 
         if (time_since_click > 0.0 && time_since_click < 4.0) {
-            let dir = uv - fp.pos;
-            let dist = length(dir);
-            let angle = atan2(dir.y, dir.x);
-            
-            let fbm_uv = vec2<f32>(dist, angle * 2.0);
-            
-            var f = fbm(fbm_uv * 3.0 - vec2<f32>(time_since_click * 0.5, 0.0));
-            
-            let life = smoothstep(0.0, 1.0, time_since_click / 4.0);
-            f *= 1.0 - life;
-            f *= smoothstep(0.0, 0.05, dist) * (1.0 - smoothstep(0.2, 0.5, dist));
-
-            let hue = fract(angle / (2.0 * 3.14159) + currentTime * 0.2);
-            let color = hsv2rgb(vec3<f32>(hue, 1.0, f));
-            
-            final_color += color;
+            // Use the simple, safe circle logic from our earlier test
+            let dist = distance(uv, fp.pos);
+            let radius = time_since_click * 0.2;
+            let ring = smoothstep(radius - 0.02, radius, dist) - smoothstep(radius, radius + 0.02, dist);
+            final_color += vec3<f32>(ring);
         }
     }
 
