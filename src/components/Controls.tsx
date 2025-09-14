@@ -11,9 +11,23 @@ interface ControlsProps {
     panY: number;
     setPanY: (panY: number) => void;
     onNewImage: () => void;
+    autoChangeEnabled: boolean;
+    setAutoChangeEnabled: (enabled: boolean) => void;
+    autoChangeDelay: number;
+    setAutoChangeDelay: (delay: number) => void;
 }
 
-const Controls: React.FC<ControlsProps> = ({ mode, setMode, zoom, setZoom, panX, setPanX, panY, setPanY, onNewImage }) => {
+const Controls: React.FC<ControlsProps> = ({ 
+    mode, setMode, 
+    zoom, setZoom, 
+    panX, setPanX, 
+    panY, setPanY, 
+    onNewImage,
+    autoChangeEnabled, setAutoChangeEnabled,
+    autoChangeDelay, setAutoChangeDelay
+}) => {
+    const isImageMode = mode === 'image' || mode === 'ripple';
+
     return (
         <div className="controls">
             <div className="control-group">
@@ -21,14 +35,27 @@ const Controls: React.FC<ControlsProps> = ({ mode, setMode, zoom, setZoom, panX,
                 <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
                     <option value="shader">Galaxy Shader</option>
                     <option value="image">Static Image</option>
+                    <option value="ripple">Ripple Effect</option>
                     <option value="video">Video Texture</option>
                 </select>
             </div>
-             {mode === 'image' && (
-                <div className="control-group">
-                    <label></label>
-                    <button onClick={onNewImage}>New Random Image</button>
-                </div>
+             {isImageMode && (
+                <>
+                    <div className="control-group">
+                        <label></label>
+                        <button onClick={onNewImage}>New Random Image</button>
+                    </div>
+                    <div className="control-group">
+                        <label htmlFor="auto-change-toggle">Auto Change:</label>
+                        <input type="checkbox" id="auto-change-toggle" checked={autoChangeEnabled} onChange={(e) => setAutoChangeEnabled(e.target.checked)} />
+                    </div>
+                    {autoChangeEnabled && (
+                        <div className="control-group">
+                            <label htmlFor="delay-slider">Delay ({autoChangeDelay}s):</label>
+                            <input type="range" id="delay-slider" min="1" max="10" step="1" value={autoChangeDelay} onChange={(e) => setAutoChangeDelay(Number(e.target.value))} />
+                        </div>
+                    )}
+                </>
             )}
             <div className="control-group">
                 <label htmlFor="zoom-slider">Zoom:</label>
