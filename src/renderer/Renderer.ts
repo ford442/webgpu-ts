@@ -1,4 +1,4 @@
-export type RenderMode = 'shader' | 'image' | 'video';
+export type RenderMode = 'shader' | 'image' | 'video' | 'ripple';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -17,14 +17,20 @@ export class Renderer {
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
     private imageUrls: string[] = []; // Will be populated from Google Bucket
+    private ripplePoints: { x: number, y: number, startTime: number }[] = [];
+    private MAX_RIPPLES = 50;
     
     // Bind Groups
     private galaxyBindGroup!: GPUBindGroup;
-    private videoBindGroup!: GPUBindGroup;
+    private videoBindGrup!: GPUBindGroup;
     private imageBindGroup!: GPUBindGroup;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
+    }
+
+    public addRipplePoint(x: number, y: number) {
+        this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
     }
 
     public async init(): Promise<boolean> {
@@ -117,7 +123,6 @@ export class Renderer {
         }
     }
 
-
     private async createResources(): Promise<void> {
         // Uniform Buffers
         this.galaxyUniformBuffer = this.device.createBuffer({
@@ -125,7 +130,7 @@ export class Renderer {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
         this.imageVideoUniformBuffer = this.device.createBuffer({
-            size: 4 * 4, // 4 floats: canvas.width, canvas.height, source.width, source.height
+            size: (4 * 4) + (4 * 4) + (this.MAX_RIPPLES * 4 * 4),
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
@@ -185,7 +190,19 @@ export class Renderer {
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
-        // ... (The rest of the render method remains unchanged)
+        const isRippleMode = mode === 'ripple';
+        const currentTime = performance.now() / 1000.0;
+
+        // Prune old ripples that have finished their animation
+        this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 3.0);
+        // Trim array to max size if needed
+        if (this.ripplePoints.length > this.MAX_RIPPLES) {
+            this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
+        }
+        
+        const uniformBufferSize = (4 + 4 + this.MAX_RIPPLES * 4);
+        const uniformArray = new Float32Array(uniformBufferSize);
+
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
              if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
@@ -240,8 +257,22 @@ export class Renderer {
                 }
                 break;
             case 'image':
+            case 'ripple':
                 if (this.imageVideoPipeline && this.imageBindGroup && this.imageTexture) {
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, new Float32Array([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height]));
+                    uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
+                    uniformArray.set([currentTime, this.ripplePoints.length, isRippleMode ? 1.0 : 0.0], 4);
+                    
+                    // Ripple data
+                    const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
+                    for (let i = 0; i < this.ripplePoints.length; i++) {
+                        const point = this.ripplePoints[i];
+                        rippleData[i * 4 + 0] = point.x;
+                        rippleData[i * 4 + 1] = point.y;
+                        rippleData[i * 4 + 2] = point.startTime;
+                    }
+                    uniformArray.set(rippleData, 8);
+                    
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
                     passEncoder.setPipeline(this.imageVideoPipeline);
                     passEncoder.setBindGroup(0, this.imageBindGroup);
                     passEncoder.draw(4);
@@ -249,7 +280,10 @@ export class Renderer {
                 break;
             case 'video':
                 if (this.videoTexture) {
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, new Float32Array([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height]));
+                    uniformArray.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
+                    uniformArray.set([currentTime, 0, 0], 4); // No ripples for video mode
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
+
                     if (this.imageVideoPipeline && this.videoBindGroup) {
                         passEncoder.setPipeline(this.imageVideoPipeline);
                         passEncoder.setBindGroup(0, this.videoBindGroup);
