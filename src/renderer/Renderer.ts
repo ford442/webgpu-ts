@@ -9,6 +9,8 @@ export class Renderer {
 private firePipeline!: GPURenderPipeline;
 private fireUniformBuffer!: GPUBuffer;
 private fireBindGroup!: GPUBindGroup;
+private firePoints: { x: number, y: number, startTime: number }[] = [];
+private MAX_FIRE_POINTS = 50;
 
     // Pipelines
     private galaxyPipeline!: GPURenderPipeline;
@@ -33,6 +35,10 @@ private fireBindGroup!: GPUBindGroup;
         this.canvas = canvas;
     }
 
+    public addFirePoint(x: number, y: number) {
+    this.firePoints.push({ x, y, startTime: performance.now() / 1000.0 });
+}
+    
     public addRipplePoint(x: number, y: number) {
         this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
     }
@@ -143,7 +149,7 @@ this.fireBindGroup = this.device.createBindGroup({
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 this.fireUniformBuffer = this.device.createBuffer({
-    size: 4 * 4, // 4 floats: time, unused, unused, unused
+    size: (4 * 4) + (this.MAX_FIRE_POINTS * 4 * 4), // Uniforms struct size
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
         // Sampler
@@ -304,8 +310,30 @@ this.firePipeline = this.device.createRenderPipeline({
                     passEncoder.draw(4);
                 }
                 break;
-                case 'fire':
-    this.device.queue.writeBuffer(this.fireUniformBuffer, 0, new Float32Array([performance.now() / 1000.0]));
+             case 'fire':
+    const currentTimeFire = performance.now() / 1000.0;
+
+    // Prune old fire points
+    this.firePoints = this.firePoints.filter(p => (currentTimeFire - p.startTime) < 4.0);
+    if (this.firePoints.length > this.MAX_FIRE_POINTS) {
+        this.firePoints.splice(0, this.firePoints.length - this.MAX_FIRE_POINTS);
+    }
+
+    const fireUniformData = new Float32Array(4 + (this.MAX_FIRE_POINTS * 4));
+    fireUniformData[0] = currentTimeFire;
+    fireUniformData[1] = this.firePoints.length;
+    
+    const firePointsData = new Float32Array(this.MAX_FIRE_POINTS * 4);
+    for (let i = 0; i < this.firePoints.length; i++) {
+        const point = this.firePoints[i];
+        firePointsData[i * 4 + 0] = point.x;
+        firePointsData[i * 4 + 1] = point.y;
+        firePointsData[i * 4 + 2] = point.startTime;
+    }
+    fireUniformData.set(firePointsData, 4);
+    
+    this.device.queue.writeBuffer(this.fireUniformBuffer, 0, fireUniformData);
+    
     if (this.firePipeline && this.fireBindGroup) {
         passEncoder.setPipeline(this.firePipeline);
         passEncoder.setBindGroup(0, this.fireBindGroup);
