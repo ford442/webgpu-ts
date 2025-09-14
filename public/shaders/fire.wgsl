@@ -34,17 +34,11 @@ fn noise(p: vec2<f32>) -> f32 {
                mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 
+// DEBUGGING: Replace the original fbm function with this one.
 fn fbm(p: vec2<f32>) -> f32 {
-    var v = 0.0;
-    var a = 0.5;
-    var shift = vec2<f32>(100.0);
-    var p_mutable = p; // Create a mutable copy of 'p'
-    for (var i = 0; i < 5; i = i + 1) {
-        v += a * noise(p_mutable);
-        p_mutable = p_mutable * 2.0 + shift; // Use the mutable copy
-        a *= 0.5;
-    }
-    return v;
+    // We are temporarily removing the complex loop and noise calculations.
+    // Returning a simple value will tell us if the crash is happening inside this function.
+    return 0.5;
 }
 
 @vertex
