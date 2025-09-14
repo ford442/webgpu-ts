@@ -59,12 +59,7 @@ private MAX_FIRE_POINTS = 50;
         await this.fetchImageUrls(); // Fetch the list from our Google Bucket
         await this.createResources();
         await this.createPipelines();
-this.fireBindGroup = this.device.createBindGroup({
-    layout: this.firePipeline.getBindGroupLayout(0),
-    entries: [
-        { binding: 0, resource: { buffer: this.fireUniformBuffer } },
-    ],
-});
+
         return true;
     }
 
