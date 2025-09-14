@@ -34,15 +34,19 @@ const Controls: React.FC<ControlsProps> = ({
 
     return (
         <div className="controls">
+            {/* Input Source Selector */}
+            {/* This dropdown chooses the input for the effects (image or video). */}
             <div className="control-group">
                 <label htmlFor="mode-select">Input Source:</label>
                 <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
                     <option value="image">Static Image</option>
                     <option value="video">Video Texture</option>
-                    {/* You can add back other modes if they don't use the standard effect pipeline */}
                 </select>
             </div>
-             <div className="control-group">
+
+            {/* Effect Selector */}
+            {/* This dropdown is now dynamically populated with all available effects. */}
+            <div className="control-group">
                 <label htmlFor="effect-select">Effect:</label>
                 <select id="effect-select" value={activeEffect} onChange={(e) => setActiveEffect(e.target.value)}>
                     {availableEffects.map(name => (
@@ -50,6 +54,7 @@ const Controls: React.FC<ControlsProps> = ({
                     ))}
                 </select>
             </div>
+
              {isImageMode && (
                 <>
                     <div className="control-group">
@@ -68,8 +73,7 @@ const Controls: React.FC<ControlsProps> = ({
                     )}
                 </>
             )}
-            {/* Pan and Zoom might not be applicable for all effects, 
-                you could conditionally render these based on the activeEffect */}
+            
             <div className="control-group">
                 <label htmlFor="zoom-slider">Zoom:</label>
                 <input type="range" id="zoom-slider" min="50" max="200" value={zoom * 100} onChange={(e) => setZoom(parseFloat(e.target.value) / 100)} />
