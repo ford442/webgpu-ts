@@ -45,6 +45,7 @@ fn fbm(p: vec2<f32>) -> f32 {
         a *= 0.5;
     }
     return v;
+}
 
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
