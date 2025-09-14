@@ -5,6 +5,10 @@ export class Renderer {
     private device!: GPUDevice;
     private context!: GPUCanvasContext;
     private presentationFormat!: GPUTextureFormat;
+    
+private firePipeline!: GPURenderPipeline;
+private fireUniformBuffer!: GPUBuffer;
+private fireBindGroup!: GPUBindGroup;
 
     // Pipelines
     private galaxyPipeline!: GPURenderPipeline;
@@ -49,7 +53,12 @@ export class Renderer {
         await this.fetchImageUrls(); // Fetch the list from our Google Bucket
         await this.createResources();
         await this.createPipelines();
-        
+this.fireBindGroup = this.device.createBindGroup({
+    layout: this.firePipeline.getBindGroupLayout(0),
+    entries: [
+        { binding: 0, resource: { buffer: this.fireUniformBuffer } },
+    ],
+});
         return true;
     }
 
@@ -133,7 +142,10 @@ export class Renderer {
             size: (4 * 4) + (4 * 4) + (this.MAX_RIPPLES * 4 * 4),
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-
+this.fireUniformBuffer = this.device.createBuffer({
+    size: 4 * 4, // 4 floats: time, unused, unused, unused
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+});
         // Sampler
         this.sampler = this.device.createSampler({
             magFilter: 'linear',
@@ -151,6 +163,9 @@ export class Renderer {
         const galaxyShaderModule = this.device.createShaderModule({ code: galaxyShaderCode });
         const imageVideoShaderModule = this.device.createShaderModule({ code: imageVideoShaderCode });
         
+        const fireShaderCode = await (await fetch('shaders/fire.wgsl')).text();
+        const fireShaderModule = this.device.createShaderModule({ code: fireShaderCode });
+
         const vertexEntryPoint = 'vs_main';
         const fragmentEntryPoint = 'fs_main';
 
@@ -164,7 +179,18 @@ export class Renderer {
             },
             primitive: { topology: 'triangle-list' },
         });
-
+        
+this.firePipeline = this.device.createRenderPipeline({
+    layout: 'auto',
+    vertex: { module: fireShaderModule, entryPoint: 'vs_main' },
+    fragment: {
+        module: fireShaderModule,
+        entryPoint: 'fs_main',
+        targets: [{ format: this.presentationFormat }],
+    },
+    primitive: { topology: 'triangle-list' },
+});
+        
         this.imageVideoPipeline = this.device.createRenderPipeline({
             layout: 'auto',
             vertex: { module: imageVideoShaderModule, entryPoint: vertexEntryPoint },
@@ -278,6 +304,14 @@ export class Renderer {
                     passEncoder.draw(4);
                 }
                 break;
+                case 'fire':
+    this.device.queue.writeBuffer(this.fireUniformBuffer, 0, new Float32Array([performance.now() / 1000.0]));
+    if (this.firePipeline && this.fireBindGroup) {
+        passEncoder.setPipeline(this.firePipeline);
+        passEncoder.setBindGroup(0, this.fireBindGroup);
+        passEncoder.draw(6);
+    }
+    break;
             case 'video':
                 if (this.videoTexture) {
                     uniformArray.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
