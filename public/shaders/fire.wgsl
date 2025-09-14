@@ -8,7 +8,7 @@ struct Uniforms {
     time: f32,
     firePointCount: u32,
     // Two f32s for padding to ensure firePoints is 16-byte aligned
-    _padding1: f32, 
+    _padding1: f32,
     _padding2: f32,
     @align(16) firePoints: array<FirePoint, 50>,
 };
@@ -17,7 +17,7 @@ struct Uniforms {
 
 // Function to convert HSV color to RGB
 fn hsv2rgb(c: vec3<f32>) -> vec3<f32> {
-    let RGB = clamp(abs(mod(c.x * 6.0 + vec3<f32>(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    let RGB = clamp(abs((c.x * 6.0 + vec3<f32>(0.0, 4.0, 2.0)) % 6.0 - 3.0) - 1.0, 0.0, 1.0);
     return c.z * mix(vec3<f32>(1.0), RGB, c.y);
 }
 
