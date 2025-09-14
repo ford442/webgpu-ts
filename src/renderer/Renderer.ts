@@ -310,40 +310,11 @@ this.firePipeline = this.device.createRenderPipeline({
                     passEncoder.draw(4);
                 }
                 break;
-            case 'fire':
-    const currentTimeFire = performance.now() / 1000.0;
-
-    // Prune old fire points
-    this.firePoints = this.firePoints.filter(p => (currentTimeFire - p.startTime) < 4.0);
-    if (this.firePoints.length > this.MAX_FIRE_POINTS) {
-        this.firePoints.splice(0, this.firePoints.length - this.MAX_FIRE_POINTS);
-    }
-
-    // The uniform buffer now has padding.
-    // 4 floats for time, count, and 2 padding floats.
-    // Then the array of fire points.
-    const fireUniformData = new Float32Array(4 + (this.MAX_FIRE_POINTS * 4));
-    fireUniformData[0] = currentTimeFire;
-    fireUniformData[1] = this.firePoints.length;
-    
-    // firePointsData starts at offset 16 bytes (4 floats)
-    const firePointsData = new Float32Array(this.MAX_FIRE_POINTS * 4);
-    for (let i = 0; i < this.firePoints.length; i++) {
-        const point = this.firePoints[i];
-        // Each FirePoint is now 4 floats (16 bytes) due to padding.
-        firePointsData[i * 4 + 0] = point.x;
-        firePointsData[i * 4 + 1] = point.y;
-        firePointsData[i * 4 + 2] = point.startTime;
-        // firePointsData[i * 4 + 3] is padding and can be left as 0
-    }
-    fireUniformData.set(firePointsData, 4); // Start setting the array data at index 4
-    
-    this.device.queue.writeBuffer(this.fireUniformBuffer, 0, fireUniformData);
-    
-    if (this.firePipeline && this.fireBindGroup) {
+           case 'fire':
+    // For this simple debug shader, we don't need to update a buffer or set a bind group.
+    if (this.firePipeline) {
         passEncoder.setPipeline(this.firePipeline);
-        passEncoder.setBindGroup(0, this.fireBindGroup);
-        passEncoder.draw(6);
+        passEncoder.draw(6); // Draw 6 vertices to make two triangles that cover the screen.
     }
     break;
             case 'video':
