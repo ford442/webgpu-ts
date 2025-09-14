@@ -22,7 +22,7 @@ export class Renderer {
     
     // Bind Groups
     private galaxyBindGroup!: GPUBindGroup;
-    private videoBindGrup!: GPUBindGroup;
+    private videoBindGroup!: GPUBindGroup; // <-- FIX IS HERE
     private imageBindGroup!: GPUBindGroup;
 
     constructor(canvas: HTMLCanvasElement) {
