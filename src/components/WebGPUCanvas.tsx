@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Renderer, RenderMode } from '../renderer/Renderer';
 
 interface WebGPUCanvasProps {
@@ -14,6 +14,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
     const rendererRef = useRef<Renderer | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
+    const lastMouseAddTime = useRef(0);
+    const [isMouseDown, setIsMouseDown] = useState(false);
 
     useEffect(() => {
         if (!canvasRef.current) return;
@@ -50,7 +52,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         }
     }, [imageVersion]);
 
-
     useEffect(() => {
         let active = true;
 
@@ -70,7 +71,35 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         };
     }, [mode, zoom, panX, panY]);
 
-    return <canvas ref={canvasRef} width="800" height="600" />;
+    const handleMouseDown = () => setIsMouseDown(true);
+    const handleMouseUp = () => setIsMouseDown(false);
+    const handleMouseLeave = () => setIsMouseDown(false);
+
+    const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+        if (rendererRef.current && mode === 'ripple' && isMouseDown) {
+            const now = performance.now();
+            if (now - lastMouseAddTime.current < 50) return;
+            lastMouseAddTime.current = now;
+
+            const canvas = canvasRef.current!;
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / canvas.width;
+            const y = (event.clientY - rect.top) / canvas.height;
+            rendererRef.current.addRipplePoint(x, y);
+        }
+    };
+
+    return (
+        <canvas 
+            ref={canvasRef} 
+            width="800" 
+            height="600" 
+            onMouseMove={handleCanvasMouseMove}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+        />
+    );
 };
 
 export default WebGPUCanvas;
