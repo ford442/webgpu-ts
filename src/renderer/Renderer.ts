@@ -1,10 +1,17 @@
 import { Effect } from '../effects/Effect';
-import { InvertEffect } from '../effects/InvertEffect';
-// Import other effects here as you create them
-// import { RippleEffect } from '../effects/RippleEffect'; 
-// import { GalaxyEffect } from '../effects/GalaxyEffect';
+// import { InvertEffect } from '../effects/InvertEffect'; 
+// NOTE: I've commented this out so you don't get an error before creating the file.
+// Please create InvertEffect.ts and uncomment this line.
 
-export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'effect'; // 'effect' can be a new generic mode
+// A temporary mock effect to prevent errors until you create the real ones.
+class InvertEffect implements Effect {
+    name = "Invert Colors";
+    async init(device: GPUDevice, presentationFormat: GPUTextureFormat): Promise<void> {}
+    render(device: GPUDevice, passEncoder: GPURenderPassEncoder, sampler: GPUSampler, texture: GPUTexture, uniformBuffer: GPUBuffer, canvas: HTMLCanvasElement, videoElement: HTMLVideoElement): void {}
+}
+
+
+export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'effect';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -12,11 +19,9 @@ export class Renderer {
     private context!: GPUCanvasContext;
     private presentationFormat!: GPUTextureFormat;
 
-    // Effects
     private effects: Effect[] = [];
     private activeEffect: Effect | null = null;
 
-    // Common Resources
     private imageVideoUniformBuffer!: GPUBuffer;
     private sampler!: GPUSampler;
     private videoTexture!: GPUTexture;
@@ -82,7 +87,6 @@ export class Renderer {
 
     private async createResources(): Promise<void> {
         this.imageVideoUniformBuffer = this.device.createBuffer({
-            // Make this large enough for any effect's needs
             size: 1024, 
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
@@ -93,8 +97,6 @@ export class Renderer {
     private async initializeEffects(): Promise<void> {
         this.effects = [
             new InvertEffect(),
-            // new RippleEffect(), // Once you create this class
-            // new GalaxyEffect(), // Once you create this class
         ];
 
         for (const effect of this.effects) {
@@ -130,18 +132,20 @@ export class Renderer {
 
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = this.context.getCurrentTexture().createView();
+
+        // --- FIX IS HERE ---
+        // Explicitly cast 'clear' and 'store' to the required types.
         const renderPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
                 clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                loadOp: 'clear',
-                storeOp: 'store',
+                loadOp: 'clear' as GPULoadOp,
+                storeOp: 'store' as GPUStoreOp,
             }],
         };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
         if (this.activeEffect && this.imageTexture && this.videoTexture) {
-            // Determine which texture to use based on the mode
             const sourceTexture = mode === 'video' ? this.videoTexture : this.imageTexture;
             
             this.activeEffect.render(
