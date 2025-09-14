@@ -23,11 +23,11 @@ const octaves = 5;
 fn fbm(p: vec2<f32>) -> f32 {
     var value = 0.0;
     var amplitude = 0.5;
-    var frequency = 0.0;
+    var p_mutable = p;
 
     for (var i = 0; i < octaves; i = i + 1) {
-        value = value + amplitude * noise(p);
-        p = p * 2.0;
+        value = value + amplitude * noise(p_mutable);
+        p_mutable = p_mutable * 2.0;
         amplitude = amplitude * 0.5;
     }
     return value;
