@@ -1,4 +1,10 @@
-export type RenderMode = 'shader' | 'image' | 'video' | 'ripple';
+import { Effect } from '../effects/Effect';
+import { InvertEffect } from '../effects/InvertEffect';
+// Import other effects here as you create them
+// import { RippleEffect } from '../effects/RippleEffect'; 
+// import { GalaxyEffect } from '../effects/GalaxyEffect';
+
+export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'effect'; // 'effect' can be a new generic mode
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -6,31 +12,19 @@ export class Renderer {
     private context!: GPUCanvasContext;
     private presentationFormat!: GPUTextureFormat;
 
-    // Pipelines
-    private galaxyPipeline!: GPURenderPipeline;
-    private imageVideoPipeline!: GPURenderPipeline;
+    // Effects
+    private effects: Effect[] = [];
+    private activeEffect: Effect | null = null;
 
-    // Resources
-    private galaxyUniformBuffer!: GPUBuffer;
+    // Common Resources
     private imageVideoUniformBuffer!: GPUBuffer;
     private sampler!: GPUSampler;
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
-    private imageUrls: string[] = []; // Will be populated from Google Bucket
-    private ripplePoints: { x: number, y: number, startTime: number }[] = [];
-    private MAX_RIPPLES = 50;
+    private imageUrls: string[] = [];
     
-    // Bind Groups
-    private galaxyBindGroup!: GPUBindGroup;
-    private videoBindGroup!: GPUBindGroup; // <-- FIX IS HERE
-    private imageBindGroup!: GPUBindGroup;
-
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
-    }
-
-    public addRipplePoint(x: number, y: number) {
-        this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
     }
 
     public async init(): Promise<boolean> {
@@ -46,192 +40,91 @@ export class Renderer {
             alphaMode: 'premultiplied',
         });
 
-        await this.fetchImageUrls(); // Fetch the list from our Google Bucket
+        await this.fetchImageUrls();
         await this.createResources();
-        await this.createPipelines();
+        await this.initializeEffects();
         
         return true;
     }
 
     private async fetchImageUrls(): Promise<void> {
-        // IMPORTANT: Replace this with your actual bucket name.
         const bucketName = 'my-sd35-space-images-2025'; 
         const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
-
         try {
             const response = await fetch(apiUrl);
-            if (!response.ok) {
-                throw new Error(`Google Cloud Storage API returned status ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`Google Cloud Storage API returned status ${response.status}`);
             const data = await response.json();
-            
-            if (data.items) {
-                this.imageUrls = data.items.map((item: { name: string }) => `https://storage.googleapis.com/${bucketName}/${item.name}`);
-            } else {
-                this.imageUrls = [];
-            }
-            
-            if (this.imageUrls.length === 0) {
-                console.warn("No images found in bucket or bucket is empty.");
-            }
-
+            this.imageUrls = data.items ? data.items.map((item: any) => `https://storage.googleapis.com/${bucketName}/${item.name}`) : [];
+            if (this.imageUrls.length === 0) console.warn("No images found in bucket.");
         } catch (e) {
             console.error("Failed to fetch image list from Google Bucket:", e);
-            console.error("Please ensure the bucket name is correct, is public, and has the correct CORS policy and permissions (Storage Legacy Bucket Reader).");
-            // Fallback to a default image if the API fails
             this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
         }
     }
-    
+
     public async loadRandomImage(): Promise<void> {
-        try {
-            if (this.imageUrls.length === 0) {
-                console.warn("Image URL list is empty. Cannot load a random image.");
-                return;
-            }
-            const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
-            const response = await fetch(imageUrl);
-            const imageBitmap = await createImageBitmap(await response.blob());
+        if (this.imageUrls.length === 0) return;
+        const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
+        const response = await fetch(imageUrl);
+        const imageBitmap = await createImageBitmap(await response.blob());
 
-            if (this.imageTexture) {
-                this.imageTexture.destroy();
-            }
+        if (this.imageTexture) this.imageTexture.destroy();
 
-            this.imageTexture = this.device.createTexture({
-                size: [imageBitmap.width, imageBitmap.height],
-                format: 'rgba8unorm',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-            });
-            this.device.queue.copyExternalImageToTexture(
-                { source: imageBitmap },
-                { texture: this.imageTexture },
-                [imageBitmap.width, imageBitmap.height]
-            );
-
-            if (this.imageVideoPipeline) {
-                this.imageBindGroup = this.device.createBindGroup({
-                    layout: this.imageVideoPipeline.getBindGroupLayout(0),
-                    entries: [
-                        { binding: 0, resource: this.sampler },
-                        { binding: 1, resource: this.imageTexture.createView() },
-                        { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } },
-                    ],
-                });
-            }
-        } catch (e) {
-            console.error("Failed to load image:", e);
-        }
+        this.imageTexture = this.device.createTexture({
+            size: [imageBitmap.width, imageBitmap.height],
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        this.device.queue.copyExternalImageToTexture(
+            { source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]
+        );
     }
 
     private async createResources(): Promise<void> {
-        // Uniform Buffers
-        this.galaxyUniformBuffer = this.device.createBuffer({
-            size: 4 * 4, // 4 floats: time, zoom, panX, panY
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
         this.imageVideoUniformBuffer = this.device.createBuffer({
-            size: (4 * 4) + (4 * 4) + (this.MAX_RIPPLES * 4 * 4),
+            // Make this large enough for any effect's needs
+            size: 1024, 
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-
-        // Sampler
-        this.sampler = this.device.createSampler({
-            magFilter: 'linear',
-            minFilter: 'linear',
-        });
-        
-        // Load the initial random image
+        this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         await this.loadRandomImage();
     }
 
-    private async createPipelines(): Promise<void> {
-        const galaxyShaderCode = await (await fetch('shaders/galaxy.wgsl')).text();
-        const imageVideoShaderCode = await (await fetch('shaders/imageVideo.wgsl')).text();
+    private async initializeEffects(): Promise<void> {
+        this.effects = [
+            new InvertEffect(),
+            // new RippleEffect(), // Once you create this class
+            // new GalaxyEffect(), // Once you create this class
+        ];
 
-        const galaxyShaderModule = this.device.createShaderModule({ code: galaxyShaderCode });
-        const imageVideoShaderModule = this.device.createShaderModule({ code: imageVideoShaderCode });
-        
-        const vertexEntryPoint = 'vs_main';
-        const fragmentEntryPoint = 'fs_main';
-
-        this.galaxyPipeline = this.device.createRenderPipeline({
-            layout: 'auto',
-            vertex: { module: galaxyShaderModule, entryPoint: vertexEntryPoint },
-            fragment: {
-                module: galaxyShaderModule,
-                entryPoint: fragmentEntryPoint,
-                targets: [{ format: this.presentationFormat }],
-            },
-            primitive: { topology: 'triangle-list' },
-        });
-
-        this.imageVideoPipeline = this.device.createRenderPipeline({
-            layout: 'auto',
-            vertex: { module: imageVideoShaderModule, entryPoint: vertexEntryPoint },
-            fragment: {
-                module: imageVideoShaderModule,
-                entryPoint: fragmentEntryPoint,
-                targets: [{ format: this.presentationFormat }],
-            },
-            primitive: { topology: 'triangle-strip' },
-        });
-
-        // This check is important because loadRandomImage runs before this
-        if (this.imageTexture) {
-            this.imageBindGroup = this.device.createBindGroup({
-                layout: this.imageVideoPipeline.getBindGroupLayout(0),
-                entries: [
-                    { binding: 0, resource: this.sampler },
-                    { binding: 1, resource: this.imageTexture.createView() },
-                    { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } },
-                ],
-            });
+        for (const effect of this.effects) {
+            await effect.init(this.device, this.presentationFormat);
         }
+
+        this.activeEffect = this.effects[0] || null;
+    }
+    
+    public getAvailableEffects(): string[] {
+        return this.effects.map(effect => effect.name);
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
-        const isRippleMode = mode === 'ripple';
-        const currentTime = performance.now() / 1000.0;
+    public setActiveEffect(name: string): void {
+        const effect = this.effects.find(e => e.name === name);
+        this.activeEffect = effect || null;
+    }
 
-        // Prune old ripples that have finished their animation
-        this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 3.0);
-        // Trim array to max size if needed
-        if (this.ripplePoints.length > this.MAX_RIPPLES) {
-            this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
-        }
-        
-        const uniformBufferSize = (4 + 4 + this.MAX_RIPPLES * 4);
-        const uniformArray = new Float32Array(uniformBufferSize);
-
+    public render(mode: RenderMode, videoElement: HTMLVideoElement): void {
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-             if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
+            if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
                 this.videoTexture = this.device.createTexture({
                     size: [videoElement.videoWidth, videoElement.videoHeight],
                     format: 'rgba8unorm',
                     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
                 });
-                this.videoBindGroup = this.device.createBindGroup({
-                    layout: this.imageVideoPipeline.getBindGroupLayout(0),
-                    entries: [
-                        { binding: 0, resource: this.sampler },
-                        { binding: 1, resource: this.videoTexture.createView() },
-                        { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } },
-                    ],
-                });
-                this.galaxyBindGroup = this.device.createBindGroup({
-                    layout: this.galaxyPipeline.getBindGroupLayout(0),
-                    entries: [
-                        { binding: 0, resource: { buffer: this.galaxyUniformBuffer } },
-                        { binding: 1, resource: this.sampler },
-                        { binding: 2, resource: this.videoTexture.createView() },
-                    ],
-                });
-             }
+            }
             this.device.queue.copyExternalImageToTexture(
-                { source: videoElement },
-                { texture: this.videoTexture },
-                [videoElement.videoWidth, videoElement.videoHeight]
+                { source: videoElement }, { texture: this.videoTexture }, [videoElement.videoWidth, videoElement.videoHeight]
             );
         }
 
@@ -241,56 +134,25 @@ export class Renderer {
             colorAttachments: [{
                 view: textureView,
                 clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                loadOp: 'clear' as GPULoadOp,
-                storeOp: 'store' as GPUStoreOp,
+                loadOp: 'clear',
+                storeOp: 'store',
             }],
         };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
-        switch (mode) {
-            case 'shader':
-                this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([performance.now() / 1000.0, zoom, panX, panY]));
-                if (this.galaxyPipeline && this.galaxyBindGroup) {
-                    passEncoder.setPipeline(this.galaxyPipeline);
-                    passEncoder.setBindGroup(0, this.galaxyBindGroup);
-                    passEncoder.draw(6);
-                }
-                break;
-            case 'image':
-            case 'ripple':
-                if (this.imageVideoPipeline && this.imageBindGroup && this.imageTexture) {
-                    uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
-                    uniformArray.set([currentTime, this.ripplePoints.length, isRippleMode ? 1.0 : 0.0], 4);
-                    
-                    // Ripple data
-                    const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
-                    for (let i = 0; i < this.ripplePoints.length; i++) {
-                        const point = this.ripplePoints[i];
-                        rippleData[i * 4 + 0] = point.x;
-                        rippleData[i * 4 + 1] = point.y;
-                        rippleData[i * 4 + 2] = point.startTime;
-                    }
-                    uniformArray.set(rippleData, 8);
-                    
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-                    passEncoder.setPipeline(this.imageVideoPipeline);
-                    passEncoder.setBindGroup(0, this.imageBindGroup);
-                    passEncoder.draw(4);
-                }
-                break;
-            case 'video':
-                if (this.videoTexture) {
-                    uniformArray.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
-                    uniformArray.set([currentTime, 0, 0], 4); // No ripples for video mode
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-
-                    if (this.imageVideoPipeline && this.videoBindGroup) {
-                        passEncoder.setPipeline(this.imageVideoPipeline);
-                        passEncoder.setBindGroup(0, this.videoBindGroup);
-                        passEncoder.draw(4);
-                    }
-                }
-                break;
+        if (this.activeEffect && this.imageTexture && this.videoTexture) {
+            // Determine which texture to use based on the mode
+            const sourceTexture = mode === 'video' ? this.videoTexture : this.imageTexture;
+            
+            this.activeEffect.render(
+                this.device,
+                passEncoder,
+                this.sampler,
+                sourceTexture,
+                this.imageVideoUniformBuffer,
+                this.canvas,
+                videoElement
+            );
         }
 
         passEncoder.end();
