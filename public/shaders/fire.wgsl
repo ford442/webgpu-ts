@@ -1,12 +1,16 @@
 struct FirePoint {
     pos: vec2<f32>,
     startTime: f32,
+    _pading: f32, // Added for 16-byte alignment
 };
 
 struct Uniforms {
     time: f32,
     firePointCount: u32,
-    firePoints: array<FirePoint, 50>,
+    // Two f32s for padding to ensure firePoints is 16-byte aligned
+    _padding1: f32, 
+    _padding2: f32,
+    @align(16) firePoints: array<FirePoint, 50>,
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
