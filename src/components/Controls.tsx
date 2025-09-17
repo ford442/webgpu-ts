@@ -26,7 +26,7 @@ const Controls: React.FC<ControlsProps> = ({
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay
 }) => {
-    const isImageMode = mode === 'image' || mode === 'ripple';
+    const isImageMode = mode === 'image' || mode === 'ripple' || mode === 'liquid';
 
     return (
         <div className="controls">
@@ -37,6 +37,7 @@ const Controls: React.FC<ControlsProps> = ({
                     <option value="image">Static Image</option>
                     <option value="ripple">Ripple Effect</option>
                     <option value="video">Video Texture</option>
+                    <option value="liquid">Liquid Effect</option>
                 </select>
             </div>
              {isImageMode && (
