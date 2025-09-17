@@ -133,12 +133,14 @@ export class Renderer {
         // This just loads the image data; it doesn't create pipelines or bind groups yet.
         await this.loadRandomImage();
     }
-
-    private _initializeV3State() {
-        if (!this.device || !this.imageTexture || !this.pipelines.has('liquid')) return;
+    
+   private _initializeV3State() {
+        // --- FIX IS HERE ---
+        // This function now uses the new, dedicated 'initV3' pipeline.
+        if (!this.device || !this.imageTexture || !this.pipelines.has('initV3')) return;
 
         const initBindGroup = this.device.createBindGroup({
-            layout: this.pipelines.get('liquid')!.getBindGroupLayout(0),
+            layout: this.pipelines.get('initV3')!.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: this.sampler },
                 { binding: 1, resource: this.imageTexture.createView() }
@@ -154,7 +156,7 @@ export class Renderer {
                 clearValue: { r: 0, g: 0, b: 0, a: 1 },
             }]
         });
-        passEncoder.setPipeline(this.pipelines.get('liquid') as GPURenderPipeline);
+        passEncoder.setPipeline(this.pipelines.get('initV3') as GPURenderPipeline);
         passEncoder.setBindGroup(0, initBindGroup);
         passEncoder.draw(4);
         passEncoder.end();
