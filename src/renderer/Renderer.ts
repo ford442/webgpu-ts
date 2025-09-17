@@ -1,4 +1,4 @@
-export type RenderMode = 'shader' | 'image' | 'video' | 'ripple';
+export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -9,21 +9,27 @@ export class Renderer {
     // Pipelines
     private galaxyPipeline!: GPURenderPipeline;
     private imageVideoPipeline!: GPURenderPipeline;
+    private liquidPipeline!: GPURenderPipeline;
+    private computePipeline!: GPUComputePipeline;
 
     // Resources
     private galaxyUniformBuffer!: GPUBuffer;
     private imageVideoUniformBuffer!: GPUBuffer;
+    private computeUniformBuffer!: GPUBuffer;
     private sampler!: GPUSampler;
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
+    private writeTexture!: GPUTexture;
     private imageUrls: string[] = []; // Will be populated from Google Bucket
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
     private MAX_RIPPLES = 50;
     
     // Bind Groups
     private galaxyBindGroup!: GPUBindGroup;
-    private videoBindGroup!: GPUBindGroup; // <-- FIX IS HERE
+    private videoBindGroup!: GPUBindGroup;
     private imageBindGroup!: GPUBindGroup;
+    private liquidBindGroup!: GPUBindGroup;
+    private computeBindGroup!: GPUBindGroup;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -118,6 +124,17 @@ export class Renderer {
                     ],
                 });
             }
+            if (this.computePipeline) {
+                this.computeBindGroup = this.device.createBindGroup({
+                    layout: this.computePipeline.getBindGroupLayout(0),
+                    entries: [
+                        { binding: 0, resource: this.sampler },
+                        { binding: 1, resource: this.imageTexture.createView() },
+                        { binding: 2, resource: this.writeTexture.createView() },
+                        { binding: 3, resource: { buffer: this.computeUniformBuffer } },
+                    ],
+                });
+            }
         } catch (e) {
             console.error("Failed to load image:", e);
         }
@@ -133,11 +150,22 @@ export class Renderer {
             size: (4 * 4) + (4 * 4) + (this.MAX_RIPPLES * 4 * 4),
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
+        this.computeUniformBuffer = this.device.createBuffer({
+            size: 4 * 4, // time, resolutionX, resolutionY
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
 
         // Sampler
         this.sampler = this.device.createSampler({
             magFilter: 'linear',
             minFilter: 'linear',
+        });
+        
+        // Storage Texture
+        this.writeTexture = this.device.createTexture({
+            size: [this.canvas.width, this.canvas.height],
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
         
         // Load the initial random image
@@ -147,9 +175,13 @@ export class Renderer {
     private async createPipelines(): Promise<void> {
         const galaxyShaderCode = await (await fetch('shaders/galaxy.wgsl')).text();
         const imageVideoShaderCode = await (await fetch('shaders/imageVideo.wgsl')).text();
+        const liquidShaderCode = await (await fetch('shaders/liquid.wgsl')).text();
+        const textureShaderCode = await (await fetch('shaders/texture.wgsl')).text();
 
         const galaxyShaderModule = this.device.createShaderModule({ code: galaxyShaderCode });
         const imageVideoShaderModule = this.device.createShaderModule({ code: imageVideoShaderCode });
+        const liquidShaderModule = this.device.createShaderModule({ code: liquidShaderCode });
+        const textureShaderModule = this.device.createShaderModule({ code: textureShaderCode });
         
         const vertexEntryPoint = 'vs_main';
         const fragmentEntryPoint = 'fs_main';
@@ -176,6 +208,25 @@ export class Renderer {
             primitive: { topology: 'triangle-strip' },
         });
 
+        this.liquidPipeline = this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: { module: textureShaderModule, entryPoint: vertexEntryPoint },
+            fragment: {
+                module: textureShaderModule,
+                entryPoint: fragmentEntryPoint,
+                targets: [{ format: this.presentationFormat }],
+            },
+            primitive: { topology: 'triangle-strip' },
+        });
+
+        this.computePipeline = this.device.createComputePipeline({
+            layout: 'auto',
+            compute: {
+                module: liquidShaderModule,
+                entryPoint: 'main',
+            },
+        });
+
         // This check is important because loadRandomImage runs before this
         if (this.imageTexture) {
             this.imageBindGroup = this.device.createBindGroup({
@@ -184,6 +235,22 @@ export class Renderer {
                     { binding: 0, resource: this.sampler },
                     { binding: 1, resource: this.imageTexture.createView() },
                     { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } },
+                ],
+            });
+            this.liquidBindGroup = this.device.createBindGroup({
+                layout: this.liquidPipeline.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: this.sampler },
+                    { binding: 1, resource: this.writeTexture.createView() },
+                ],
+            });
+            this.computeBindGroup = this.device.createBindGroup({
+                layout: this.computePipeline.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: this.sampler },
+                    { binding: 1, resource: this.imageTexture.createView() },
+                    { binding: 2, resource: this.writeTexture.createView() },
+                    { binding: 3, resource: { buffer: this.computeUniformBuffer } },
                 ],
             });
         }
@@ -236,6 +303,16 @@ export class Renderer {
         }
 
         const commandEncoder = this.device.createCommandEncoder();
+        
+        if (mode === 'liquid') {
+            this.device.queue.writeBuffer(this.computeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
+            const computePass = commandEncoder.beginComputePass();
+            computePass.setPipeline(this.computePipeline);
+            computePass.setBindGroup(0, this.computeBindGroup);
+            computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+            computePass.end();
+        }
+
         const textureView = this.context.getCurrentTexture().createView();
         const renderPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [{
@@ -289,6 +366,13 @@ export class Renderer {
                         passEncoder.setBindGroup(0, this.videoBindGroup);
                         passEncoder.draw(4);
                     }
+                }
+                break;
+            case 'liquid':
+                if (this.liquidPipeline && this.liquidBindGroup) {
+                    passEncoder.setPipeline(this.liquidPipeline);
+                    passEncoder.setBindGroup(0, this.liquidBindGroup);
+                    passEncoder.draw(4);
                 }
                 break;
         }
