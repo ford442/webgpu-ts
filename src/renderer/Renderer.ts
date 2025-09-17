@@ -98,11 +98,13 @@ export class Renderer {
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
             
-            // --- FIX #1 & #2 ---
-            // Instead of an incorrect copy, we now call a dedicated function
-            // to properly initialize the v3 state by rendering to it.
-            // We also REMOVED the incorrect call to createBindGroups() from here.
-            this._initializeV3State();
+            // --- FIX: Make this function safe to call after initial setup ---
+            // When loading a new image later, we need to re-initialize the state
+            // and then update the bind groups that depend on the new image.
+            if (this.pipelines.size > 0) {
+                this._initializeV3State();
+                await this.createBindGroups();
+            }
 
         } catch (e) { console.error("Failed to load image:", e); }
     }
