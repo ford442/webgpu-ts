@@ -165,10 +165,14 @@ export class Renderer {
             [this.colorRead, this.colorWrite] = [this.colorWrite, this.colorRead];
             this.createBindGroups(); // Re-create bind groups with swapped textures
         } else if (mode.startsWith('liquid')) {
-            // V1/V2 single-pass simulation
-            /* ... unchanged ... */
+            if (this.liquidPipeline && this.liquidBindGroup) {
+                    passEncoder.setPipeline(this.liquidPipeline);
+                    passEncoder.setBindGroup(0, this.liquidBindGroup);
+                    passEncoder.draw(4);
+                }
         }
         
-        // ... (rest of render function, render pass, and switch statement) ...
+      passEncoder.end();
+        this.device.queue.submit([commandEncoder.finish()]);
     }
 }
