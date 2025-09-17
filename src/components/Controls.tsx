@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { RenderMode } from '../renderer/Renderer';
 
 interface ControlsProps {
