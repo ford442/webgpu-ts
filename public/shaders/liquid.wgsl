@@ -16,7 +16,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var totalDisplacement = vec2<f32>(0.0, 0.0);
     let currentTime = u.config.x;
     
-    // 1. Ambient "liquid" effect (always running)
+    // 1. Ambient "liquid" effect
     let time = currentTime * 0.5;
     let ambient_strength = 0.02;
     let ambient_freq = 15.0;
@@ -24,10 +24,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let d2 = cos(uv.y * ambient_freq * 0.7 + time) * ambient_strength;
     totalDisplacement += vec2<f32>(d1, d2);
 
-    // 2. Mouse-driven ripple logic
+    // 2. Mouse-driven ripple logic (simplified to ONE ripple)
     let rippleCount = u32(u.config.y);
-    for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
-        let rippleData = u.ripples[i];
+    if (rippleCount > 0u) {
+        let rippleData = u.ripples[0]; // Only process the first ripple
         let rippleCenter = rippleData.xy;
         let rippleStartTime = rippleData.z;
         let timeSinceClick = currentTime - rippleStartTime;
@@ -36,8 +36,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             let direction_vec = uv - rippleCenter;
             let dist = length(direction_vec);
 
-            // --- FIX IS HERE ---
-            // Add a check to prevent division by zero / normalize(0)
             if (dist > 0.0001) {
                 let ripple_speed = 2.0;
                 let ripple_frequency = 25.0;
@@ -48,16 +46,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                 let falloff = 1.0 / (dist * 20.0 + 1.0);
                 let displacement = wave * ripple_amplitude * attenuation * falloff;
                 
-                // Safe normalization
                 let direction = direction_vec / dist;
-
                 totalDisplacement += direction * displacement;
             }
         }
     }
 
     let displacedUV = uv + totalDisplacement;
-    
     let color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
     
     textureStore(writeTexture, global_id.xy, color);
