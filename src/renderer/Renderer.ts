@@ -147,11 +147,12 @@ export class Renderer {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
         this.imageVideoUniformBuffer = this.device.createBuffer({
-            size: (4 * 4) + (4 * 4) + (this.MAX_RIPPLES * 4 * 4),
+            size: (4 * 4) + (this.MAX_RIPPLES * 4 * 4),
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
+        // Increased buffer size to hold ripple data
         this.computeUniformBuffer = this.device.createBuffer({
-            size: 4 * 4, // time, resolutionX, resolutionY
+            size: (4 * 4) + (this.MAX_RIPPLES * 4 * 4), // config + ripples array
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
@@ -305,7 +306,23 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
         
         if (mode === 'liquid') {
-            this.device.queue.writeBuffer(this.computeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
+            // Updated uniform data preparation for compute shader
+            const computeUniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
+            // config: time, rippleCount, resolutionX, resolutionY
+            computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
+            
+            // ripples: x, y, startTime
+            const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
+            for (let i = 0; i < this.ripplePoints.length; i++) {
+                const point = this.ripplePoints[i];
+                rippleData[i * 4 + 0] = point.x;
+                rippleData[i * 4 + 1] = point.y;
+                rippleData[i * 4 + 2] = point.startTime;
+            }
+            computeUniformArray.set(rippleData, 4);
+
+            this.device.queue.writeBuffer(this.computeUniformBuffer, 0, computeUniformArray);
+
             const computePass = commandEncoder.beginComputePass();
             computePass.setPipeline(this.computePipeline);
             computePass.setBindGroup(0, this.computeBindGroup);
