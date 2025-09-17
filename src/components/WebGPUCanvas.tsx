@@ -76,7 +76,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
     const handleMouseLeave = () => setIsMouseDown(false);
 
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        if (rendererRef.current && mode === 'ripple' && isMouseDown) {
+        // Updated condition to include 'liquid' mode
+        if (rendererRef.current && (mode === 'ripple' || mode === 'liquid') && isMouseDown) {
             const now = performance.now();
             if (now - lastMouseAddTime.current < 50) return;
             lastMouseAddTime.current = now;
