@@ -187,11 +187,46 @@ export class Renderer {
         const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
-        switch (mode) {
-            case 'shader': /* ... */ break;
-            case 'image': case 'ripple': /* ... */ break;
-            case 'video': /* ... */ break;
-            case 'liquid-v1': case 'liquid':
+       switch (mode) {
+            case 'shader':
+                this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([currentTime, zoom, panX, panY]));
+                if (this.galaxyPipeline && this.galaxyBindGroup) {
+                    passEncoder.setPipeline(this.galaxyPipeline);
+                    passEncoder.setBindGroup(0, this.galaxyBindGroup);
+                    passEncoder.draw(6);
+                }
+                break;
+            case 'image':
+            case 'ripple':
+                if (this.imageVideoPipeline && this.imageBindGroup && this.imageTexture) {
+                    const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
+                    uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
+                    uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0], 4);
+                    const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
+                    for (let i = 0; i < this.ripplePoints.length; i++) {
+                        const point = this.ripplePoints[i];
+                        rippleData.set([point.x, point.y, point.startTime], i * 4);
+                    }
+                    uniformArray.set(rippleData, 8);
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
+                    passEncoder.setPipeline(this.imageVideoPipeline);
+                    passEncoder.setBindGroup(0, this.imageBindGroup);
+                    passEncoder.draw(4);
+                }
+                break;
+            case 'video':
+                if (this.videoTexture && this.imageVideoPipeline && this.videoBindGroup) {
+                    const uniformArray = new Float32Array(8);
+                    uniformArray.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
+                    uniformArray.set([currentTime, 0, 0], 4);
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
+                    passEncoder.setPipeline(this.imageVideoPipeline);
+                    passEncoder.setBindGroup(0, this.videoBindGroup);
+                    passEncoder.draw(4);
+                }
+                break;
+            case 'liquid-v1':
+            case 'liquid':
                 if (this.liquidPipeline && this.liquidBindGroup) {
                     passEncoder.setPipeline(this.liquidPipeline);
                     passEncoder.setBindGroup(0, this.liquidBindGroup);
