@@ -165,11 +165,19 @@ export class Renderer {
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
-        if (mode !== 'liquid-v3') {
+      if (mode !== 'liquid-v3') {
+             // Draw black for other modes for now
             const commandEncoder = this.device.createCommandEncoder();
             const textureView = this.context.getCurrentTexture().createView();
             const renderPass = commandEncoder.beginRenderPass({
-                colorAttachments: [{ view: textureView, loadOp: 'clear', storeOp: 'store', clearValue: {r:0,g:0,b:0,a:1}}]
+                // --- FIX IS HERE ---
+                // Added the required type assertions for GPULoadOp and GPUStoreOp
+                colorAttachments: [{ 
+                    view: textureView, 
+                    loadOp: 'clear' as GPULoadOp, 
+                    storeOp: 'store' as GPUStoreOp, 
+                    clearValue: {r:0,g:0,b:0,a:1}
+                }]
             });
             renderPass.end();
             this.device.queue.submit([commandEncoder.finish()]);
