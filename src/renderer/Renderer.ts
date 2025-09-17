@@ -81,10 +81,10 @@ export class Renderer {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.v3MouseUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
-        const floatTextureDesc: GPUTextureDescriptor = { 
+              const floatTextureDesc: GPUTextureDescriptor = { 
             size: [width, height], 
             format: 'rgba16float', 
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST,
         };
         this.velocityRead = this.device.createTexture(floatTextureDesc);
         this.velocityWrite = this.device.createTexture(floatTextureDesc);
