@@ -94,13 +94,16 @@ export class Renderer {
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
             
-            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.colorRead }, { width: imageBitmap.width, height: imageBitmap.height });
+            // --- FIX #1 & #2 ---
+            // Instead of an incorrect copy, we now call a dedicated function
+            // to properly initialize the v3 state by rendering to it.
+            // We also REMOVED the incorrect call to createBindGroups() from here.
+            this._initializeV3State();
 
-            await this.createBindGroups();
         } catch (e) { console.error("Failed to load image:", e); }
     }
 
@@ -113,10 +116,10 @@ export class Renderer {
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.writeTexture = this.device.createTexture({ size: [width, height], format: 'rgba8unorm', usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
         this.v3MouseUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        const floatTextureDesc: GPUTextureDescriptor = { 
+      const floatTextureDesc: GPUTextureDescriptor = { 
             size: [width, height], 
             format: 'rgba16float', 
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         };
         this.velocityRead = this.device.createTexture(floatTextureDesc);
         this.velocityWrite = this.device.createTexture(floatTextureDesc);
@@ -125,6 +128,18 @@ export class Renderer {
         await this.loadRandomImage();
     }
 
+     private _initializeV3State() {
+        if (!this.device || !this.imageTexture) return;
+
+        // This bind group is used just once to stamp the source image onto the color state texture
+        const initBindGroup = this.device.createBindGroup({
+            layout: this.pipelines.get('liquid')!.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: this.sampler },
+                { binding: 1, resource: this.imageTexture.createView() }
+            ]
+        });
+         
     private async createPipelines(): Promise<void> {
         const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode, velocityCode, advectionCode] = await Promise.all([
             fetch('shaders/galaxy.wgsl').then(res => res.text()), fetch('shaders/imageVideo.wgsl').then(res => res.text()),
@@ -176,9 +191,12 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
         const currentTime = performance.now() / 1000.0;
 
-        if (mode === 'liquid-v3') {
-            this.createBindGroups(); // Update bind groups for ping-pong
-            this.device.queue.writeBuffer(this.v3MouseUniformBuffer, 0, new Float32Array([this.mouseState.x, this.mouseState.y, this.mouseState.deltaX, this.mouseState.deltaY, this.mouseState.isDragging ? 1.0 : 0.0]));
+           if (mode === 'liquid-v3') {
+            this.createBindGroups();
+            const mouseData = new Float32Array(8);
+            mouseData.set([this.mouseState.x, this.mouseState.y, this.mouseState.isDragging ? 1.0 : 0.0], 0);
+            mouseData.set([this.mouseState.deltaX, this.mouseState.deltaY], 4);
+            this.device.queue.writeBuffer(this.v3MouseUniformBuffer, 0, mouseData);
             
             const computePass = commandEncoder.beginComputePass();
             computePass.setPipeline(this.pipelines.get('velocity') as GPUComputePipeline);
