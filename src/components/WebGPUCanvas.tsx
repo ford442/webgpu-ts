@@ -16,33 +16,26 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
     const animationFrameId = useRef<number>(0);
     const lastMouseAddTime = useRef(0);
     const [isMouseDown, setIsMouseDown] = useState(false);
+    const lastMousePos = useRef<{x: number, y: number}>({ x: 0, y: 0 });
 
     useEffect(() => {
         if (!canvasRef.current) return;
-
         const canvas = canvasRef.current;
         const renderer = new Renderer(canvas);
+        rendererRef.current = renderer;
         
         (async () => {
             const success = await renderer.init();
             if (success) {
-                rendererRef.current = renderer;
                 videoRef.current = document.createElement('video');
                 videoRef.current.src = 'https://test.1ink.us/webgputs/big_buck_bunny_720p_surround.mp4';
                 videoRef.current.crossOrigin = 'anonymous';
-                videoRef.current.muted = true;
-                videoRef.current.loop = true;
-                videoRef.current.autoplay = true;
-                videoRef.current.playsInline = true;
-                await videoRef.current.play().catch(err => {
-                    console.error("Video play failed:", err);
-                });
+                videoRef.current.muted = true; videoRef.current.loop = true;
+                videoRef.current.autoplay = true; videoRef.current.playsInline = true;
+                await videoRef.current.play().catch(console.error);
             }
         })();
-
-        return () => {
-            cancelAnimationFrame(animationFrameId.current);
-        };
+        return () => cancelAnimationFrame(animationFrameId.current);
     }, []);
 
     useEffect(() => {
@@ -53,7 +46,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
 
     useEffect(() => {
         let active = true;
-
         const animate = () => {
             if (!active) return;
             if (rendererRef.current && videoRef.current) {
@@ -61,58 +53,58 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
-        
         animate();
-
-        return () => {
-            active = false;
-            cancelAnimationFrame(animationFrameId.current);
-        };
+        return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
     }, [mode, zoom, panX, panY]);
 
-    // --- FIX IS HERE ---
-
-    // 1. Created a helper function to avoid repeating code.
-    const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!rendererRef.current) return;
-        const canvas = canvasRef.current!;
-        const rect = canvas.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / canvas.width;
-        const y = (event.clientY - rect.top) / canvas.height;
-        rendererRef.current.addRipplePoint(x, y);
-    };
-
-    // 2. Updated onMouseDown to create a ripple on the initial click.
+    const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => { /* ... unchanged ... */ };
+    
+    // --- v3 MOUSE HANDLING ---
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
         setIsMouseDown(true);
-        if (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1') {
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / canvasRef.current!.width;
+        const y = (event.clientY - rect.top) / canvasRef.current!.height;
+        lastMousePos.current = { x, y };
+
+        if (mode.startsWith('liquid') && mode !== 'liquid-v3') {
             addRippleAtMouseEvent(event);
+        } else if (mode === 'liquid-v3' && rendererRef.current) {
+            rendererRef.current.updateMouse(x, y, 0, 0, true);
         }
     };
 
-    const handleMouseUp = () => setIsMouseDown(false);
-    const handleMouseLeave = () => setIsMouseDown(false);
+    const handleMouseUp = () => {
+        setIsMouseDown(false);
+        if (mode === 'liquid-v3' && rendererRef.current) {
+            rendererRef.current.updateMouse(0, 0, 0, 0, false);
+        }
+    };
 
-    // 3. Updated onMouseMove to handle dragging.
+    const handleMouseLeave = handleMouseUp; // Treat leaving the canvas as letting go
+
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        if (isMouseDown && (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1')) {
-            const now = performance.now();
-            if (now - lastMouseAddTime.current < 10) return;
-            lastMouseAddTime.current = now;
-            addRippleAtMouseEvent(event);
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / canvasRef.current!.width;
+        const y = (event.clientY - rect.top) / canvasRef.current!.height;
+
+        if (isMouseDown) {
+            if (mode.startsWith('liquid') && mode !== 'liquid-v3') {
+                const now = performance.now();
+                if (now - lastMouseAddTime.current < 10) return;
+                lastMouseAddTime.current = now;
+                addRippleAtMouseEvent(event);
+            } else if (mode === 'liquid-v3' && rendererRef.current) {
+                const deltaX = x - lastMousePos.current.x;
+                const deltaY = y - lastMousePos.current.y;
+                rendererRef.current.updateMouse(x, y, deltaX, deltaY, true);
+                lastMousePos.current = { x, y };
+            }
         }
     };
 
     return (
-        <canvas 
-            ref={canvasRef} 
-            width="1024" 
-            height="1024" 
-            onMouseMove={handleCanvasMouseMove}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
-        />
+        <canvas ref={canvasRef} width="800" height="600" onMouseMove={handleCanvasMouseMove} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave} />
     );
 };
 
