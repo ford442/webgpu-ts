@@ -166,11 +166,11 @@ export class Renderer {
         const vertexEntryPoint = 'vs_main';
         const fragmentEntryPoint = 'fs_main';
 
-     const commonPipelineConfig = {
-    vertex: { module: imageVideoShaderModule, entryPoint: vertexEntryPoint },
-    fragment: { targets: [{ format: this.presentationFormat }] },
-    primitive: { topology: 'triangle-strip' }, // <-- TypeScript sees this as `string`
-};
+        const commonPipelineConfig = {
+            vertex: { module: imageVideoShaderModule, entryPoint: vertexEntryPoint },
+            fragment: { targets: [{ format: this.presentationFormat }] },
+            primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology },
+        };
 
         this.galaxyPipeline = this.device.createRenderPipeline({ layout: 'auto', ...commonPipelineConfig, vertex: { module: galaxyShaderModule, entryPoint: vertexEntryPoint }, fragment: { ...commonPipelineConfig.fragment, module: galaxyShaderModule, entryPoint: fragmentEntryPoint }, primitive: { topology: 'triangle-list' } });
         this.imageVideoPipeline = this.device.createRenderPipeline({ layout: 'auto', ...commonPipelineConfig, fragment: { ...commonPipelineConfig.fragment, module: imageVideoShaderModule, entryPoint: fragmentEntryPoint }});
