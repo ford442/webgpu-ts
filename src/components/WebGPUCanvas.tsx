@@ -45,9 +45,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         };
     }, []);
 
-    // This useEffect handles loading a new random image when the button is clicked
     useEffect(() => {
-        if (rendererRef.current && imageVersion > 0) { // imageVersion > 0 ensures it doesn't run on initial load
+        if (rendererRef.current && imageVersion > 0) {
             rendererRef.current.loadRandomImage();
         }
     }, [imageVersion]);
@@ -71,22 +70,36 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         };
     }, [mode, zoom, panX, panY]);
 
-    const handleMouseDown = () => setIsMouseDown(true);
+    // --- FIX IS HERE ---
+
+    // 1. Created a helper function to avoid repeating code.
+    const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!rendererRef.current) return;
+        const canvas = canvasRef.current!;
+        const rect = canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / canvas.width;
+        const y = (event.clientY - rect.top) / canvas.height;
+        rendererRef.current.addRipplePoint(x, y);
+    };
+
+    // 2. Updated onMouseDown to create a ripple on the initial click.
+    const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
+        setIsMouseDown(true);
+        if (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1') {
+            addRippleAtMouseEvent(event);
+        }
+    };
+
     const handleMouseUp = () => setIsMouseDown(false);
     const handleMouseLeave = () => setIsMouseDown(false);
 
+    // 3. Updated onMouseMove to handle dragging.
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        // Updated condition to include 'liquid' mode
-        if (rendererRef.current && (mode === 'ripple' || mode === 'liquid') && isMouseDown) {
+        if (isMouseDown && (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1')) {
             const now = performance.now();
-            if (now - lastMouseAddTime.current < 50) return;
+            if (now - lastMouseAddTime.current < 10) return;
             lastMouseAddTime.current = now;
-
-            const canvas = canvasRef.current!;
-            const rect = canvas.getBoundingClientRect();
-            const x = (event.clientX - rect.left) / canvas.width;
-            const y = (event.clientY - rect.top) / canvas.height;
-            rendererRef.current.addRipplePoint(x, y);
+            addRippleAtMouseEvent(event);
         }
     };
 
