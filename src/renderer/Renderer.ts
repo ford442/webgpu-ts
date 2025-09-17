@@ -1,4 +1,4 @@
-export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'liquid' | 'liquid-v3';
+import { RenderMode } from "./types";
 
 export class Renderer {
     // Canvas & Device
@@ -37,7 +37,7 @@ export class Renderer {
     
     // Mouse State for v3
     private mouseState = { x: 0, y: 0, deltaX: 0, deltaY: 0, isDragging: false };
-    private frameCount = 0; // For ping-pong logic
+    private frameCount = 0;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -61,9 +61,11 @@ export class Renderer {
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
 
         await this.fetchImageUrls();
-        await this.createResources();
-        await this.createPipelines();
-        await this.createBindGroups();
+        // The order here is critical to prevent errors
+        await this.createResources(); // This loads the initial image
+        await this.createPipelines();   // This creates the shaders
+        this._initializeV3State();      // This uses a pipeline to stamp the image onto the state texture
+        await this.createBindGroups();  // This creates the bindings for the render loop
         
         return true;
     }
@@ -98,14 +100,11 @@ export class Renderer {
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
             
-            // --- FIX: Make this function safe to call after initial setup ---
-            // When loading a new image later, we need to re-initialize the state
-            // and then update the bind groups that depend on the new image.
+            // If pipelines are already created, re-initialize state and bind groups
             if (this.pipelines.size > 0) {
                 this._initializeV3State();
                 await this.createBindGroups();
             }
-
         } catch (e) { console.error("Failed to load image:", e); }
     }
 
@@ -118,7 +117,10 @@ export class Renderer {
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.writeTexture = this.device.createTexture({ size: [width, height], format: 'rgba8unorm', usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
         this.v3MouseUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-      const floatTextureDesc: GPUTextureDescriptor = { 
+
+        // --- FIX IS HERE ---
+        // This descriptor MUST include RENDER_ATTACHMENT because _initializeV3State uses it as a render target.
+        const floatTextureDesc: GPUTextureDescriptor = { 
             size: [width, height], 
             format: 'rgba16float', 
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
@@ -127,13 +129,14 @@ export class Renderer {
         this.velocityWrite = this.device.createTexture(floatTextureDesc);
         this.colorRead = this.device.createTexture(floatTextureDesc);
         this.colorWrite = this.device.createTexture(floatTextureDesc);
+        
+        // This just loads the image data; it doesn't create pipelines or bind groups yet.
         await this.loadRandomImage();
     }
 
-     private _initializeV3State() {
-        if (!this.device || !this.imageTexture) return;
+    private _initializeV3State() {
+        if (!this.device || !this.imageTexture || !this.pipelines.has('liquid')) return;
 
-        // This bind group is used just once to stamp the source image onto the color state texture
         const initBindGroup = this.device.createBindGroup({
             layout: this.pipelines.get('liquid')!.getBindGroupLayout(0),
             entries: [
@@ -141,8 +144,23 @@ export class Renderer {
                 { binding: 1, resource: this.imageTexture.createView() }
             ]
         });
-     }
-    
+
+        const commandEncoder = this.device.createCommandEncoder();
+        const passEncoder = commandEncoder.beginRenderPass({
+            colorAttachments: [{
+                view: this.colorRead.createView(),
+                loadOp: 'clear' as GPULoadOp,
+                storeOp: 'store' as GPUStoreOp,
+                clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            }]
+        });
+        passEncoder.setPipeline(this.pipelines.get('liquid') as GPURenderPipeline);
+        passEncoder.setBindGroup(0, initBindGroup);
+        passEncoder.draw(4);
+        passEncoder.end();
+        this.device.queue.submit([commandEncoder.finish()]);
+    }
+
     private async createPipelines(): Promise<void> {
         const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode, velocityCode, advectionCode] = await Promise.all([
             fetch('shaders/galaxy.wgsl').then(res => res.text()), fetch('shaders/imageVideo.wgsl').then(res => res.text()),
@@ -171,19 +189,16 @@ export class Renderer {
 
     private async createBindGroups(): Promise<void> {
         if (!this.imageTexture) return;
-
-        // v2 Bind Groups
-        this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
-        this.bindGroups.set('computeV1', this.device.createBindGroup({ layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }] }));
-        this.bindGroups.set('computeV2', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
         
-        // v3 Bind Groups - need to handle ping-ponging
         const velRead = this.frameCount % 2 === 0 ? this.velocityRead : this.velocityWrite;
         const velWrite = this.frameCount % 2 === 0 ? this.velocityWrite : this.velocityRead;
         const colRead = this.frameCount % 2 === 0 ? this.colorRead : this.colorWrite;
         const colWrite = this.frameCount % 2 === 0 ? this.colorWrite : this.colorRead;
 
+        this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
+        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
+        this.bindGroups.set('computeV1', this.device.createBindGroup({ layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }] }));
+        this.bindGroups.set('computeV2', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
         this.bindGroups.set('velocity', this.device.createBindGroup({ layout: this.pipelines.get('velocity')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: velRead.createView() }, { binding: 2, resource: velWrite.createView() }, { binding: 3, resource: { buffer: this.v3MouseUniformBuffer } }] }));
         this.bindGroups.set('advection', this.device.createBindGroup({ layout: this.pipelines.get('advection')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: velWrite.createView() }, { binding: 2, resource: colRead.createView() }, { binding: 3, resource: colWrite.createView() }, { binding: 4, resource: this.imageTexture.createView() }] }));
         this.bindGroups.set('v3final', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: colWrite.createView() }] }));
@@ -194,8 +209,7 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
         const currentTime = performance.now() / 1000.0;
 
-           if (mode === 'liquid-v3') {
-            this.createBindGroups();
+        if (mode === 'liquid-v3') {
             const mouseData = new Float32Array(8);
             mouseData.set([this.mouseState.x, this.mouseState.y, this.mouseState.isDragging ? 1.0 : 0.0], 0);
             mouseData.set([this.mouseState.deltaX, this.mouseState.deltaY], 4);
@@ -212,17 +226,18 @@ export class Renderer {
             computePass.end();
 
             this.frameCount++;
+            this.createBindGroups(); // Update bind groups for next frame's ping-pong
         } else if (mode.startsWith('liquid')) {
             const computePass = commandEncoder.beginComputePass();
             if (mode === 'liquid-v1') {
-                this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
+                this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, width, height]));
                 computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
                 computePass.setBindGroup(0, this.bindGroups.get('computeV1')!);
-            } else { // 'liquid' v2
+            } else {
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
                 const computeUniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
-                computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
+                computeUniformArray.set([currentTime, this.ripplePoints.length, width, height], 0);
                 const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
                 for (let i = 0; i < this.ripplePoints.length; i++) {
                     const point = this.ripplePoints[i];
@@ -241,25 +256,48 @@ export class Renderer {
         const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
-        // --- FIX IS HERE ---
-        // Updated this block to use the new Map-based storage.
         const liquidPipeline = this.pipelines.get('liquid') as GPURenderPipeline;
         const imageVideoPipeline = this.pipelines.get('imageVideo') as GPURenderPipeline;
         const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
 
         switch (mode) {
             case 'shader':
-                // ... logic unchanged, just using the new variables ...
+                if (galaxyPipeline && this.bindGroups.has('galaxy')) {
+                    this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([currentTime, zoom, panX, panY]));
+                    passEncoder.setPipeline(galaxyPipeline);
+                    passEncoder.setBindGroup(0, this.bindGroups.get('galaxy')!);
+                    passEncoder.draw(6);
+                }
                 break;
-            case 'image':
-            case 'ripple':
-                // ... logic unchanged, just using the new variables ...
+            case 'image': case 'ripple':
+                if (imageVideoPipeline && this.bindGroups.has('image')) {
+                    const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
+                    uniformArray.set([width, height, this.imageTexture.width, this.imageTexture.height], 0);
+                    uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0], 4);
+                    const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
+                    for (let i = 0; i < this.ripplePoints.length; i++) {
+                        const point = this.ripplePoints[i];
+                        rippleData.set([point.x, point.y, point.startTime], i * 4);
+                    }
+                    uniformArray.set(rippleData, 8);
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
+                    passEncoder.setPipeline(imageVideoPipeline);
+                    passEncoder.setBindGroup(0, this.bindGroups.get('image')!);
+                    passEncoder.draw(4);
+                }
                 break;
             case 'video':
-                 // ... logic unchanged, just using the new variables ...
+                 if (imageVideoPipeline && this.bindGroups.has('video')) {
+                    const uniformArray = new Float32Array(8);
+                    uniformArray.set([width, height, this.videoTexture.width, this.videoTexture.height], 0);
+                    uniformArray.set([currentTime, 0, 0], 4);
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
+                    passEncoder.setPipeline(imageVideoPipeline);
+                    passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
+                    passEncoder.draw(4);
+                }
                 break;
-            case 'liquid-v1':
-            case 'liquid':
+            case 'liquid-v1': case 'liquid':
                 if (liquidPipeline && this.bindGroups.has('liquid')) {
                     passEncoder.setPipeline(liquidPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('liquid')!);
