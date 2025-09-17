@@ -42,7 +42,7 @@ export class Renderer {
 
     private async fetchImageUrls(): Promise<void> { /* ... unchanged ... */ }
     
-    public async loadRandomImage(): Promise<void> {
+     public async loadRandomImage(): Promise<void> {
         try {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
@@ -50,10 +50,14 @@ export class Renderer {
             const imageBitmap = await createImageBitmap(await response.blob());
 
             if (this.imageTexture) this.imageTexture.destroy();
+            
+            // --- FIX ---
+            // The source image texture ONLY needs to be a copy destination and a texture binding.
+            // Removing the unnecessary RENDER_ATTACHMENT flag.
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
             
@@ -69,6 +73,10 @@ export class Renderer {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.v3MouseUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
+        // --- FIX ---
+        // The state textures are render targets, storage targets, and sampled textures.
+        // They are NEVER the destination of a copy operation like copyExternalImageToTexture.
+        // Removing the unnecessary COPY_DST flag.
         const floatTextureDesc: GPUTextureDescriptor = { 
             size: [width, height], 
             format: 'rgba16float', 
@@ -78,6 +86,9 @@ export class Renderer {
         this.velocityWrite = this.device.createTexture(floatTextureDesc);
         this.colorRead = this.device.createTexture(floatTextureDesc);
         this.colorWrite = this.device.createTexture(floatTextureDesc);
+        
+        // This is a simplified bootstrap, the rest of the old resources are no longer needed
+        // for our focused v3 renderer.
         await this.loadRandomImage();
     }
 
