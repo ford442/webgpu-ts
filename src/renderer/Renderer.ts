@@ -139,7 +139,8 @@ export class Renderer {
                 { binding: 1, resource: this.imageTexture.createView() }
             ]
         });
-         
+     }
+    
     private async createPipelines(): Promise<void> {
         const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode, velocityCode, advectionCode] = await Promise.all([
             fetch('shaders/galaxy.wgsl').then(res => res.text()), fetch('shaders/imageVideo.wgsl').then(res => res.text()),
