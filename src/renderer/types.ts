@@ -1,1 +1,1 @@
-export type RenderMode = 'shader' | 'image' | 'video' | 'ripple';
+export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid';
