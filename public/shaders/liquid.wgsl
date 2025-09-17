@@ -32,19 +32,27 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let rippleStartTime = rippleData.z;
         let timeSinceClick = currentTime - rippleStartTime;
         
-        if (timeSinceClick > 0.0 && timeSinceClick < 3.0) { // Ripples last for 3 seconds
-            let dist = distance(uv, rippleCenter);
-            let ripple_speed = 2.0;
-            let ripple_frequency = 25.0;
-            let ripple_amplitude = 0.015;
+        if (timeSinceClick > 0.0 && timeSinceClick < 3.0) {
+            let direction_vec = uv - rippleCenter;
+            let dist = length(direction_vec);
 
-            let wave = sin(dist * ripple_frequency - timeSinceClick * ripple_speed);
-            let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / 3.0);
-            let falloff = 1.0 / (dist * 20.0 + 1.0);
-            let displacement = wave * ripple_amplitude * attenuation * falloff;
-            let direction = normalize(uv - rippleCenter);
+            // --- FIX IS HERE ---
+            // Add a check to prevent division by zero / normalize(0)
+            if (dist > 0.0001) {
+                let ripple_speed = 2.0;
+                let ripple_frequency = 25.0;
+                let ripple_amplitude = 0.015;
 
-            totalDisplacement += direction * displacement;
+                let wave = sin(dist * ripple_frequency - timeSinceClick * ripple_speed);
+                let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / 3.0);
+                let falloff = 1.0 / (dist * 20.0 + 1.0);
+                let displacement = wave * ripple_amplitude * attenuation * falloff;
+                
+                // Safe normalization
+                let direction = direction_vec / dist;
+
+                totalDisplacement += direction * displacement;
+            }
         }
     }
 
