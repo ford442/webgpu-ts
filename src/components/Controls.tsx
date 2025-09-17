@@ -26,7 +26,7 @@ const Controls: React.FC<ControlsProps> = ({
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay
 }) => {
-    const isImageMode = mode === 'image' || mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1';
+    const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple';
 
     return (
         <div className="controls">
@@ -36,9 +36,8 @@ const Controls: React.FC<ControlsProps> = ({
                     <option value="shader">Galaxy Shader</option>
                     <option value="image">Static Image</option>
                     <option value="ripple">Ripple Effect</option>
-                    <option value="video">Video Texture</option>
-                    <option value="liquid-v1">Liquid (Ambient)</option>
-                    <option value="liquid">Liquid (Interactive)</option>
+                    <option value="liquid">Liquid v2 (Refractive)</option>
+                    <option value="liquid-v3">Liquid v3 (Fluid Sim)</option>
                 </select>
             </div>
              {isImageMode && (
@@ -47,15 +46,19 @@ const Controls: React.FC<ControlsProps> = ({
                         <label></label>
                         <button onClick={onNewImage}>New Random Image</button>
                     </div>
-                    <div className="control-group">
-                        <label htmlFor="auto-change-toggle">Auto Change:</label>
-                        <input type="checkbox" id="auto-change-toggle" checked={autoChangeEnabled} onChange={(e) => setAutoChangeEnabled(e.target.checked)} />
-                    </div>
-                    {autoChangeEnabled && (
+                    { mode !== 'liquid-v3' && (
+                        <>
                         <div className="control-group">
-                            <label htmlFor="delay-slider">Delay ({autoChangeDelay}s):</label>
-                            <input type="range" id="delay-slider" min="1" max="10" step="1" value={autoChangeDelay} onChange={(e) => setAutoChangeDelay(Number(e.target.value))} />
+                            <label htmlFor="auto-change-toggle">Auto Change:</label>
+                            <input type="checkbox" id="auto-change-toggle" checked={autoChangeEnabled} onChange={(e) => setAutoChangeEnabled(e.target.checked)} />
                         </div>
+                        {autoChangeEnabled && (
+                            <div className="control-group">
+                                <label htmlFor="delay-slider">Delay ({autoChangeDelay}s):</label>
+                                <input type="range" id="delay-slider" min="1" max="10" step="1" value={autoChangeDelay} onChange={(e) => setAutoChangeDelay(Number(e.target.value))} />
+                            </div>
+                        )}
+                        </>
                     )}
                 </>
             )}
