@@ -8,12 +8,10 @@ struct Uniforms {
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// --- NEW EASING FUNCTION for the "snap-back" effect ---
-// This function simulates an ease-out-back animation curve.
+// "Snap-back" easing function remains the same.
 fn ease_out_back(x: f32) -> f32 {
     let c1 = 1.70158;
     let c3 = c1 + 1.0;
-    // The formula creates a curve that overshoots 1.0 then settles.
     return 1.0 + c3 * pow(x - 1.0, 3.0) + c1 * pow(x - 1.0, 2.0);
 }
 
@@ -31,21 +29,26 @@ fn get_displacement(uv: vec2<f32>) -> vec2<f32> {
     let rippleCount = u32(u.config.y);
     for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
         let ripple = u.ripples[i];
+        
+        // --- 1. LONGER DURATION ---
+        // Increased duration from 3.0 to 4.0 seconds.
+        let duration = 4.0;
         let timeSinceClick = currentTime - ripple.z;
-        if (timeSinceClick > 0.0 && timeSinceClick < 3.0) {
+
+        if (timeSinceClick > 0.0 && timeSinceClick < duration) {
             let direction_vec = uv - ripple.xy;
             let dist = length(direction_vec);
             if (dist > 0.0001) {
                 let wave = sin(dist * 25.0 - timeSinceClick * 2.0);
                 
-                // --- 1. SMALLER RADIUS CHANGE ---
-                // Increased this value from 20.0 to 80.0 to make the falloff much faster.
-                let falloff = 1.0 / (dist * 80.0 + 1.0);
+                // --- 3. SMALLER RADIUS ---
+                // Increased falloff from 80.0 to 100.0 for a tighter ripple.
+                let falloff = 1.0 / (dist * 100.0 + 1.0);
 
-                // --- 2. SNAP-BACK CHANGE ---
-                // We now use our custom easing function for the attenuation.
-                let progress = timeSinceClick / 3.0;
-                let attenuation = 1.0 - ease_out_back(progress);
+                // --- 2. FASTER SNAP-BACK ---
+                // The easing animation now starts at 75% of the way through the ripple's life.
+                let ease_progress = smoothstep(0.75, 1.0, timeSinceClick / duration);
+                let attenuation = 1.0 - ease_out_back(ease_progress);
                 
                 let displacement = wave * 0.015 * attenuation * falloff;
                 
