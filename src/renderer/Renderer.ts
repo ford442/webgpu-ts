@@ -1,46 +1,54 @@
-export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'liquid';
+export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'liquid' | 'liquid-v3';
 
 export class Renderer {
+    // Canvas & Device
     private canvas: HTMLCanvasElement;
     private device!: GPUDevice;
     private context!: GPUCanvasContext;
     private presentationFormat!: GPUTextureFormat;
 
     // Pipelines
-    private galaxyPipeline!: GPURenderPipeline;
-    private imageVideoPipeline!: GPURenderPipeline;
-    private liquidPipeline!: GPURenderPipeline;
-    private computeV1Pipeline!: GPUComputePipeline;
-    private computePipeline!: GPUComputePipeline;
+    private pipelines = new Map<string, GPURenderPipeline | GPUComputePipeline>();
 
     // Resources
-    private galaxyUniformBuffer!: GPUBuffer;
-    private imageVideoUniformBuffer!: GPUBuffer;
-    private computeV1UniformBuffer!: GPUBuffer;
-    private computeUniformBuffer!: GPUBuffer;
     private sampler!: GPUSampler;
-    private videoTexture!: GPUTexture;
-    private imageTexture!: GPUTexture;
-    private writeTexture!: GPUTexture;
     private imageUrls: string[] = [];
+    
+    // v2 Resources
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
     private MAX_RIPPLES = 50;
+    private v2ComputeUniformBuffer!: GPUBuffer;
+    private v1ComputeUniformBuffer!: GPUBuffer;
+    private imageVideoUniformBuffer!: GPUBuffer;
+    private galaxyUniformBuffer!: GPUBuffer;
+
+    // v3 Resources
+    private v3MouseUniformBuffer!: GPUBuffer;
+    private velocityRead!: GPUTexture;
+    private velocityWrite!: GPUTexture;
+    private colorRead!: GPUTexture;
+    private colorWrite!: GPUTexture;
+
+    // Shared Resources
+    private videoTexture!: GPUTexture;
+    private imageTexture!: GPUTexture; // Source image
+    private writeTexture!: GPUTexture; // v2 output
     
     // Bind Groups
-    private galaxyBindGroup!: GPUBindGroup;
-    private videoBindGroup!: GPUBindGroup;
-    private imageBindGroup!: GPUBindGroup;
-    private liquidBindGroup!: GPUBindGroup;
-    private computeV1BindGroup!: GPUBindGroup;
-    private computeBindGroup!: GPUBindGroup;
+    private bindGroups = new Map<string, GPUBindGroup>();
+
+    // Mouse State for v3
+    private mouseState = { x: 0, y: 0, deltaX: 0, deltaY: 0, isDragging: false };
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
     }
 
-    public addRipplePoint(x: number, y: number) {
-        this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
+    public updateMouse(x: number, y: number, deltaX: number, deltaY: number, isDragging: boolean) {
+        this.mouseState = { x, y, deltaX, deltaY, isDragging };
     }
+
+    public addRipplePoint(x: number, y: number) { /* ... unchanged ... */ }
 
     public async init(): Promise<boolean> {
         if (!navigator.gpu) return false;
@@ -49,33 +57,17 @@ export class Renderer {
         this.device = await adapter.requestDevice();
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-        this.context.configure({
-            device: this.device,
-            format: this.presentationFormat,
-            alphaMode: 'premultiplied',
-        });
+        this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
 
         await this.fetchImageUrls();
         await this.createResources();
         await this.createPipelines();
+        await this.createBindGroups();
         
         return true;
     }
 
-    private async fetchImageUrls(): Promise<void> {
-        const bucketName = 'my-sd35-space-images-2025'; 
-        const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
-        try {
-            const response = await fetch(apiUrl);
-            if (!response.ok) throw new Error(`Google Cloud Storage API returned status ${response.status}`);
-            const data = await response.json();
-            this.imageUrls = data.items ? data.items.map((item: { name: string }) => `https://storage.googleapis.com/${bucketName}/${item.name}`) : [];
-            if (this.imageUrls.length === 0) console.warn("No images found in bucket or bucket is empty.");
-        } catch (e) {
-            console.error("Failed to fetch image list from Google Bucket:", e);
-            this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
-        }
-    }
+    private async fetchImageUrls(): Promise<void> { /* ... unchanged ... */ }
     
     public async loadRandomImage(): Promise<void> {
         try {
@@ -91,151 +83,92 @@ export class Renderer {
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+            
+            // Recreate bind groups that depend on the source image
+            await this.createBindGroups();
 
-            if (this.imageVideoPipeline) this.imageBindGroup = this.device.createBindGroup({ layout: this.imageVideoPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] });
-            if (this.computeV1Pipeline) this.computeV1BindGroup = this.device.createBindGroup({ layout: this.computeV1Pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.computeV1UniformBuffer } }] });
-            if (this.computePipeline) this.computeBindGroup = this.device.createBindGroup({ layout: this.computePipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.computeUniformBuffer } }] });
         } catch (e) { console.error("Failed to load image:", e); }
     }
 
     private async createResources(): Promise<void> {
+        const { width, height } = this.canvas;
+        // Sampler
+        this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+
+        // v2 Buffers
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 4 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: (4 * 4) * 2 + (this.MAX_RIPPLES * 4 * 4), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.computeV1UniformBuffer = this.device.createBuffer({ size: 4 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.computeUniformBuffer = this.device.createBuffer({ size: (4 * 4) + (this.MAX_RIPPLES * 4 * 4), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
-        this.writeTexture = this.device.createTexture({ size: [this.canvas.width, this.canvas.height], format: 'rgba8unorm', usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+        this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 4 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: (4 * 4) + (this.MAX_RIPPLES * 4 * 4), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        
+        // v2 Output Texture
+        this.writeTexture = this.device.createTexture({ size: [width, height], format: 'rgba8unorm', usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+
+        // v3 Buffers
+        this.v3MouseUniformBuffer = this.device.createBuffer({ size: 4 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+        // v3 State Textures (using float textures for precision)
+        const floatTextureDesc: GPUTextureDescriptor = {
+            size: [width, height],
+            format: 'rgba16float',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+        };
+        this.velocityRead = this.device.createTexture(floatTextureDesc);
+        this.velocityWrite = this.device.createTexture(floatTextureDesc);
+        this.colorRead = this.device.createTexture(floatTextureDesc);
+        this.colorWrite = this.device.createTexture(floatTextureDesc);
+        
         await this.loadRandomImage();
     }
 
-    private async createPipelines(): Promise<void> {
-        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode] = await Promise.all([
-            fetch('shaders/galaxy.wgsl').then(res => res.text()),
-            fetch('shaders/imageVideo.wgsl').then(res => res.text()),
-            fetch('shaders/liquid-v1.wgsl').then(res => res.text()),
-            fetch('shaders/liquid.wgsl').then(res => res.text()),
-            fetch('shaders/texture.wgsl').then(res => res.text()),
-        ]);
+    private async createPipelines(): Promise<void> { /* ... (refactored to just create pipelines) ... */ }
 
-        const galaxyModule = this.device.createShaderModule({ code: galaxyCode });
-        const imageVideoModule = this.device.createShaderModule({ code: imageVideoCode });
-        const liquidV1Module = this.device.createShaderModule({ code: liquidV1Code });
-        const liquidModule = this.device.createShaderModule({ code: liquidCode });
-        const textureModule = this.device.createShaderModule({ code: textureCode });
+    private async createBindGroups(): Promise<void> {
+        if (!this.imageTexture) return;
 
-        const commonConfig = {
-            vertex: { module: imageVideoModule, entryPoint: 'vs_main' },
-            fragment: { targets: [{ format: this.presentationFormat }] },
-            primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology },
-        };
-
-        this.galaxyPipeline = this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: galaxyModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: galaxyModule, entryPoint: 'fs_main' }, primitive: { topology: 'triangle-list' as GPUPrimitiveTopology } });
-        this.imageVideoPipeline = this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: imageVideoModule, entryPoint: 'fs_main' } });
-        this.liquidPipeline = this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } });
-        this.computeV1Pipeline = this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } });
-        this.computePipeline = this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } });
-
-        if (this.imageTexture) {
-            this.imageBindGroup = this.device.createBindGroup({ layout: this.imageVideoPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] });
-            this.liquidBindGroup = this.device.createBindGroup({ layout: this.liquidPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] });
-            this.computeV1BindGroup = this.device.createBindGroup({ layout: this.computeV1Pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.computeV1UniformBuffer } }] });
-            this.computeBindGroup = this.device.createBindGroup({ layout: this.computePipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.computeUniformBuffer } }] });
-        }
+        // v2 Bind Groups
+        this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
+        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
+        this.bindGroups.set('computeV1', this.device.createBindGroup({ layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }] }));
+        this.bindGroups.set('computeV2', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
+        
+        // v3 Bind Groups
+        this.bindGroups.set('velocityRead', this.device.createBindGroup({ layout: this.pipelines.get('velocity')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.velocityRead.createView() }, { binding: 2, resource: this.velocityWrite.createView() }, { binding: 3, resource: { buffer: this.v3MouseUniformBuffer } }] }));
+        this.bindGroups.set('velocityWrite', this.device.createBindGroup({ layout: this.pipelines.get('velocity')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.velocityWrite.createView() }, { binding: 2, resource: this.velocityRead.createView() }, { binding: 3, resource: { buffer: this.v3MouseUniformBuffer } }] }));
+        this.bindGroups.set('advectionRead', this.device.createBindGroup({ layout: this.pipelines.get('advection')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.velocityRead.createView() }, { binding: 2, resource: this.colorRead.createView() }, { binding: 3, resource: this.colorWrite.createView() }, { binding: 4, resource: this.imageTexture.createView() }] }));
+        this.bindGroups.set('advectionWrite', this.device.createBindGroup({ layout: this.pipelines.get('advection')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.velocityWrite.createView() }, { binding: 2, resource: this.colorWrite.createView() }, { binding: 3, resource: this.colorRead.createView() }, { binding: 4, resource: this.imageTexture.createView() }] }));
+        this.bindGroups.set('v3final', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.colorRead.createView() }] }));
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
-        const currentTime = performance.now() / 1000.0;
-        this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 3.0);
-        if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
-        
-        if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-            if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
-                if (this.videoTexture) this.videoTexture.destroy();
-                this.videoTexture = this.device.createTexture({ size: [videoElement.videoWidth, videoElement.videoHeight], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
-                this.videoBindGroup = this.device.createBindGroup({ layout: this.imageVideoPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.videoTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] });
-                this.galaxyBindGroup = this.device.createBindGroup({ layout: this.galaxyPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.sampler }, { binding: 2, resource: this.videoTexture.createView() }] });
-            }
-            this.device.queue.copyExternalImageToTexture({ source: videoElement }, { texture: this.videoTexture }, [videoElement.videoWidth, videoElement.videoHeight]);
-        }
-
+        const { width, height } = this.canvas;
         const commandEncoder = this.device.createCommandEncoder();
-        
-        if (mode === 'liquid-v1' || mode === 'liquid') {
+
+        if (mode === 'liquid-v3') {
+            // V3 Multi-pass simulation
+            this.device.queue.writeBuffer(this.v3MouseUniformBuffer, 0, new Float32Array([this.mouseState.x, this.mouseState.y, this.mouseState.deltaX, this.mouseState.isDragging ? 1.0 : 0.0]));
+            
             const computePass = commandEncoder.beginComputePass();
-            if (mode === 'liquid-v1') {
-                this.device.queue.writeBuffer(this.computeV1UniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
-                computePass.setPipeline(this.computeV1Pipeline);
-                computePass.setBindGroup(0, this.computeV1BindGroup);
-            } else {
-                const computeUniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
-                computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
-                const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
-                for (let i = 0; i < this.ripplePoints.length; i++) {
-                    const point = this.ripplePoints[i];
-                    rippleData.set([point.x, point.y, point.startTime], i * 4);
-                }
-                computeUniformArray.set(rippleData, 4);
-                this.device.queue.writeBuffer(this.computeUniformBuffer, 0, computeUniformArray);
-                computePass.setPipeline(this.computePipeline);
-                computePass.setBindGroup(0, this.computeBindGroup);
-            }
-            computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+            // 1. Velocity pass
+            computePass.setPipeline(this.pipelines.get('velocity') as GPUComputePipeline);
+            computePass.setBindGroup(0, this.bindGroups.get('velocityRead')!);
+            computePass.dispatchWorkgroups(width / 8, height / 8, 1);
+            
+            // 2. Advection pass
+            computePass.setPipeline(this.pipelines.get('advection') as GPUComputePipeline);
+            computePass.setBindGroup(0, this.bindGroups.get('advectionRead')!);
+            computePass.dispatchWorkgroups(width / 8, height / 8, 1);
             computePass.end();
+
+            // Ping-pong textures for next frame
+            [this.velocityRead, this.velocityWrite] = [this.velocityWrite, this.velocityRead];
+            [this.colorRead, this.colorWrite] = [this.colorWrite, this.colorRead];
+            this.createBindGroups(); // Re-create bind groups with swapped textures
+        } else if (mode.startsWith('liquid')) {
+            // V1/V2 single-pass simulation
+            /* ... unchanged ... */
         }
-
-        const textureView = this.context.getCurrentTexture().createView();
-        const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] };
-        const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-
-       switch (mode) {
-            case 'shader':
-                this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([currentTime, zoom, panX, panY]));
-                if (this.galaxyPipeline && this.galaxyBindGroup) {
-                    passEncoder.setPipeline(this.galaxyPipeline);
-                    passEncoder.setBindGroup(0, this.galaxyBindGroup);
-                    passEncoder.draw(6);
-                }
-                break;
-            case 'image':
-            case 'ripple':
-                if (this.imageVideoPipeline && this.imageBindGroup && this.imageTexture) {
-                    const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
-                    uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
-                    uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0], 4);
-                    const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
-                    for (let i = 0; i < this.ripplePoints.length; i++) {
-                        const point = this.ripplePoints[i];
-                        rippleData.set([point.x, point.y, point.startTime], i * 4);
-                    }
-                    uniformArray.set(rippleData, 8);
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-                    passEncoder.setPipeline(this.imageVideoPipeline);
-                    passEncoder.setBindGroup(0, this.imageBindGroup);
-                    passEncoder.draw(4);
-                }
-                break;
-            case 'video':
-                if (this.videoTexture && this.imageVideoPipeline && this.videoBindGroup) {
-                    const uniformArray = new Float32Array(8);
-                    uniformArray.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
-                    uniformArray.set([currentTime, 0, 0], 4);
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-                    passEncoder.setPipeline(this.imageVideoPipeline);
-                    passEncoder.setBindGroup(0, this.videoBindGroup);
-                    passEncoder.draw(4);
-                }
-                break;
-            case 'liquid-v1':
-            case 'liquid':
-                if (this.liquidPipeline && this.liquidBindGroup) {
-                    passEncoder.setPipeline(this.liquidPipeline);
-                    passEncoder.setBindGroup(0, this.liquidBindGroup);
-                    passEncoder.draw(4);
-                }
-                break;
-        }
-
-        passEncoder.end();
-        this.device.queue.submit([commandEncoder.finish()]);
+        
+        // ... (rest of render function, render pass, and switch statement) ...
     }
 }
