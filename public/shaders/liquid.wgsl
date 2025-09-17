@@ -23,7 +23,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     let displacedUV = uv + vec2<f32>(d1, d2);
     
-    let color = textureSample(readTexture, u_sampler, displacedUV);
+    // Corrected line: Use textureSampleLevel with LOD 0.0
+    let color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
     
     textureStore(writeTexture, global_id.xy, color);
 }
