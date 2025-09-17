@@ -132,7 +132,10 @@ export class Renderer {
     private async createResources(): Promise<void> {
         // Uniform Buffers
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 4 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.imageVideoUniformBuffer = this.device.createBuffer({ size: (4 * 4) + (this.MAX_RIPPLES * 4 * 4), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.imageVideoUniformBuffer = this.device.createBuffer({ 
+            size: (4 * 4) + (4 * 4) + (this.MAX_RIPPLES * 4 * 4), 
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST 
+        });
         this.computeV1UniformBuffer = this.device.createBuffer({ size: 4 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.computeUniformBuffer = this.device.createBuffer({ size: (4 * 4) + (this.MAX_RIPPLES * 4 * 4), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
