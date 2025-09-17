@@ -3,27 +3,53 @@
 @group(0) @binding(2) var writeTexture: texture_storage_2d<rgba8unorm, write>;
 
 struct Uniforms {
-    time: f32,
-    resolutionX: f32,
-    resolutionY: f32,
+    config: vec4<f32>,      // time, rippleCount, resolutionX, resolutionY
+    ripples: array<vec4<f32>, 50>, // x, y, startTime, unused
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let resolution = vec2<f32>(u.resolutionX, u.resolutionY);
+    let resolution = u.config.zw;
     let uv = vec2<f32>(global_id.xy) / resolution;
     
-    let time = u.time * 0.5;
-    let strength = 0.02;
-    let frequency = 15.0;
+    var totalDisplacement = vec2<f32>(0.0, 0.0);
+    let currentTime = u.config.x;
     
-    let d1 = sin(uv.x * frequency + time) * strength;
-    let d2 = cos(uv.y * frequency * 0.7 + time) * strength;
+    // 1. Ambient "liquid" effect (always running)
+    let time = currentTime * 0.5;
+    let ambient_strength = 0.02;
+    let ambient_freq = 15.0;
+    let d1 = sin(uv.x * ambient_freq + time) * ambient_strength;
+    let d2 = cos(uv.y * ambient_freq * 0.7 + time) * ambient_strength;
+    totalDisplacement += vec2<f32>(d1, d2);
+
+    // 2. Mouse-driven ripple logic
+    let rippleCount = u32(u.config.y);
+    for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
+        let rippleData = u.ripples[i];
+        let rippleCenter = rippleData.xy;
+        let rippleStartTime = rippleData.z;
+        let timeSinceClick = currentTime - rippleStartTime;
+        
+        if (timeSinceClick > 0.0 && timeSinceClick < 3.0) { // Ripples last for 3 seconds
+            let dist = distance(uv, rippleCenter);
+            let ripple_speed = 2.0;
+            let ripple_frequency = 25.0;
+            let ripple_amplitude = 0.015;
+
+            let wave = sin(dist * ripple_frequency - timeSinceClick * ripple_speed);
+            let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / 3.0);
+            let falloff = 1.0 / (dist * 20.0 + 1.0);
+            let displacement = wave * ripple_amplitude * attenuation * falloff;
+            let direction = normalize(uv - rippleCenter);
+
+            totalDisplacement += direction * displacement;
+        }
+    }
+
+    let displacedUV = uv + totalDisplacement;
     
-    let displacedUV = uv + vec2<f32>(d1, d2);
-    
-    // Corrected line: Use textureSampleLevel with LOD 0.0
     let color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
     
     textureStore(writeTexture, global_id.xy, color);
