@@ -40,9 +40,21 @@ export class Renderer {
         return true;
     }
 
-    private async fetchImageUrls(): Promise<void> { /* ... unchanged ... */ }
+    private async fetchImageUrls(): Promise<void> {
+        const bucketName = 'my-sd35-space-images-2025';
+        const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error(`Google Cloud Storage API returned status ${response.status}`);
+            const data = await response.json();
+            this.imageUrls = data.items ? data.items.map((item: { name: string }) => `https://storage.googleapis.com/${bucketName}/${item.name}`) : [];
+        } catch (e) {
+            console.error("Failed to fetch image list:", e);
+            this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
+        }
+     }
     
-     public async loadRandomImage(): Promise<void> {
+    public async loadRandomImage(): Promise<void> {
         try {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
@@ -50,10 +62,6 @@ export class Renderer {
             const imageBitmap = await createImageBitmap(await response.blob());
 
             if (this.imageTexture) this.imageTexture.destroy();
-            
-            // --- FIX ---
-            // The source image texture ONLY needs to be a copy destination and a texture binding.
-            // Removing the unnecessary RENDER_ATTACHMENT flag.
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
@@ -73,10 +81,6 @@ export class Renderer {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.v3MouseUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
-        // --- FIX ---
-        // The state textures are render targets, storage targets, and sampled textures.
-        // They are NEVER the destination of a copy operation like copyExternalImageToTexture.
-        // Removing the unnecessary COPY_DST flag.
         const floatTextureDesc: GPUTextureDescriptor = { 
             size: [width, height], 
             format: 'rgba16float', 
@@ -86,9 +90,6 @@ export class Renderer {
         this.velocityWrite = this.device.createTexture(floatTextureDesc);
         this.colorRead = this.device.createTexture(floatTextureDesc);
         this.colorWrite = this.device.createTexture(floatTextureDesc);
-        
-        // This is a simplified bootstrap, the rest of the old resources are no longer needed
-        // for our focused v3 renderer.
         await this.loadRandomImage();
     }
 
@@ -127,7 +128,6 @@ export class Renderer {
         const velocityModule = this.device.createShaderModule({ code: velocityCode });
         const advectionModule = this.device.createShaderModule({ code: advectionCode });
 
-        // This pipeline is for the final render to the screen
         this.pipelines.set('finalRender', this.device.createRenderPipeline({
             layout: 'auto',
             vertex: { module: textureModule, entryPoint: 'vs_main' },
@@ -135,11 +135,15 @@ export class Renderer {
             primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology }
         }));
         
-        // This pipeline is ONLY for the initialization step, targeting the float texture
         this.pipelines.set('texture', this.device.createRenderPipeline({
             layout: 'auto',
             vertex: { module: textureModule, entryPoint: 'vs_main' },
-            fragment: { module: textureModule, entryPoint: 'fs_main', targets: [{ format: 'rgba16float' }] },
+            fragment: { 
+                module: textureModule, 
+                entryPoint: 'fs_main', 
+                // --- FIX IS HERE ---
+                targets: [{ format: 'rgba16float' as GPUTextureFormat }] 
+            },
             primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology }
         }));
 
@@ -161,9 +165,7 @@ export class Renderer {
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
-        // This render loop is now ONLY for v3
         if (mode !== 'liquid-v3') {
-             // Draw black for other modes for now
             const commandEncoder = this.device.createCommandEncoder();
             const textureView = this.context.getCurrentTexture().createView();
             const renderPass = commandEncoder.beginRenderPass({
@@ -193,7 +195,7 @@ export class Renderer {
         computePass.end();
 
         const textureView = this.context.getCurrentTexture().createView();
-        const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, loadOp: 'clear', storeOp: 'store' }] };
+        const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }}] };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
         passEncoder.setPipeline(this.pipelines.get('finalRender') as GPURenderPipeline);
         passEncoder.setBindGroup(0, this.bindGroups.get('finalRender')!);
