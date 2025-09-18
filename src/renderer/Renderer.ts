@@ -131,11 +131,20 @@ export class Renderer {
             entries: [
                 { binding: 0, resource: this.sampler }, 
                 { binding: 1, resource: this.imageTexture.createView() }, 
-                { binding: 2, resource: this.writeTexture.createView() },
-                // { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } } // This line was incorrect and has been removed.
+                { binding: 2, resource: this.writeTexture.createView() }
             ] 
         }));
-        this.bindGroups.set('compute', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
+
+        // 'compute' (liquid.wgsl) DOES use the uniform buffer. It needs all 4 bindings.
+        this.bindGroups.set('compute', this.device.createBindGroup({ 
+            layout: this.pipelines.get('compute')!.getBindGroupLayout(0), 
+            entries: [
+                { binding: 0, resource: this.sampler }, 
+                { binding: 1, resource: this.imageTexture.createView() }, 
+                { binding: 2, resource: this.writeTexture.createView() }, 
+                { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }
+            ] 
+        }));
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
