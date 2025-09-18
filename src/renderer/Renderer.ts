@@ -67,7 +67,8 @@ export class Renderer {
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                // --- FIX #1: Added COPY_SRC usage flag ---
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
@@ -124,41 +125,13 @@ export class Renderer {
         }
 
         this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        
-        // --- FIX IS HERE ---
-        // 'liquid' is now only for the render pass (reading from writeTexture)
-        this.bindGroups.set('liquid', this.device.createBindGroup({ 
-            layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), 
-            entries: [
-                { binding: 0, resource: this.sampler }, 
-                { binding: 1, resource: this.writeTexture.createView() }
-            ] 
-        }));
-        
-        // 'compute' (for liquid v2) is now the correct key for the compute pass bind group.
-        this.bindGroups.set('compute', this.device.createBindGroup({ 
-            layout: this.pipelines.get('compute')!.getBindGroupLayout(0), 
-            entries: [
-                { binding: 0, resource: this.sampler }, 
-                { binding: 1, resource: this.imageTexture.createView() }, 
-                { binding: 2, resource: this.writeTexture.createView() }, 
-                { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }
-            ] 
-        }));
-
-        this.bindGroups.set('computeV1', this.device.createBindGroup({ 
-            layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), 
-            entries: [
-                { binding: 0, resource: this.sampler }, 
-                { binding: 1, resource: this.imageTexture.createView() }, 
-                { binding: 2, resource: this.writeTexture.createView() }, 
-                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }
-            ] 
-        }));
+        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
+        this.bindGroups.set('computeV1', this.device.createBindGroup({ layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }] }));
+        this.bindGroups.set('compute', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
     }
 
-      public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
-        if (!this.device || !this.imageTexture) return; // Added imageTexture check for safety
+    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
+        if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
 
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
@@ -173,11 +146,7 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-            // --- FIX IS HERE ---
-            // On every frame, copy the original image to our output texture first.
-            // This ensures the render pass always has a valid texture to read from,
-            // preventing the black screen.
-          commandEncoder.copyTextureToTexture(
+            commandEncoder.copyTextureToTexture(
                 { texture: this.imageTexture },
                 { texture: this.writeTexture },
                 [this.writeTexture.width, this.writeTexture.height]
@@ -231,15 +200,17 @@ export class Renderer {
             case 'image':
             case 'ripple':
                 if (imageVideoPipeline && this.bindGroups.has('image')) {
+                    // --- FIX #2: Rewrote uniform buffer creation to be safer ---
                     const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
+                    // Resolutions
                     uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
-                    uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0], 4);
-                    const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
+                    // Config
+                    uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0, 0.0], 4);
+                    // Ripple Data
                     for (let i = 0; i < this.ripplePoints.length; i++) {
                         const point = this.ripplePoints[i];
-                        rippleData.set([point.x, point.y, point.startTime], i * 4);
+                        uniformArray.set([point.x, point.y, point.startTime, 0.0], 8 + i * 4);
                     }
-                    uniformArray.set(rippleData, 8);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
                     passEncoder.setPipeline(imageVideoPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('image')!);
@@ -250,7 +221,7 @@ export class Renderer {
                 if (imageVideoPipeline && this.bindGroups.has('video')) {
                     const uniformArray = new Float32Array(8);
                     uniformArray.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
-                    uniformArray.set([currentTime, 0, 0], 4);
+                    uniformArray.set([currentTime, 0, 0, 0], 4);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
                     passEncoder.setPipeline(imageVideoPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
