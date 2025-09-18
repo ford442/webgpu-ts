@@ -58,13 +58,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let uv_g = displacedUV;
     let uv_b = displacedUV - displacement_offset * aberration_strength * 0.5;
 
-    // --- FIX IS HERE ---
-    // We now saturate the UV coordinates to ensure they stay between 0.0 and 1.0,
-    // which prevents the "solid color" bug.
     let color_r = textureSampleLevel(readTexture, u_sampler, saturate(uv_r), 0.0).r;
     let color_g = textureSampleLevel(readTexture, u_sampler, saturate(uv_g), 0.0).g;
     let color_b = textureSampleLevel(readTexture, u_sampler, saturate(uv_b), 0.0).b;
-
     let finalColor = vec4<f32>(color_r, color_g, color_b, 1.0);
     textureStore(writeTexture, global_id.xy, finalColor);
 }
