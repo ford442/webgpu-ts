@@ -157,8 +157,8 @@ export class Renderer {
         }));
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
-        if (!this.device) return;
+      public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
+        if (!this.device || !this.imageTexture) return; // Added imageTexture check for safety
         const currentTime = performance.now() / 1000.0;
 
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
@@ -173,6 +173,16 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
+            // --- FIX IS HERE ---
+            // On every frame, copy the original image to our output texture first.
+            // This ensures the render pass always has a valid texture to read from,
+            // preventing the black screen.
+            commandEncoder.copyTextureToTexture(
+                { texture: this.imageTexture },
+                { texture: this.writeTexture },
+                [this.imageTexture.width, this.imageTexture.height]
+            );
+
             const computePass = commandEncoder.beginComputePass();
             const computeV1BG = this.bindGroups.get('computeV1');
             const computeBG = this.bindGroups.get('compute');
