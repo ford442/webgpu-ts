@@ -9,17 +9,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = vec2<f32>(textureDimensions(readColor));
     let uv = vec2<f32>(global_id.xy) / resolution;
 
-    // Get the velocity at this point
     let velocity = textureSampleLevel(readVelocity, u_sampler, uv, 0.0).xy;
-
-    // Look "upstream" based on the velocity to find the color from the last frame
     let advected_color = textureSampleLevel(readColor, u_sampler, uv - velocity, 0.0);
-
-    // Get the color from the original, undisturbed image
     let original_color = textureSampleLevel(sourceImage, u_sampler, uv, 0.0);
 
-    // Gently mix the advected color back towards the original image.
-    // This makes the liquid slowly settle back into place.
+    // Gently mix the stirred color back towards the original image over time
     let final_color = mix(advected_color, original_color, 0.005);
 
     textureStore(writeColor, global_id.xy, final_color);
