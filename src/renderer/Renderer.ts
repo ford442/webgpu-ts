@@ -146,7 +146,7 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-            commandEncoder.copyTextureToTexture(
+     commandEncoder.copyTextureToTexture(
                 { texture: this.imageTexture },
                 { texture: this.writeTexture },
                 [this.writeTexture.width, this.writeTexture.height]
