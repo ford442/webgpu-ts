@@ -202,11 +202,8 @@ export class Renderer {
                 if (imageVideoPipeline && this.bindGroups.has('image')) {
                     // --- FIX #2: Rewrote uniform buffer creation to be safer ---
                     const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
-                    // Resolutions
                     uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
-                    // Config
                     uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0, 0.0], 4);
-                    // Ripple Data
                     for (let i = 0; i < this.ripplePoints.length; i++) {
                         const point = this.ripplePoints[i];
                         uniformArray.set([point.x, point.y, point.startTime, 0.0], 8 + i * 4);
