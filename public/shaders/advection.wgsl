@@ -9,17 +9,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = vec2<f32>(textureDimensions(readColor));
     let uv = vec2<f32>(global_id.xy) / resolution;
 
+    // Read the velocity at this point to know where the fluid is coming from.
     let velocity = textureSampleLevel(readVelocity, u_sampler, uv, 0.0).xy;
-    let advected_color = textureSampleLevel(readColor, u_sampler, uv - velocity, 0.0);
-    let original_color = textureSampleLevel(sourceImage, u_sampler, uv, 0.0);
 
     // --- CHANGE IS HERE ---
-    // The restoring force is now dynamic.
-    // When velocity is low, the mix factor is high, locking the image in place.
-    // When velocity is high, the mix factor is low, allowing the colors to smear.
-    let speed = length(velocity);
-    let mix_factor = 1.0 - smoothstep(0.0, 0.0001, speed);
-    let final_color = mix(advected_color, original_color, mix_factor);
+    // The advected_color is now the final_color.
+    // The 'mix' operation that pulled it back to the original image has been removed.
+    // The particles will now stay where the currents take them.
+    let final_color = textureSampleLevel(readColor, u_sampler, uv - velocity, 0.0);
 
     textureStore(writeColor, global_id.xy, final_color);
 }
