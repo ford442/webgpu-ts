@@ -35,16 +35,14 @@ export class Renderer {
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
 
         await this.fetchImageUrls();
-        // Correct initialization order
         await this.createResources();
         await this.createPipelines();
-        this.createBindGroups(); // Now this is called in the correct place
+        this.createBindGroups();
         
         return true;
     }
 
     private async fetchImageUrls(): Promise<void> {
-        // This function is correct.
         const bucketName = 'my-sd35-space-images-2025';
         const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
         try {
@@ -73,7 +71,6 @@ export class Renderer {
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
-            // If pipelines exist, it's safe to update the bind groups
             if (this.pipelines.size > 0) {
                 this.createBindGroups();
             }
@@ -127,9 +124,37 @@ export class Renderer {
         }
 
         this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
-        this.bindGroups.set('computeV1', this.device.createBindGroup({ layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }] }));
-        this.bindGroups.set('compute', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
+        
+        // --- FIX IS HERE ---
+        // 'liquid' is now only for the render pass (reading from writeTexture)
+        this.bindGroups.set('liquid', this.device.createBindGroup({ 
+            layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), 
+            entries: [
+                { binding: 0, resource: this.sampler }, 
+                { binding: 1, resource: this.writeTexture.createView() }
+            ] 
+        }));
+        
+        // 'compute' (for liquid v2) is now the correct key for the compute pass bind group.
+        this.bindGroups.set('compute', this.device.createBindGroup({ 
+            layout: this.pipelines.get('compute')!.getBindGroupLayout(0), 
+            entries: [
+                { binding: 0, resource: this.sampler }, 
+                { binding: 1, resource: this.imageTexture.createView() }, 
+                { binding: 2, resource: this.writeTexture.createView() }, 
+                { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }
+            ] 
+        }));
+
+        this.bindGroups.set('computeV1', this.device.createBindGroup({ 
+            layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), 
+            entries: [
+                { binding: 0, resource: this.sampler }, 
+                { binding: 1, resource: this.imageTexture.createView() }, 
+                { binding: 2, resource: this.writeTexture.createView() }, 
+                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }
+            ] 
+        }));
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
