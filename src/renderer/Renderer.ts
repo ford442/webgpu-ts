@@ -149,7 +149,12 @@ export class Renderer {
         this.pipelines.set('velocity', this.device.createComputePipeline({ layout: 'auto', compute: { module: velocityModule, entryPoint: 'main' } }));
         this.pipelines.set('advection', this.device.createComputePipeline({ layout: 'auto', compute: { module: advectionModule, entryPoint: 'main' } }));
     }
-
+    
+    public resetSimulation() {
+        // This function simply re-runs the initialization process for the v3 state.
+        this._initializeV3State();
+    }
+    
     private createBindGroups(): void {
         if (!this.imageTexture) return;
         
