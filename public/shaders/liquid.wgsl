@@ -8,7 +8,6 @@ struct Uniforms {
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// "Snap-back" easing function remains the same.
 fn ease_out_back(x: f32) -> f32 {
     let c1 = 1.70158;
     let c3 = c1 + 1.0;
@@ -19,19 +18,15 @@ fn get_displacement(uv: vec2<f32>) -> vec2<f32> {
     var total_offset = vec2<f32>(0.0, 0.0);
     let currentTime = u.config.x;
 
-    // Ambient wave
+    // Ambient wave is now added to the displacement, not sampled separately
     total_offset += vec2<f32>(
         sin(uv.x * 15.0 + currentTime * 0.5) * 0.01,
         cos(uv.y * 15.0 * 0.7 + currentTime * 0.5) * 0.01
     );
 
-    // Mouse-driven ripples
     let rippleCount = u32(u.config.y);
     for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
         let ripple = u.ripples[i];
-        
-        // --- 1. LONGER DURATION ---
-        // Increased duration from 3.0 to 4.0 seconds.
         let duration = 4.0;
         let timeSinceClick = currentTime - ripple.z;
 
@@ -40,18 +35,10 @@ fn get_displacement(uv: vec2<f32>) -> vec2<f32> {
             let dist = length(direction_vec);
             if (dist > 0.0001) {
                 let wave = sin(dist * 25.0 - timeSinceClick * 2.0);
-                
-                // --- 3. SMALLER RADIUS ---
-                // Increased falloff from 80.0 to 100.0 for a tighter ripple.
                 let falloff = 1.0 / (dist * 100.0 + 1.0);
-
-                // --- 2. FASTER SNAP-BACK ---
-                // The easing animation now starts at 75% of the way through the ripple's life.
                 let ease_progress = smoothstep(0.75, 1.0, timeSinceClick / duration);
                 let attenuation = 1.0 - ease_out_back(ease_progress);
-                
                 let displacement = wave * 0.015 * attenuation * falloff;
-                
                 total_offset += (direction_vec / dist) * displacement;
             }
         }
@@ -64,20 +51,26 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = u.config.zw;
     let uv = vec2<f32>(global_id.xy) / resolution;
 
+    // --- FIX IS HERE ---
+    // The logic is now cleaner and more robust.
+    // The compute shader is responsible for the entire output image.
+
+    // 1. Calculate the final displacement for the current pixel.
     let displacement_offset = get_displacement(uv);
     let displacedUV = uv + displacement_offset;
 
-    // Chromatic Aberration Refraction
+    // 2. Apply chromatic aberration based on the displacement.
     let aberration_strength = length(displacement_offset) * 2.0;
     let uv_r = displacedUV + displacement_offset * aberration_strength * 0.5;
     let uv_g = displacedUV;
     let uv_b = displacedUV - displacement_offset * aberration_strength * 0.5;
 
-    let color_r = textureSampleLevel(readTexture, u_sampler, uv_r, 0.0).r;
-    let color_g = textureSampleLevel(readTexture, u_sampler, uv_g, 0.0).g;
-    let color_b = textureSampleLevel(readTexture, u_sampler, uv_b, 0.0).b;
+    // 3. Sample the source texture with clamping to prevent artifacts.
+    let color_r = textureSampleLevel(readTexture, u_sampler, saturate(uv_r), 0.0).r;
+    let color_g = textureSampleLevel(readTexture, u_sampler, saturate(uv_g), 0.0).g;
+    let color_b = textureSampleLevel(readTexture, u_sampler, saturate(uv_b), 0.0).b;
 
+    // 4. Write the final, fully computed color to the output texture.
     let finalColor = vec4<f32>(color_r, color_g, color_b, 1.0);
-    
     textureStore(writeTexture, global_id.xy, finalColor);
 }
