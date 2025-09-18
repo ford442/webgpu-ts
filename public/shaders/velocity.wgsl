@@ -28,22 +28,22 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     advected_velocity *= 0.98;
 
     // --- CHANGE IS HERE ---
-    // If the velocity is extremely small, set it to zero to prevent drifting.
-    if (length(advected_velocity) < 0.0001) {
-        advected_velocity = vec2<f32>(0.0, 0.0);
+    // The swirling force is now only applied if the fluid is already in motion.
+    // This prevents it from starting the unwanted drifting effect.
+    let speed = length(advected_velocity);
+    if (speed > 0.0001) {
+        let pixel = 1.0 / resolution;
+        let curl_center = curl(uv, resolution);
+        let curl_l = curl(uv - vec2<f32>(pixel.x, 0.0), resolution);
+        let curl_r = curl(uv + vec2<f32>(pixel.x, 0.0), resolution);
+        let curl_t = curl(uv + vec2<f32>(0.0, pixel.y), resolution);
+        let curl_b = curl(uv - vec2<f32>(0.0, pixel.y), resolution);
+        
+        var force = vec2<f32>(abs(curl_t) - abs(curl_b), abs(curl_l) - abs(curl_r));
+        force = normalize(force + 0.0001);
+        force *= curl_center * 0.015;
+        advected_velocity += force;
     }
-
-    let pixel = 1.0 / resolution;
-    let curl_center = curl(uv, resolution);
-    let curl_l = curl(uv - vec2<f32>(pixel.x, 0.0), resolution);
-    let curl_r = curl(uv + vec2<f32>(pixel.x, 0.0), resolution);
-    let curl_t = curl(uv + vec2<f32>(0.0, pixel.y), resolution);
-    let curl_b = curl(uv - vec2<f32>(0.0, pixel.y), resolution);
-    
-    var force = vec2<f32>(abs(curl_t) - abs(curl_b), abs(curl_l) - abs(curl_r));
-    force = normalize(force + 0.0001);
-    force *= curl_center * 0.015;
-    advected_velocity += force;
 
     let is_dragging = u.mouse.z;
     let mouse_pos = u.mouse.xy;
