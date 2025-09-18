@@ -17,8 +17,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // --- CHANGE IS HERE ---
     // Increased friction for a thicker, more viscous feel.
-    velocity *= 0.35;
-
+    velocity *= 0.95;
+   if (length(velocity) < 0.0001) {
+        velocity = vec2<f32>(0.0, 0.0);
+    }
     let is_dragging = u.mouse.z;
     let mouse_pos = u.mouse.xy;
     let mouse_delta = u.delta.xy;
