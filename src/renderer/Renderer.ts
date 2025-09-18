@@ -17,9 +17,7 @@ export class Renderer {
     private galaxyUniformBuffer!: GPUBuffer;
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
-    private readTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
-    private frameCount = 0;
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
@@ -69,7 +67,6 @@ export class Renderer {
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                // --- FIX #1: Added COPY_SRC usage flag ---
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
@@ -88,11 +85,6 @@ export class Renderer {
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.writeTexture = this.device.createTexture({
-            size: [width, height],
-            format: 'rgba8unorm',
-            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        this.readTexture = this.device.createTexture({
             size: [width, height],
             format: 'rgba8unorm',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
@@ -132,13 +124,9 @@ export class Renderer {
         }
 
         this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        this.bindGroups.set('liquidRead', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.readTexture.createView() }] }));
-        this.bindGroups.set('liquidWrite', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
-
+        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
         this.bindGroups.set('computeV1', this.device.createBindGroup({ layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }] }));
-
-        this.bindGroups.set('computeA', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.readTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
-        this.bindGroups.set('computeB', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }, { binding: 2, resource: this.readTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
+        this.bindGroups.set('compute', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
@@ -157,19 +145,22 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-            const computePass = commandEncoder.beginComputePass();
-            if (this.frameCount === 0) {
-                commandEncoder.copyTextureToTexture({ texture: this.imageTexture }, { texture: this.readTexture }, [this.readTexture.width, this.readTexture.height]);
-                commandEncoder.copyTextureToTexture({ texture: this.imageTexture }, { texture: this.writeTexture }, [this.writeTexture.width, this.writeTexture.height]);
-            }
+     commandEncoder.copyTextureToTexture(
+                { texture: this.imageTexture },
+                { texture: this.writeTexture },
+                [this.writeTexture.width, this.writeTexture.height]
+            );
 
+            const computePass = commandEncoder.beginComputePass();
             const computeV1BG = this.bindGroups.get('computeV1');
+            const computeBG = this.bindGroups.get('compute');
+
             if (mode === 'liquid-v1' && computeV1BG) {
                 this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
                 computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeV1BG);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-            } else {
+            } else if (mode === 'liquid' && computeBG) {
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
                 const computeUniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
@@ -182,8 +173,7 @@ export class Renderer {
                 computeUniformArray.set(rippleData, 4);
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
                 computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
-                const selectedBG = this.frameCount % 2 === 0 ? this.bindGroups.get('computeA')! : this.bindGroups.get('computeB')!;
-                computePass.setBindGroup(0, selectedBG);
+                computePass.setBindGroup(0, computeBG);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
             }
             computePass.end();
@@ -236,10 +226,9 @@ export class Renderer {
                 break;
             case 'liquid-v1':
             case 'liquid':
-                if (liquidPipeline) {
+                if (liquidPipeline && this.bindGroups.has('liquid')) {
                     passEncoder.setPipeline(liquidPipeline);
-                    const selectedBG = this.frameCount % 2 === 0 ? this.bindGroups.get('liquidWrite')! : this.bindGroups.get('liquidRead')!;
-                    passEncoder.setBindGroup(0, selectedBG);
+                    passEncoder.setBindGroup(0, this.bindGroups.get('liquid')!);
                     passEncoder.draw(4);
                 }
                 break;
@@ -247,6 +236,5 @@ export class Renderer {
 
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
-        this.frameCount++;
     }
 }
