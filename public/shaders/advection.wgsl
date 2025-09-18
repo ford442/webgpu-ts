@@ -14,9 +14,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let original_color = textureSampleLevel(sourceImage, u_sampler, uv, 0.0);
 
     // --- CHANGE IS HERE ---
-    // The mix factor is now a tiny, constant value.
-    // This makes the dissolving much slower and allows the mixed colors to persist.
-    let final_color = mix(advected_color, original_color, 0.001);
+    // The restoring force is now dynamic.
+    // When velocity is low, the mix factor is high, locking the image in place.
+    // When velocity is high, the mix factor is low, allowing the colors to smear.
+    let speed = length(velocity);
+    let mix_factor = (1.0 - smoothstep(0.0, 0.005, speed)) * 0.1 + 0.002;
+    let final_color = mix(advected_color, original_color, mix_factor);
 
     textureStore(writeColor, global_id.xy, final_color);
 }
