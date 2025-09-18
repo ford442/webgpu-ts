@@ -7,6 +7,7 @@ interface WebGPUCanvasProps {
     panX: number;
     panY: number;
     imageVersion: number;
+    resetVersion: number;
 }
 
 const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion }) => {
