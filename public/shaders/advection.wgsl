@@ -14,12 +14,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let original_color = textureSampleLevel(sourceImage, u_sampler, uv, 0.0);
 
     // --- CHANGE IS HERE ---
-    // The restoring force is now dynamic.
-    // When velocity is low, the mix factor is high, pulling the image back together strongly.
-    // When velocity is high, the mix factor is low, allowing the colors to smear.
-    let speed = length(velocity);
-    let mix_factor = smoothstep(0.0, 0.01, speed) * 0.005 + (1.0 - smoothstep(0.0, 0.01, speed)) * 0.5;
-    let final_color = mix(advected_color, original_color, mix_factor);
+    // Removed the strong, dynamic restoring force.
+    // Now, we use a very small, constant mix factor. This allows the colors to be
+    // completely smeared and only return to their original state very slowly.
+    let final_color = mix(advected_color, original_color, 0.002);
 
     textureStore(writeColor, global_id.xy, final_color);
 }
