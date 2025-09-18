@@ -38,7 +38,14 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         })();
         return () => cancelAnimationFrame(animationFrameId.current);
     }, []);
-
+    
+   useEffect(() => {
+        // Don't reset on the initial load
+        if (rendererRef.current && resetVersion > 0) {
+            rendererRef.current.resetSimulation();
+        }
+    }, [resetVersion]);
+    
     useEffect(() => {
         if (rendererRef.current && imageVersion > 0) {
             rendererRef.current.loadRandomImage();
