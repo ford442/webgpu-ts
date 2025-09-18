@@ -15,6 +15,7 @@ interface ControlsProps {
     setAutoChangeEnabled: (enabled: boolean) => void;
     autoChangeDelay: number;
     setAutoChangeDelay: (delay: number) => void;
+    onReset: () => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
@@ -24,7 +25,7 @@ const Controls: React.FC<ControlsProps> = ({
     panY, setPanY, 
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
-    autoChangeDelay, setAutoChangeDelay
+    autoChangeDelay, setAutoChangeDelay, onReset 
 }) => {
     const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple';
 
@@ -40,6 +41,12 @@ const Controls: React.FC<ControlsProps> = ({
                     <option value="liquid-v3">Liquid v3 (Fluid Sim)</option>
                 </select>
             </div>
+          {mode === 'liquid-v3' && (
+                <div className="control-group">
+                    <label></label>
+                    <button onClick={onReset}>Reset Simulation</button>
+                </div>
+            )}
              {isImageMode && (
                 <>
                     <div className="control-group">
