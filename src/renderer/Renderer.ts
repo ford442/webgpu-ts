@@ -147,7 +147,16 @@ export class Renderer {
         }));
 
         this.pipelines.set('velocity', this.device.createComputePipeline({ layout: 'auto', compute: { module: velocityModule, entryPoint: 'main' } }));
-        this.pipelines.set('advection', this.device.createComputePipeline({ layout: 'auto', compute: { module: advectionModule, entryPoint: 'main' } }));
+       this.bindGroups.set('advection', this.device.createBindGroup({ 
+            layout: this.pipelines.get('advection')!.getBindGroupLayout(0), 
+            entries: [
+                { binding: 0, resource: this.sampler }, 
+                { binding: 1, resource: velWrite.createView() }, 
+                { binding: 2, resource: colRead.createView() }, 
+                { binding: 3, resource: colWrite.createView() },
+                { binding: 4, resource: this.imageTexture.createView() } // This line is now restored.
+            ] 
+        }));
     }
 
     private createBindGroups(): void {
