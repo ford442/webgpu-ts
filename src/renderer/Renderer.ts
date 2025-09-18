@@ -1,4 +1,4 @@
-export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'liquid' | 'liquid-v3';
+export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'liquid';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -24,15 +24,6 @@ export class Renderer {
     public addRipplePoint(x: number, y: number) {
         this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
     }
-    
-    // --- FIX IS HERE ---
-    // Added the missing resetSimulation function.
-    // For the v2 renderer, its job is simply to reload the current image,
-    // which effectively resets the ripple effects.
-    public resetSimulation(): void {
-        this.loadRandomImage();
-    }
-
 
     public async init(): Promise<boolean> {
         if (!navigator.gpu) return false;
@@ -91,7 +82,7 @@ export class Renderer {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.writeTexture = this.device.createTexture({
             size: [width, height],
@@ -102,6 +93,8 @@ export class Renderer {
     }
 
     private async createPipelines(): Promise<void> {
+        // --- FIX IS HERE ---
+        // Only fetch and create pipelines for the v2 shaders.
         const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode] = await Promise.all([
             fetch('shaders/galaxy.wgsl').then(res => res.text()),
             fetch('shaders/imageVideo.wgsl').then(res => res.text()),
@@ -159,17 +152,13 @@ export class Renderer {
                 { texture: this.writeTexture },
                 [this.writeTexture.width, this.writeTexture.height]
             );
-
             const computePass = commandEncoder.beginComputePass();
-            const computeV1BG = this.bindGroups.get('computeV1');
-            const computeBG = this.bindGroups.get('compute');
-
-            if (mode === 'liquid-v1' && computeV1BG) {
+            if (mode === 'liquid-v1') {
                 this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
                 computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
-                computePass.setBindGroup(0, computeV1BG);
+                computePass.setBindGroup(0, this.bindGroups.get('computeV1')!);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-            } else if (mode === 'liquid' && computeBG) {
+            } else {
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
                 const computeUniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
@@ -182,7 +171,7 @@ export class Renderer {
                 computeUniformArray.set(rippleData, 4);
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
                 computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
-                computePass.setBindGroup(0, computeBG);
+                computePass.setBindGroup(0, this.bindGroups.get('compute')!);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
             }
             computePass.end();
@@ -192,22 +181,17 @@ export class Renderer {
         const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
-        const liquidPipeline = this.pipelines.get('liquid') as GPURenderPipeline;
-        const imageVideoPipeline = this.pipelines.get('imageVideo') as GPURenderPipeline;
-        const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
-
         switch (mode) {
             case 'shader':
-                if (galaxyPipeline && this.bindGroups.has('galaxy')) {
+                if (this.pipelines.has('galaxy') && this.bindGroups.has('galaxy')) {
                     this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([currentTime, zoom, panX, panY]));
-                    passEncoder.setPipeline(galaxyPipeline);
+                    passEncoder.setPipeline(this.pipelines.get('galaxy') as GPURenderPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('galaxy')!);
                     passEncoder.draw(6);
                 }
                 break;
-            case 'image':
-            case 'ripple':
-                if (imageVideoPipeline && this.bindGroups.has('image')) {
+            case 'image': case 'ripple':
+                if (this.pipelines.has('imageVideo') && this.bindGroups.has('image')) {
                     const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
                     uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
                     uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0, 0.0], 4);
@@ -216,26 +200,25 @@ export class Renderer {
                         uniformArray.set([point.x, point.y, point.startTime, 0.0], 8 + i * 4);
                     }
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-                    passEncoder.setPipeline(imageVideoPipeline);
+                    passEncoder.setPipeline(this.pipelines.get('imageVideo') as GPURenderPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('image')!);
                     passEncoder.draw(4);
                 }
                 break;
             case 'video':
-                if (imageVideoPipeline && this.bindGroups.has('video')) {
+                if (this.pipelines.has('imageVideo') && this.bindGroups.has('video')) {
                     const uniformArray = new Float32Array(8);
                     uniformArray.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
                     uniformArray.set([currentTime, 0, 0, 0], 4);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-                    passEncoder.setPipeline(imageVideoPipeline);
+                    passEncoder.setPipeline(this.pipelines.get('imageVideo') as GPURenderPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
                     passEncoder.draw(4);
                 }
                 break;
-            case 'liquid-v1':
-            case 'liquid':
-                if (liquidPipeline && this.bindGroups.has('liquid')) {
-                    passEncoder.setPipeline(liquidPipeline);
+            case 'liquid-v1': case 'liquid':
+                if (this.pipelines.has('liquid') && this.bindGroups.has('liquid')) {
+                    passEncoder.setPipeline(this.pipelines.get('liquid') as GPURenderPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('liquid')!);
                     passEncoder.draw(4);
                 }
