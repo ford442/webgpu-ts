@@ -14,11 +14,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let original_color = textureSampleLevel(sourceImage, u_sampler, uv, 0.0);
 
     // --- CHANGE IS HERE ---
-    // Create a hard switch between the original image and the advected (liquid) color.
-    // If speed is zero, mix_factor = 1.0 (100% original color).
-    // If speed is > 0, mix_factor = 0.0 (100% liquid color).
+    // This reinforces the "solid" state. If there's no velocity, we show the original image.
+    // If there is any velocity, we show the fully advected (liquid) color.
     let speed = length(velocity);
-    let mix_factor = 1.0 - smoothstep(0.0, 0.0001, speed);
+    let mix_factor = 1.0 - step(0.0001, speed);
     let final_color = mix(advected_color, original_color, mix_factor);
 
     textureStore(writeColor, global_id.xy, final_color);
