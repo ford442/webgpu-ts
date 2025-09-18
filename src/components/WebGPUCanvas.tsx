@@ -10,7 +10,7 @@ interface WebGPUCanvasProps {
     resetVersion: number;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion, resetVersion }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<Renderer | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
