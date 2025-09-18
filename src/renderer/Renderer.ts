@@ -37,7 +37,7 @@ export class Renderer {
         this._initializeV3State();
         this.createBindGroups();
         
-        return true; // This was the missing return statement
+        return true;
     }
 
     private async fetchImageUrls(): Promise<void> {
@@ -147,16 +147,7 @@ export class Renderer {
         }));
 
         this.pipelines.set('velocity', this.device.createComputePipeline({ layout: 'auto', compute: { module: velocityModule, entryPoint: 'main' } }));
-       this.bindGroups.set('advection', this.device.createBindGroup({ 
-            layout: this.pipelines.get('advection')!.getBindGroupLayout(0), 
-            entries: [
-                { binding: 0, resource: this.sampler }, 
-                { binding: 1, resource: velWrite.createView() }, 
-                { binding: 2, resource: colRead.createView() }, 
-                { binding: 3, resource: colWrite.createView() },
-                { binding: 4, resource: this.imageTexture.createView() } // This line is now restored.
-            ] 
-        }));
+        this.pipelines.set('advection', this.device.createComputePipeline({ layout: 'auto', compute: { module: advectionModule, entryPoint: 'main' } }));
     }
 
     private createBindGroups(): void {
@@ -168,24 +159,10 @@ export class Renderer {
         const colWrite = this.frameCount % 2 === 0 ? this.colorWrite : this.colorRead;
 
         this.bindGroups.set('velocity', this.device.createBindGroup({ layout: this.pipelines.get('velocity')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: velRead.createView() }, { binding: 2, resource: velWrite.createView() }, { binding: 3, resource: { buffer: this.v3MouseUniformBuffer } }] }));
-        this.bindGroups.set('advection', this.device.createBindGroup({ 
-            layout: this.pipelines.get('advection')!.getBindGroupLayout(0), 
-            entries: [
-                { binding: 0, resource: this.sampler }, 
-                { binding: 1, resource: velWrite.createView() }, 
-                { binding: 2, resource: colRead.createView() }, 
-                { binding: 3, resource: colWrite.createView() }
-                // { binding: 4, resource: this.imageTexture.createView() } // This entry has been removed.
-            ] 
-        }));
+        this.bindGroups.set('advection', this.device.createBindGroup({ layout: this.pipelines.get('advection')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: velWrite.createView() }, { binding: 2, resource: colRead.createView() }, { binding: 3, resource: colWrite.createView() }, { binding: 4, resource: this.imageTexture.createView() }] }));
         this.bindGroups.set('finalRender', this.device.createBindGroup({ layout: this.pipelines.get('finalRender')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: colWrite.createView() }] }));
     }
 
-       public resetSimulation() {
-        // This function simply re-runs the initialization process for the v3 state.
-        this._initializeV3State();
-    }
-    
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
         if (mode !== 'liquid-v3') {
             const commandEncoder = this.device.createCommandEncoder();
