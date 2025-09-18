@@ -146,11 +146,7 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-     commandEncoder.copyTextureToTexture(
-                { texture: this.imageTexture },
-                { texture: this.writeTexture },
-                [this.writeTexture.width, this.writeTexture.height]
-            );
+
 
             const computePass = commandEncoder.beginComputePass();
             const computeV1BG = this.bindGroups.get('computeV1');
