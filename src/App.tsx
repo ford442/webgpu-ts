@@ -12,11 +12,16 @@ function App() {
     const [imageVersion, setImageVersion] = useState(0);
     const [autoChangeEnabled, setAutoChangeEnabled] = useState(false);
     const [autoChangeDelay, setAutoChangeDelay] = useState(5);
+    const [resetVersion, setResetVersion] = useState(0);
 
     const handleNewImage = () => {
         setImageVersion(v => v + 1);
     };
-
+    
+    const handleReset = () => {
+        setResetVersion(v => v + 1);
+    };
+    
     useEffect(() => {
         let intervalId: NodeJS.Timeout | null = null;
         if (autoChangeEnabled && (mode === 'image' || mode === 'ripple')) {
@@ -38,6 +43,7 @@ function App() {
                 setAutoChangeEnabled={setAutoChangeEnabled}
                 autoChangeDelay={autoChangeDelay}
                 setAutoChangeDelay={setAutoChangeDelay}
+                onReset={handleReset} // Pass the new handler to the controls
             />
             <WebGPUCanvas
                 mode={mode}
@@ -45,6 +51,7 @@ function App() {
                 panX={panX}
                 panY={panY}
                 imageVersion={imageVersion}
+                resetVersion={resetVersion} // Pass the reset trigger to the canvas
             />
         </div>
     );
