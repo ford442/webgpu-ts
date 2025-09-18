@@ -159,7 +159,16 @@ export class Renderer {
         const colWrite = this.frameCount % 2 === 0 ? this.colorWrite : this.colorRead;
 
         this.bindGroups.set('velocity', this.device.createBindGroup({ layout: this.pipelines.get('velocity')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: velRead.createView() }, { binding: 2, resource: velWrite.createView() }, { binding: 3, resource: { buffer: this.v3MouseUniformBuffer } }] }));
-        this.bindGroups.set('advection', this.device.createBindGroup({ layout: this.pipelines.get('advection')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: velWrite.createView() }, { binding: 2, resource: colRead.createView() }, { binding: 3, resource: colWrite.createView() }, { binding: 4, resource: this.imageTexture.createView() }] }));
+        this.bindGroups.set('advection', this.device.createBindGroup({ 
+            layout: this.pipelines.get('advection')!.getBindGroupLayout(0), 
+            entries: [
+                { binding: 0, resource: this.sampler }, 
+                { binding: 1, resource: velWrite.createView() }, 
+                { binding: 2, resource: colRead.createView() }, 
+                { binding: 3, resource: colWrite.createView() }
+                // { binding: 4, resource: this.imageTexture.createView() } // This entry has been removed.
+            ] 
+        }));
         this.bindGroups.set('finalRender', this.device.createBindGroup({ layout: this.pipelines.get('finalRender')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: colWrite.createView() }] }));
     }
 
