@@ -163,6 +163,11 @@ export class Renderer {
         this.bindGroups.set('finalRender', this.device.createBindGroup({ layout: this.pipelines.get('finalRender')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: colWrite.createView() }] }));
     }
 
+       public resetSimulation() {
+        // This function simply re-runs the initialization process for the v3 state.
+        this._initializeV3State();
+    }
+    
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
         if (mode !== 'liquid-v3') {
             const commandEncoder = this.device.createCommandEncoder();
