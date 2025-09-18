@@ -117,18 +117,30 @@ export class Renderer {
         this.pipelines.set('compute', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }));
     }
 
-    private createBindGroups(): void {
+     private createBindGroups(): void {
         if (!this.imageTexture) return;
+        
+        const velRead = this.frameCount % 2 === 0 ? this.velocityRead : this.velocityWrite;
+        const velWrite = this.frameCount % 2 === 0 ? this.velocityWrite : this.velocityRead;
+        const colRead = this.frameCount % 2 === 0 ? this.colorRead : this.colorWrite;
+        const colWrite = this.frameCount % 2 === 0 ? this.colorWrite : this.colorRead;
 
-        if (this.videoTexture) {
-            this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.sampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
-            this.bindGroups.set('video', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.videoTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        }
+        this.bindGroups.set('velocity', this.device.createBindGroup({ layout: this.pipelines.get('velocity')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: velRead.createView() }, { binding: 2, resource: velWrite.createView() }, { binding: 3, resource: { buffer: this.v3MouseUniformBuffer } }] }));
+        
+        // --- FIX IS HERE ---
+        // The advection shader requires the sourceImage at binding 4. This restores it.
+        this.bindGroups.set('advection', this.device.createBindGroup({ 
+            layout: this.pipelines.get('advection')!.getBindGroupLayout(0), 
+            entries: [
+                { binding: 0, resource: this.sampler }, 
+                { binding: 1, resource: velWrite.createView() }, 
+                { binding: 2, resource: colRead.createView() }, 
+                { binding: 3, resource: colWrite.createView() },
+                { binding: 4, resource: this.imageTexture.createView() } // This line is now correctly restored.
+            ] 
+        }));
 
-        this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
-        this.bindGroups.set('computeV1', this.device.createBindGroup({ layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }] }));
-        this.bindGroups.set('compute', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
+        this.bindGroups.set('finalRender', this.device.createBindGroup({ layout: this.pipelines.get('finalRender')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: colWrite.createView() }] }));
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
