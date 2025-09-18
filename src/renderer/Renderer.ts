@@ -103,12 +103,12 @@ export class Renderer {
         this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }));
         this.pipelines.set('compute', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }));
     }
+private createBindGroups(): void {
+        if (!this.imageTexture) return;
 
-    private createBindGroups(): void {
-        if (!this.imageTexture || !this.videoTexture) {
-             if (this.videoTexture) return; // Wait for video to be ready if it exists
-        }
- if (this.videoTexture) {
+        // --- FIX IS HERE ---
+        // Only create bind groups that depend on the video texture if it exists.
+        if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({ 
                 layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), 
                 entries: [
@@ -127,7 +127,7 @@ export class Renderer {
             }));
         }
 
-        // These bind groups do not depend on the video, so they can always be created.
+        // These bind groups can always be created as they don't depend on the video.
         this.bindGroups.set('image', this.device.createBindGroup({ 
             layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), 
             entries: [
