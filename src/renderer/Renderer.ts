@@ -177,10 +177,10 @@ export class Renderer {
             // On every frame, copy the original image to our output texture first.
             // This ensures the render pass always has a valid texture to read from,
             // preventing the black screen.
-            commandEncoder.copyTextureToTexture(
+          commandEncoder.copyTextureToTexture(
                 { texture: this.imageTexture },
                 { texture: this.writeTexture },
-                [this.imageTexture.width, this.imageTexture.height]
+                [this.writeTexture.width, this.writeTexture.height]
             );
 
             const computePass = commandEncoder.beginComputePass();
