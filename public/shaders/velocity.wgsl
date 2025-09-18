@@ -8,7 +8,6 @@ struct Uniforms {
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// Helper function to calculate the "curl" or rotation at a point in the fluid
 fn curl(uv: vec2<f32>, resolution: vec2<f32>) -> f32 {
     let pixel = 1.0 / resolution;
     let vel_l = textureSampleLevel(readVelocity, u_sampler, uv - vec2<f32>(pixel.x, 0.0), 0.0).y;
@@ -23,16 +22,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = vec2<f32>(textureDimensions(readVelocity));
     let uv = vec2<f32>(global_id.xy) / resolution;
 
-    // --- 1. Advection Step ---
-    // First, read the velocity at the current point to know where the fluid is flowing from.
     let current_velocity = textureSampleLevel(readVelocity, u_sampler, uv, 0.0).xy;
-    // Now, look "upstream" to grab the velocity from the previous frame. This makes the currents flow.
     var advected_velocity = textureSampleLevel(readVelocity, u_sampler, uv - current_velocity * 0.002, 0.0).xy;
 
-    // Apply friction to the flowing velocity
     advected_velocity *= 0.98;
 
-    // --- 2. Vorticity Confinement (to create realistic swirls) ---
+    // --- CHANGE IS HERE ---
+    // If the velocity is extremely small, set it to zero to prevent drifting.
+    if (length(advected_velocity) < 0.0001) {
+        advected_velocity = vec2<f32>(0.0, 0.0);
+    }
+
     let pixel = 1.0 / resolution;
     let curl_center = curl(uv, resolution);
     let curl_l = curl(uv - vec2<f32>(pixel.x, 0.0), resolution);
@@ -41,13 +41,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let curl_b = curl(uv - vec2<f32>(0.0, pixel.y), resolution);
     
     var force = vec2<f32>(abs(curl_t) - abs(curl_b), abs(curl_l) - abs(curl_r));
-    // Normalize safely to get the direction of the swirling force
-    force = normalize(force + 0.0001); 
-    force *= curl_center * 0.015; // Scale the force by how much swirl there is
+    force = normalize(force + 0.0001);
+    force *= curl_center * 0.015;
     advected_velocity += force;
 
-    // --- 3. Add Mouse Force ---
-    // This is the same as before, adding new energy from your mouse into the system.
     let is_dragging = u.mouse.z;
     let mouse_pos = u.mouse.xy;
     let mouse_delta = u.delta.xy;
