@@ -8,39 +8,33 @@ export class Renderer {
     private pipelines = new Map<string, GPURenderPipeline | GPUComputePipeline>();
     private bindGroups = new Map<string, GPUBindGroup>();
     private sampler!: GPUSampler;
-    private imageUrls: string[] = [];
     private imageTexture!: GPUTexture;
-    
-    // New resources for the depth effect
     private depthTexture!: GPUTexture;
     private parallaxUniformBuffer!: GPUBuffer;
     private mouseState = { x: 0.5, y: 0.5 };
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
-    public updateMouse(x: number, y: number) {
-        this.mouseState = { x, y };
-    }
+    public updateMouse(x: number, y: number) { this.mouseState = { x, y }; }
     
-    // New method to receive depth data from the UI
     public updateDepthMap(data: Float32Array, width: number, height: number) {
         if (!this.device) return;
         if (!this.depthTexture || this.depthTexture.width !== width || this.depthTexture.height !== height) {
+            if(this.depthTexture) this.depthTexture.destroy();
             this.depthTexture = this.device.createTexture({
                 size: [width, height],
-                format: 'r32float', // A single red channel is enough for depth
+                format: 'r32float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
             });
         }
         this.device.queue.writeTexture(
             { texture: this.depthTexture },
             data,
-            { bytesPerRow: width * 4 }, // 4 bytes per float
+            { bytesPerRow: width * 4 },
             [width, height]
         );
-        this.createBindGroups(); // Re-create bind groups when the texture changes
+        this.createBindGroups();
     }
-
 
     public async init(): Promise<boolean> {
         if (!navigator.gpu) return false;
@@ -51,15 +45,12 @@ export class Renderer {
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
 
-        await this.fetchImageUrls();
         await this.createResources();
         await this.createPipelines();
-        this.createBindGroups();
+        await this.loadRandomImage('https://i.imgur.com/vCNL2sT.jpeg'); // Load initial image
         
         return true;
     }
-
-    private async fetchImageUrls(): Promise<void> { /* ... unchanged ... */ }
     
     public async loadRandomImage(imageUrl: string): Promise<void> {
         try {
@@ -70,7 +61,8 @@ export class Renderer {
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+                // --- FIX #2: Added COPY_SRC for potential copy operations ---
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
@@ -83,11 +75,9 @@ export class Renderer {
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.parallaxUniformBuffer = this.device.createBuffer({
-            size: 2 * 4, // 2 floats for mouse xy
+            size: 8,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-        // Load a default image to start
-        await this.loadRandomImage('https://i.imgur.com/vCNL2sT.jpeg');
     }
 
     private async createPipelines(): Promise<void> {
