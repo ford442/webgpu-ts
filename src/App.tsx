@@ -23,7 +23,7 @@ function App() {
     // Load the AI model when the component mounts
     useEffect(() => {
         const loadModel = async () => {
-            const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
+            const estimator = await pipeline('depth-estimation', 'Xenova/depth-anything-base-hf', {device: 'webgpu' });
             setDepthEstimator(estimator);
             setStatus('Model Loaded. Click "New Random Image" to start.');
         };
