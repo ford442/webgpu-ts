@@ -25,25 +25,25 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let current_velocity = textureSampleLevel(readVelocity, u_sampler, uv, 0.0).xy;
     var advected_velocity = textureSampleLevel(readVelocity, u_sampler, uv - current_velocity * 0.002, 0.0).xy;
 
-    advected_velocity *= 0.98;
+    advected_velocity *= 0.95;
 
     // --- CHANGE IS HERE ---
     // The swirling force is now only applied if the fluid is already in motion.
     // This prevents it from starting the unwanted drifting effect.
-    // let speed = length(advected_velocity);
-    // if (speed > 0.0001) {
-    //     let pixel = 1.0 / resolution;
-    //     let curl_center = curl(uv, resolution);
-    //     let curl_l = curl(uv - vec2<f32>(pixel.x, 0.0), resolution);
-    //     let curl_r = curl(uv + vec2<f32>(pixel.x, 0.0), resolution);
-    //     let curl_t = curl(uv + vec2<f32>(0.0, pixel.y), resolution);
-    //     let curl_b = curl(uv - vec2<f32>(0.0, pixel.y), resolution);
+    let speed = length(advected_velocity);
+    if (speed > 0.0001) {
+        let pixel = 1.0 / resolution;
+        let curl_center = curl(uv, resolution);
+        let curl_l = curl(uv - vec2<f32>(pixel.x, 0.0), resolution);
+        let curl_r = curl(uv + vec2<f32>(pixel.x, 0.0), resolution);
+        let curl_t = curl(uv + vec2<f32>(0.0, pixel.y), resolution);
+        let curl_b = curl(uv - vec2<f32>(0.0, pixel.y), resolution);
         
-    //     var force = vec2<f32>(abs(curl_t) - abs(curl_b), abs(curl_l) - abs(curl_r));
-    //     force = normalize(force + 0.0001);
-    //     force *= curl_center * 0.015;
-    //     advected_velocity += force;
-    // }
+        var force = vec2<f32>(abs(curl_t) - abs(curl_b), abs(curl_l) - abs(curl_r));
+        force = normalize(force + 0.0001);
+        force *= curl_center * 0.015;
+        advected_velocity += force;
+    }
 
     let is_dragging = u.mouse.z;
     let mouse_pos = u.mouse.xy;
@@ -52,7 +52,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let dist_to_mouse = distance(uv, mouse_pos);
     if (is_dragging > 0.5 && dist_to_mouse < 0.05) {
         let force_multiplier = 1.0 - smoothstep(0.0, 0.05, dist_to_mouse);
-        advected_velocity += mouse_delta * 5.0 * force_multiplier;
+        advected_velocity += mouse_delta * 1.0 * force_multiplier;
     }
     
     textureStore(writeVelocity, global_id.xy, vec4<f32>(advected_velocity, 0.0, 1.0));
