@@ -15,16 +15,21 @@ interface ControlsProps {
     setAutoChangeEnabled: (enabled: boolean) => void;
     autoChangeDelay: number;
     setAutoChangeDelay: (delay: number) => void;
+    isPlaying: boolean;
+    onTogglePlay: () => void;
+    showVideoControls: boolean;
 }
 
-const Controls: React.FC<ControlsProps> = ({ 
-    mode, setMode, 
-    zoom, setZoom, 
-    panX, setPanX, 
-    panY, setPanY, 
+const Controls: React.FC<ControlsProps> = ({
+    mode, setMode,
+    zoom, setZoom,
+    panX, setPanX,
+    panY, setPanY,
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
-    autoChangeDelay, setAutoChangeDelay
+    autoChangeDelay, setAutoChangeDelay,
+    isPlaying, onTogglePlay,
+    showVideoControls
 }) => {
     const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple';
 
@@ -41,7 +46,13 @@ const Controls: React.FC<ControlsProps> = ({
                     <option value="liquid-v1">Liquid (Ambient)</option>
                 </select>
             </div>
-             {isImageMode && (
+            {showVideoControls && (
+                <div className="control-group">
+                    <label></label>
+                    <button onClick={onTogglePlay}>{isPlaying ? 'Pause' : 'Play'}</button>
+                </div>
+            )}
+            {isImageMode && (
                 <>
                     <div className="control-group">
                         <label></label>

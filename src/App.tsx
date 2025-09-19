@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
 import { RenderMode } from './renderer/Renderer';
@@ -12,9 +12,32 @@ function App() {
     const [imageVersion, setImageVersion] = useState(0);
     const [autoChangeEnabled, setAutoChangeEnabled] = useState(false);
     const [autoChangeDelay, setAutoChangeDelay] = useState(5);
+    const [isPlaying, setIsPlaying] = useState(true);
+    const [isVideoReady, setIsVideoReady] = useState(false);
+    const [liquidSource, setLiquidSource] = useState<'image' | 'video'>('image');
+    const prevModeRef = useRef<RenderMode>(mode);
+
+    useEffect(() => {
+        if (mode.startsWith('liquid') && !prevModeRef.current.startsWith('liquid')) {
+            if (prevModeRef.current === 'video') {
+                setLiquidSource('video');
+            } else {
+                setLiquidSource('image');
+            }
+        }
+        prevModeRef.current = mode;
+    }, [mode]);
 
     const handleNewImage = () => {
         setImageVersion(v => v + 1);
+    };
+
+    const handleTogglePlay = () => {
+        setIsPlaying(p => !p);
+    };
+
+    const handleVideoReady = (isReady: boolean) => {
+        setIsVideoReady(isReady);
     };
 
     useEffect(() => {
@@ -24,6 +47,8 @@ function App() {
         }
         return () => { if (intervalId) clearInterval(intervalId); };
     }, [autoChangeEnabled, autoChangeDelay, mode]);
+
+    const showVideoControls = (mode === 'video' || (mode.startsWith('liquid') && liquidSource === 'video')) && isVideoReady;
 
     return (
         <div id="app-container">
@@ -38,6 +63,9 @@ function App() {
                 setAutoChangeEnabled={setAutoChangeEnabled}
                 autoChangeDelay={autoChangeDelay}
                 setAutoChangeDelay={setAutoChangeDelay}
+                isPlaying={isPlaying}
+                onTogglePlay={handleTogglePlay}
+                showVideoControls={showVideoControls}
             />
             <WebGPUCanvas
                 mode={mode}
@@ -45,6 +73,9 @@ function App() {
                 panX={panX}
                 panY={panY}
                 imageVersion={imageVersion}
+                isPlaying={isPlaying}
+                onVideoReady={handleVideoReady}
+                liquidSource={liquidSource}
             />
         </div>
     );
