@@ -24,12 +24,16 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const renderer = new Renderer(canvas);
-        
+        rendererRef.current = renderer;
+
+        let video: HTMLVideoElement | null = null;
+        const handleCanPlay = () => onVideoReady(true);
+        const handleError = () => onVideoReady(false);
+
         (async () => {
             const success = await renderer.init();
             if (success) {
-                rendererRef.current = renderer;
-                const video = document.createElement('video');
+                video = document.createElement('video');
                 videoRef.current = video;
                 video.src = 'https://test.1ink.us/webgputs/big_buck_bunny_720p_surround.mp4';
                 video.crossOrigin = 'anonymous';
@@ -37,22 +41,17 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
                 video.loop = true;
                 video.playsInline = true;
 
-                const handleCanPlay = () => onVideoReady(true);
-                const handleError = () => onVideoReady(false);
-
                 video.addEventListener('canplay', handleCanPlay);
                 video.addEventListener('error', handleError);
-
-                // Autoplay is now handled by the isPlaying state
             }
         })();
+
         return () => {
             cancelAnimationFrame(animationFrameId.current);
-            if (videoRef.current) {
-                // This is not quite right, but it's not the main focus of this task.
-                // I'll leave it for now.
-                // videoRef.current.removeEventListener('canplay', handleCanPlay);
-                // videoRef.current.removeEventListener('error', handleError);
+            rendererRef.current?.destroy();
+            if (video) {
+                video.removeEventListener('canplay', handleCanPlay);
+                video.removeEventListener('error', handleError);
             }
         };
     }, [onVideoReady]);

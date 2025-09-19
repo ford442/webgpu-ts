@@ -283,4 +283,14 @@ export class Renderer {
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
     }
+
+    public destroy(): void {
+        this.videoTexture?.destroy();
+        this.imageTexture?.destroy();
+        this.writeTexture?.destroy();
+        this.v1ComputeUniformBuffer?.destroy();
+        this.v2ComputeUniformBuffer?.destroy();
+        this.imageVideoUniformBuffer?.destroy();
+        this.galaxyUniformBuffer?.destroy();
+    }
 }

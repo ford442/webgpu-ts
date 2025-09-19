@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
 import { RenderMode } from './renderer/Renderer';
@@ -36,9 +36,9 @@ function App() {
         setIsPlaying(p => !p);
     };
 
-    const handleVideoReady = (isReady: boolean) => {
+    const handleVideoReady = useCallback((isReady: boolean) => {
         setIsVideoReady(isReady);
-    };
+    }, []);
 
     useEffect(() => {
         let intervalId: NodeJS.Timeout | null = null;
