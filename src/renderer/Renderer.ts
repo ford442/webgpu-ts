@@ -1,4 +1,4 @@
-export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'liquid';
+export type RenderMode = 'liquid' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'shader';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
