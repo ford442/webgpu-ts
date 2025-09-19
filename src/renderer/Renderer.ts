@@ -170,13 +170,11 @@ export class Renderer {
         }));
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, liquidSource: 'image' | 'video'): void {
+    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
 
-        const isVideoActive = mode === 'video' || (mode.startsWith('liquid') && liquidSource === 'video');
-
-        if (isVideoActive && videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
+        if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
             if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
                 this.videoTexture = this.device.createTexture({ size: [videoElement.videoWidth, videoElement.videoHeight], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
@@ -188,12 +186,13 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
+            const isVideoReady = videoElement.readyState >= 2 && videoElement.videoWidth > 0;
             const computePass = commandEncoder.beginComputePass();
 
             let computeV1BG: GPUBindGroup | undefined;
             let computeBG: GPUBindGroup | undefined;
 
-            if (liquidSource === 'video' && this.videoTexture) {
+            if (isVideoReady) {
                 computeV1BG = this.bindGroups.get('compute_v1_video');
                 computeBG = this.bindGroups.get('compute_video');
             } else {
@@ -282,15 +281,5 @@ export class Renderer {
 
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
-    }
-
-    public destroy(): void {
-        this.videoTexture?.destroy();
-        this.imageTexture?.destroy();
-        this.writeTexture?.destroy();
-        this.v1ComputeUniformBuffer?.destroy();
-        this.v2ComputeUniformBuffer?.destroy();
-        this.imageVideoUniformBuffer?.destroy();
-        this.galaxyUniformBuffer?.destroy();
     }
 }
