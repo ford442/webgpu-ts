@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Renderer, RenderMode } from '../renderer/Renderer';
 
 interface WebGPUCanvasProps {
@@ -7,52 +7,45 @@ interface WebGPUCanvasProps {
     panX: number;
     panY: number;
     imageVersion: number;
-    imageUrl: string; // New Prop
-    depthMap: any;    // New Prop
+    imageUrl: string;
+    depthMap: any;
 }
 
 const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion, imageUrl, depthMap }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<Renderer | null>(null);
-    const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
-    const lastMouseAddTime = useRef(0);
-    const [isMouseDown, setIsMouseDown] = useState(false);
-
+    
+    // Setup the renderer
     useEffect(() => {
         if (!canvasRef.current) return;
-        const canvas = canvasRef.current;
-        const renderer = new Renderer(canvas);
-        
-        (async () => {
-            const success = await renderer.init();
-            if (success) {
-                rendererRef.current = renderer;
-                videoRef.current = document.createElement('video');
-                videoRef.current.src = 'https://test.1ink.us/webgputs/big_buck_bunny_720p_surround.mp4';
-                videoRef.current.crossOrigin = 'anonymous';
-                videoRef.current.muted = true;
-                videoRef.current.loop = true;
-                videoRef.current.autoplay = true;
-                videoRef.current.playsInline = true;
-                await videoRef.current.play().catch(console.error);
-            }
-        })();
-        return () => cancelAnimationFrame(animationFrameId.current);
+        const renderer = new Renderer(canvasRef.current);
+        renderer.init().then(success => {
+            if (success) rendererRef.current = renderer;
+        });
     }, []);
 
+    // Load new images
     useEffect(() => {
         if (rendererRef.current && imageVersion > 0) {
-            rendererRef.current.loadRandomImage();
+            rendererRef.current.loadRandomImage(imageUrl);
         }
-    }, [imageVersion]);
+    }, [imageVersion, imageUrl]);
 
+    // Update the depth map when it's ready
+    useEffect(() => {
+        if (rendererRef.current && depthMap) {
+            rendererRef.current.updateDepthMap(depthMap.predicted_depth.data, depthMap.predicted_depth.width, depthMap.predicted_depth.height);
+        }
+    }, [depthMap]);
+
+    // Main render loop
     useEffect(() => {
         let active = true;
         const animate = () => {
             if (!active) return;
-            if (rendererRef.current && videoRef.current) {
-                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY);
+            if (rendererRef.current) {
+                rendererRef.current.render(mode, null as any, zoom, panX, panY);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
@@ -60,36 +53,19 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
     }, [mode, zoom, panX, panY]);
 
-    const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!rendererRef.current) return;
-        const canvas = canvasRef.current!;
-        const rect = canvas.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / canvas.width;
-        const y = (event.clientY - rect.top) / canvas.height;
-        rendererRef.current.addRipplePoint(x, y);
-    };
-
-    const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        setIsMouseDown(true);
-        if (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1') {
-            addRippleAtMouseEvent(event);
-        }
-    };
-
-    const handleMouseUp = () => setIsMouseDown(false);
-    const handleMouseLeave = () => setIsMouseDown(false);
-
+    // Mouse move handler for parallax
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        if (isMouseDown && (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1')) {
-            const now = performance.now();
-            if (now - lastMouseAddTime.current < 10) return;
-            lastMouseAddTime.current = now;
-            addRippleAtMouseEvent(event);
+        if (rendererRef.current && mode === 'depth') {
+            const canvas = canvasRef.current!;
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / canvas.width;
+            const y = (event.clientY - rect.top) / canvas.height;
+            rendererRef.current.updateMouse(x, y);
         }
     };
 
     return (
-        <canvas ref={canvasRef} width="2048" height="2048" onMouseMove={handleCanvasMouseMove} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave} />
+        <canvas ref={canvasRef} width="800" height="600" onMouseMove={handleCanvasMouseMove} />
     );
 };
 
