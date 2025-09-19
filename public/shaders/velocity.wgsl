@@ -23,14 +23,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let uv = vec2<f32>(global_id.xy) / resolution;
 
     let current_velocity = textureSampleLevel(readVelocity, u_sampler, uv, 0.0).xy;
-    var advected_velocity = textureSampleLevel(readVelocity, u_sampler, uv - current_velocity * 0.0002, 0.0).xy;
+    var advected_velocity = textureSampleLevel(readVelocity, u_sampler, uv - current_velocity * 0.002, 0.0).xy;
 
-    advected_velocity *= 0.95;
+    // Implement dynamic friction for a 'layered' feel.
+    // Low-speed ripples die out quickly, while high-speed swirls persist.
+    let speed = length(advected_velocity);
+    let friction_factor = smoothstep(0.001, 0.01, speed); // 0 -> 1 as speed increases
+    let friction = mix(0.85, 0.98, friction_factor); // mix from high friction (0.85) to low friction (0.98)
+    advected_velocity *= friction;
 
     // --- CHANGE IS HERE ---
     // The swirling force is now only applied if the fluid is already in motion.
     // This prevents it from starting the unwanted drifting effect.
-    let speed = length(advected_velocity);
     if (speed > 0.0001) {
         let pixel = 1.0 / resolution;
         let curl_center = curl(uv, resolution);
