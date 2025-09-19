@@ -41,7 +41,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         
         var force = vec2<f32>(abs(curl_t) - abs(curl_b), abs(curl_l) - abs(curl_r));
         force = normalize(force + 0.0001);
-        force *= curl_center * 0.015;
+        force *= curl_center * 0.0;
         advected_velocity += force;
     }
 
