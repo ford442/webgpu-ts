@@ -32,14 +32,14 @@ const Controls: React.FC<ControlsProps> = ({
         <div className="controls">
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
-                <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
-                    <option value="shader">Galaxy Shader</option>
-                    <option value="image">Static Image</option>
-                    <option value="ripple">Ripple Effect</option>
-                    <option value="video">Video Texture</option>
-                    <option value="liquid-v1">Liquid (Ambient)</option>
-                    <option value="liquid">Liquid (Interactive)</option>
-                </select>
+<select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
+    <option value="shader">Galaxy Shader</option>
+    <option value="image">Static Image</option>
+    <option value="ripple">Ripple Effect</option>
+    <option value="video">Video Texture</option>
+    <option value="liquid">Liquid (Interactive)</option>
+    <option value="depth">Depth Parallax</option> {/* New Option */}
+</select>
             </div>
              {isImageMode && (
                 <>
