@@ -5,7 +5,7 @@ export class Renderer {
     private device!: GPUDevice;
     private context!: GPUCanvasContext;
     private presentationFormat!: GPUTextureFormat;
-    private pipelines = new Map<string, GPURenderPipeline | GPUComputePipeline>();
+    private pipelines = new Map<string, GPURenderPipeline>();
     private bindGroups = new Map<string, GPUBindGroup>();
     private sampler!: GPUSampler;
     private imageTexture!: GPUTexture;
@@ -47,12 +47,12 @@ export class Renderer {
 
         await this.createResources();
         await this.createPipelines();
-        await this.loadRandomImage('https://i.imgur.com/vCNL2sT.jpeg'); // Load initial image
+        await this.loadImage('https://i.imgur.com/vCNL2sT.jpeg');
         
         return true;
     }
     
-    public async loadRandomImage(imageUrl: string): Promise<void> {
+    public async loadImage(imageUrl: string): Promise<void> {
         try {
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
@@ -61,8 +61,7 @@ export class Renderer {
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                // --- FIX #2: Added COPY_SRC for potential copy operations ---
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
@@ -110,7 +109,7 @@ export class Renderer {
         }));
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
+    public render(mode: RenderMode): void {
         if (!this.device) return;
 
         const commandEncoder = this.device.createCommandEncoder();
