@@ -23,7 +23,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let uv = vec2<f32>(global_id.xy) / resolution;
 
     let current_velocity = textureSampleLevel(readVelocity, u_sampler, uv, 0.0).xy;
-    var advected_velocity = textureSampleLevel(readVelocity, u_sampler, uv - current_velocity * 0.002, 0.0).xy;
+    var advected_velocity = textureSampleLevel(readVelocity, u_sampler, uv - current_velocity * 0.0002, 0.0).xy;
 
     advected_velocity *= 0.95;
 
