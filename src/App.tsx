@@ -22,7 +22,7 @@ function App() {
     useEffect(() => {
         const loadModel = async () => {
             try {
-                // --- FIX #1: Using a known-good model name ---
+                // Using a known-good, high-quality depth model
                 const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas', {
                     progress_callback: (progress: any) => {
                         setStatus(`Loading Model: ${progress.file} (${Math.round(progress.progress)}%)`);
@@ -32,7 +32,7 @@ function App() {
                 setStatus('Model Loaded. Click "New Random Image" to start.');
             } catch (e) {
                 console.error(e);
-                setStatus('Failed to load model.');
+                setStatus('Failed to load AI model.');
             }
         };
         loadModel();
@@ -67,7 +67,6 @@ function App() {
                 panX={panX} setPanX={setPanX}
                 panY={panY} setPanY={setPanY}
                 onNewImage={handleNewImage}
-                // Simplified props for this branch
                 autoChangeEnabled={false}
                 setAutoChangeEnabled={() => {}}
                 autoChangeDelay={5}
