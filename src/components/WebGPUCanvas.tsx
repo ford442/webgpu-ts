@@ -7,9 +7,11 @@ interface WebGPUCanvasProps {
     panX: number;
     panY: number;
     imageVersion: number;
+    imageUrl: string; // New Prop
+    depthMap: any;    // New Prop
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion, imageUrl, depthMap }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<Renderer | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
