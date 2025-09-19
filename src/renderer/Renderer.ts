@@ -119,31 +119,54 @@ export class Renderer {
     private createBindGroups(): void {
         if (!this.imageTexture) return;
 
+        // Bind groups that depend on the video texture
         if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.sampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
             this.bindGroups.set('video', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.videoTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
+
+            // Create compute bind groups that use the VIDEO texture as input
+            this.bindGroups.set('compute_v1_video', this.device.createBindGroup({
+                layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: this.sampler },
+                    { binding: 1, resource: this.videoTexture.createView() },
+                    { binding: 2, resource: this.writeTexture.createView() },
+                    { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }
+                ]
+            }));
+            this.bindGroups.set('compute_video', this.device.createBindGroup({
+                layout: this.pipelines.get('compute')!.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: this.sampler },
+                    { binding: 1, resource: this.videoTexture.createView() },
+                    { binding: 2, resource: this.writeTexture.createView() },
+                    { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }
+                ]
+            }));
         }
 
+        // Bind groups that depend on the static image texture
         this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
         this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
-   this.bindGroups.set('computeV1', this.device.createBindGroup({ 
-            layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), 
-            entries: [
-                { binding: 0, resource: this.sampler }, 
-                { binding: 1, resource: this.imageTexture.createView() }, 
-                { binding: 2, resource: this.writeTexture.createView() },
-                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } } // This line was missing.
-            ] 
-        }));
 
-        this.bindGroups.set('compute', this.device.createBindGroup({ 
-            layout: this.pipelines.get('compute')!.getBindGroupLayout(0), 
+        // Create compute bind groups that use the IMAGE texture as input
+        this.bindGroups.set('compute_v1_image', this.device.createBindGroup({
+            layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0),
             entries: [
-                { binding: 0, resource: this.sampler }, 
-                { binding: 1, resource: this.imageTexture.createView() }, 
-                { binding: 2, resource: this.writeTexture.createView() }, 
+                { binding: 0, resource: this.sampler },
+                { binding: 1, resource: this.imageTexture.createView() },
+                { binding: 2, resource: this.writeTexture.createView() },
+                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }
+            ]
+        }));
+        this.bindGroups.set('compute_image', this.device.createBindGroup({
+            layout: this.pipelines.get('compute')!.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: this.sampler },
+                { binding: 1, resource: this.imageTexture.createView() },
+                { binding: 2, resource: this.writeTexture.createView() },
                 { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }
-            ] 
+            ]
         }));
     }
 
@@ -163,11 +186,19 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-
-
+            const isVideoReady = videoElement.readyState >= 2 && videoElement.videoWidth > 0;
             const computePass = commandEncoder.beginComputePass();
-            const computeV1BG = this.bindGroups.get('computeV1');
-            const computeBG = this.bindGroups.get('compute');
+
+            let computeV1BG: GPUBindGroup | undefined;
+            let computeBG: GPUBindGroup | undefined;
+
+            if (isVideoReady) {
+                computeV1BG = this.bindGroups.get('compute_v1_video');
+                computeBG = this.bindGroups.get('compute_video');
+            } else {
+                computeV1BG = this.bindGroups.get('compute_v1_image');
+                computeBG = this.bindGroups.get('compute_image');
+            }
 
             if (mode === 'liquid-v1' && computeV1BG) {
                 this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
