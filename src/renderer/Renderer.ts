@@ -176,7 +176,7 @@ export class Renderer {
 
         const isVideoActive = mode === 'video' || (mode.startsWith('liquid') && liquidSource === 'video');
 
-        if (isVideoActive && videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
+        if (isVideoActive && videoElement.readyState >= 3 && videoElement.videoWidth > 0) {
             if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
                 this.videoTexture = this.device.createTexture({ size: [videoElement.videoWidth, videoElement.videoHeight], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
