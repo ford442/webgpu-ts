@@ -25,7 +25,7 @@ export class Renderer {
     private fillUniformBuffer!: GPUBuffer;
     private needsFillReset = false;
     private fillIterations = 0;
-    private readonly MAX_FILL_ITERATIONS = 64;
+    private readonly MAX_FILL_ITERATIONS = 256;
 
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
@@ -76,17 +76,29 @@ export class Renderer {
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
 
+            // --- FIX #2: Resize the loaded image to match the canvas resolution ---
+            const offscreenCanvas = document.createElement('canvas');
+            offscreenCanvas.width = this.canvas.width;
+            offscreenCanvas.height = this.canvas.height;
+            const ctx = offscreenCanvas.getContext('2d');
+            if (ctx) {
+                // This stretches the original image to fill our 2048x2048 simulation space
+                ctx.drawImage(imageBitmap, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+            }
+            const resizedBitmap = await createImageBitmap(offscreenCanvas);
+            // --- End of resizing logic ---
+
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
-                size: [imageBitmap.width, imageBitmap.height],
+                size: [resizedBitmap.width, resizedBitmap.height], // Now guaranteed to be 2048x2048
                 format: 'rgba8unorm',
-                // --- FIX #1: Add STORAGE_BINDING permission ---
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING,
             });
-            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+            // Copy the resized bitmap to the GPU texture
+            this.device.queue.copyExternalImageToTexture({ source: resizedBitmap }, { texture: this.imageTexture }, [resizedBitmap.width, resizedBitmap.height]);
 
             if (this.pipelines.size > 0) {
-                this.createBindGroups(); // Recreate bind groups with new image texture
+                this.createBindGroups();
             }
         } catch (e) { console.error("Failed to load image:", e); }
     }
@@ -184,22 +196,20 @@ export class Renderer {
 
         const commandEncoder = this.device.createCommandEncoder();
 
-        // --- NEW: FLOOD FILL COMPUTE PASS ---
+        // --- FLOOD FILL COMPUTE PASS ---
         if (mode === 'colorFill') {
             if (this.needsFillReset && this.ripplePoints.length > 0) {
                 this.needsFillReset = false;
                 this.fillIterations = 0;
                 const clickPoint = this.ripplePoints[0];
                 
-                // --- FIX #1: Changed target color to grey for better testing ---
                 const targetColor = [0.5, 0.5, 0.5, 1.0];
                 const threshold = 0.5; 
                 const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
                 this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
 
-                // Clear state textures
                 const clearColor = { r: 0, g: 0, b: 0, a: 0 };
-                   commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
+                commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
                 commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureB.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
             }
 
@@ -260,23 +270,28 @@ export class Renderer {
 
          switch (mode) {
             case 'colorFill':
-                 if (colorFillPipeline && this.bindGroups.has('colorFill')) {
-                    const finalStateTexture = (this.fillIterations % 2 === 0) ? this.fillStateTextureA : this.fillStateTextureB;
+                 if (colorFillPipeline) {
+                    const finalStateTexture = (this.fillIterations % 2 === 1) ? this.fillStateTextureB : this.fillStateTextureA;
                     
-                    // --- FIX #2: Pass image/canvas resolutions to the render shader ---
+                    // First, write the resolution data to the uniform buffer
                     const uniformArray = new Float32Array(8);
                     uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
 
-                    this.bindGroups.set('colorFill', this.device.createBindGroup({ layout: colorFillPipeline.getBindGroupLayout(0), entries: [
-                        { binding: 0, resource: this.sampler }, 
-                        { binding: 1, resource: this.imageTexture.createView() }, 
-                        { binding: 2, resource: finalStateTexture.createView() },
-                        { binding: 3, resource: { buffer: this.imageVideoUniformBuffer } } // Pass uniform buffer
-                    ] }));
+                    // --- FIX IS HERE ---
+                    // Now, create the bind group with all 4 required entries.
+                    const colorFillBindGroup = this.device.createBindGroup({ 
+                        layout: colorFillPipeline.getBindGroupLayout(0), 
+                        entries: [
+                            { binding: 0, resource: this.sampler }, 
+                            { binding: 1, resource: this.imageTexture.createView() }, 
+                            { binding: 2, resource: finalStateTexture.createView() },
+                            { binding: 3, resource: { buffer: this.imageVideoUniformBuffer } } // Added the missing buffer
+                        ] 
+                    });
 
                     passEncoder.setPipeline(colorFillPipeline);
-                    passEncoder.setBindGroup(0, this.bindGroups.get('colorFill')!);
+                    passEncoder.setBindGroup(0, colorFillBindGroup);
                     passEncoder.draw(4);
                 }
                 break;
