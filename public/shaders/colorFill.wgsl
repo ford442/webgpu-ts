@@ -46,9 +46,9 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
         let dist = distance(scaledUV, mouseUV);
 
         if (dist < 0.1) {
-            // --- CHANGE IS HERE ---
-            // Instead of a solid color, invert the existing color.
-            outputColor.rgb = 1.0 - outputColor.rgb; 
+            // --- FIX IS HERE ---
+            // Construct a new vec4 with the inverted .rgb and original .a
+            outputColor = vec4<f32>(1.0 - outputColor.rgb, outputColor.a); 
         }
     }
 
