@@ -41,13 +41,25 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     
     var outputColor = textureSample(u_texture, u_sampler, scaledUV);
 
-    if (u.config.y > 0.0) {
+    if (u.config.y > 0.0) { // If a click has happened
         let mouseUV = u.ripples[0].xy;
-        let dist = distance(scaledUV, mouseUV);
+        let rippleStartTime = u.ripples[0].z;
+        let currentTime = u.config.x;
 
-        if (dist < 0.1) {
-            // --- FIX IS HERE ---
-            // Construct a new vec4 with the inverted .rgb and original .a
+        // --- NEW ANIMATION LOGIC ---
+        let timeSinceClick = currentTime - rippleStartTime;
+        let animationDuration = 0.5; // The effect grows for 0.5 seconds
+        let maxRadius = 0.25;      // The final radius of the circle
+
+        // Calculate the animation's progress (from 0.0 to 1.0)
+        let progress = clamp(timeSinceClick / animationDuration, 0.0, 1.0);
+        
+        // Use smoothstep for a nice ease-in/ease-out effect
+        let easedProgress = smoothstep(0.0, 1.0, progress);
+        let animatedRadius = easedProgress * maxRadius;
+
+        let dist = distance(scaledUV, mouseUV);
+        if (dist < animatedRadius) {
             outputColor = vec4<f32>(1.0 - outputColor.rgb, outputColor.a); 
         }
     }
