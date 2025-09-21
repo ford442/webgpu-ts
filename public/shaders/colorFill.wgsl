@@ -39,20 +39,23 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
 
     let scaledUV = (fragUV - 0.5) * scale + 0.5;
     
-    var finalUV = scaledUV;
+    // --- FIX IS HERE ---
+    // 1. Sample the texture color for ALL pixels first (uniform flow).
+    var outputColor = textureSample(u_texture, u_sampler, scaledUV);
 
+    // 2. Then, use conditional logic to potentially change the color.
     if (u.config.y > 0.0) { // Check if there's at least one point
         let mouseUV = u.ripples[0].xy;
         let dist = distance(scaledUV, mouseUV);
 
         if (dist < 0.1) {
-            return vec4<f32>(1.0, 0.0, 0.0, 1.0); // Red circle for now
+            outputColor = vec4<f32>(1.0, 0.0, 0.0, 1.0); // Overwrite with red circle
         }
     }
 
-    let textureColor = textureSample(u_texture, u_sampler, finalUV);
+    // 3. Handle out-of-bounds pixels and return the final color.
     let outOfBounds = f32(scaledUV.x < 0.0 || scaledUV.x > 1.0 || scaledUV.y < 0.0 || scaledUV.y > 1.0);
-    let finalColor = mix(vec4(0.0, 0.0, 0.0, 1.0), textureColor, 1.0 - outOfBounds);
+    let finalColor = mix(vec4(0.0, 0.0, 0.0, 1.0), outputColor, 1.0 - outOfBounds);
 
     return finalColor;
 }
