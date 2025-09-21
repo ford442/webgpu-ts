@@ -205,7 +205,7 @@ export class Renderer {
                 
                 // Hard-coded target color (a blue) and threshold
                 const targetColor = [0.1, 0.2, 0.8, 1.0];
-                const threshold = 0.3;
+                const threshold = 0.1;
                 const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
                 this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
 
