@@ -1,4 +1,4 @@
-export type RenderMode = 'liquid' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'shader';
+export type RenderMode = 'liquid' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'shader' | 'colorFill';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -94,12 +94,13 @@ export class Renderer {
     }
 
     private async createPipelines(): Promise<void> {
-        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode] = await Promise.all([
+        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode, colorFillCode] = await Promise.all([
             fetch('shaders/galaxy.wgsl').then(res => res.text()),
             fetch('shaders/imageVideo.wgsl').then(res => res.text()),
             fetch('shaders/liquid-v1.wgsl').then(res => res.text()),
             fetch('shaders/liquid.wgsl').then(res => res.text()),
             fetch('shaders/texture.wgsl').then(res => res.text()),
+            fetch('shaders/colorFill.wgsl').then(res => res.text()),
         ]);
 
         const galaxyModule = this.device.createShaderModule({ code: galaxyCode });
@@ -107,6 +108,7 @@ export class Renderer {
         const liquidV1Module = this.device.createShaderModule({ code: liquidV1Code });
         const liquidModule = this.device.createShaderModule({ code: liquidCode });
         const textureModule = this.device.createShaderModule({ code: textureCode });
+        const colorFillModule = this.device.createShaderModule({ code: colorFillCode });
 
         const commonConfig = { vertex: { module: imageVideoModule, entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }] }, primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology } };
         this.pipelines.set('galaxy', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: galaxyModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: galaxyModule, entryPoint: 'fs_main' }, primitive: { topology: 'triangle-list' as GPUPrimitiveTopology } }));
@@ -114,6 +116,7 @@ export class Renderer {
         this.pipelines.set('liquid', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } }));
         this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }));
         this.pipelines.set('compute', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }));
+        this.pipelines.set('colorFill', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: colorFillModule, entryPoint: 'fs_main' } }));
     }
 
     private createBindGroups(): void {
@@ -145,6 +148,8 @@ export class Renderer {
                 { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }
             ] 
         }));
+
+        this.bindGroups.set('colorFill', this.device.createBindGroup({ layout: this.pipelines.get('colorFill')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
@@ -200,6 +205,7 @@ export class Renderer {
         const liquidPipeline = this.pipelines.get('liquid') as GPURenderPipeline;
         const imageVideoPipeline = this.pipelines.get('imageVideo') as GPURenderPipeline;
         const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
+        const colorFillPipeline = this.pipelines.get('colorFill') as GPURenderPipeline;
 
         switch (mode) {
             case 'shader':
@@ -212,6 +218,7 @@ export class Renderer {
                 break;
             case 'image':
             case 'ripple':
+            case 'colorFill':
                 if (imageVideoPipeline && this.bindGroups.has('image')) {
                     // --- FIX #2: Rewrote uniform buffer creation to be safer ---
                     const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
@@ -222,8 +229,14 @@ export class Renderer {
                         uniformArray.set([point.x, point.y, point.startTime, 0.0], 8 + i * 4);
                     }
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-                    passEncoder.setPipeline(imageVideoPipeline);
-                    passEncoder.setBindGroup(0, this.bindGroups.get('image')!);
+                    
+                    if (mode === 'colorFill' && colorFillPipeline && this.bindGroups.has('colorFill')) {
+                        passEncoder.setPipeline(colorFillPipeline);
+                        passEncoder.setBindGroup(0, this.bindGroups.get('colorFill')!);
+                    } else {
+                        passEncoder.setPipeline(imageVideoPipeline);
+                        passEncoder.setBindGroup(0, this.bindGroups.get('image')!);
+                    }
                     passEncoder.draw(4);
                 }
                 break;
