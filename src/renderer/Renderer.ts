@@ -181,7 +181,19 @@ export class Renderer {
         this.bindGroups.set('fill_B_to_A', this.device.createBindGroup({ layout: fillLayout, entries: [ { binding: 0, resource: this.imageTexture.createView() }, { binding: 1, resource: this.fillStateTextureB.createView() }, { binding: 2, resource: this.fillStateTextureA.createView() }, { binding: 3, resource: { buffer: this.fillUniformBuffer } }] }));
     }
 
-     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
+    This TypeScript error, Cannot find name 'imageVideoPipeline', is happening because the imageVideoPipeline variable was declared inside the scope of a different case block in your switch statement, making it invisible to the 'image' and 'ripple' cases.
+
+To fix this, you need to declare all your pipeline variables at the top of the render method, before the switch statement begins. This will make them accessible to all the case blocks.
+
+File to Edit
+You only need to make a change in src/renderer/Renderer.ts.
+
+Corrected render Method
+Here is the updated method with the variable declarations moved to the correct scope.
+
+TypeScript
+
+    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
 
@@ -205,7 +217,7 @@ export class Renderer {
                 
                 // Hard-coded target color (a blue) and threshold
                 const targetColor = [0.1, 0.2, 0.8, 1.0];
-                const threshold = 0.1;
+                const threshold = 0.3;
                 const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
                 this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
 
@@ -267,6 +279,11 @@ export class Renderer {
         const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
+        // **THE FIX IS HERE**
+        // Moved these declarations out of the switch statement so they are in scope for all cases.
+        const liquidPipeline = this.pipelines.get('liquid') as GPURenderPipeline;
+        const imageVideoPipeline = this.pipelines.get('imageVideo') as GPURenderPipeline;
+        const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
         const colorFillPipeline = this.pipelines.get('colorFill') as GPURenderPipeline;
 
         switch (mode) {
@@ -274,20 +291,17 @@ export class Renderer {
                  if (colorFillPipeline) {
                     const finalStateTexture = (this.fillIterations % 2 === 1) ? this.fillStateTextureB : this.fillStateTextureA;
                     
-                    // Ensure the uniform buffer has the correct resolution data
                     const uniformArray = new Float32Array(8);
                     uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
 
-                    // **THE FIX IS HERE**
-                    // The bind group now includes all 4 entries expected by the shader.
                     const colorFillBindGroup = this.device.createBindGroup({ 
                         layout: colorFillPipeline.getBindGroupLayout(0), 
                         entries: [
                             { binding: 0, resource: this.sampler }, 
                             { binding: 1, resource: this.imageTexture.createView() }, 
                             { binding: 2, resource: finalStateTexture.createView() },
-                            { binding: 3, resource: { buffer: this.imageVideoUniformBuffer } } // Added the missing buffer
+                            { binding: 3, resource: { buffer: this.imageVideoUniformBuffer } }
                         ] 
                     });
 
