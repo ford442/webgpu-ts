@@ -198,8 +198,8 @@ export class Renderer {
 
                 // Clear state textures
                 const clearColor = { r: 0, g: 0, b: 0, a: 0 };
-                commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear', storeOp: 'store' }] }).end();
-                commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureB.createView(), clearValue: clearColor, loadOp: 'clear', storeOp: 'store' }] }).end();
+                   commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
+                commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureB.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
             }
 
             if (this.fillIterations < this.MAX_FILL_ITERATIONS) {
