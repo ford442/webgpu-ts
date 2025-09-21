@@ -7,10 +7,6 @@ struct Uniforms {
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-
-// --- NEW HELPER FUNCTIONS for vibrant colors ---
-
-// Converts a color from RGB to HSV (Hue, Saturation, Value)
 fn rgb2hsv(c: vec3<f32>) -> vec3<f32> {
     let K = vec4<f32>(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
     let p = mix(vec4<f32>(c.bg, K.wz), vec4<f32>(c.gb, K.xy), step(c.b, c.g));
@@ -20,13 +16,11 @@ fn rgb2hsv(c: vec3<f32>) -> vec3<f32> {
     return vec3<f32>(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
-// Converts a color from HSV to RGB
 fn hsv2rgb(c: vec3<f32>) -> vec3<f32> {
     let K = vec4<f32>(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
     let p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
     return c.z * mix(K.xxx, clamp(p - K.xxx, vec3<f32>(0.0), vec3<f32>(1.0)), c.y);
 }
-
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -66,15 +60,13 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     let fillState = textureSampleLevel(fillStateTexture, u_sampler, fragUV, 0.0);
 
     if (fillState.r > 0.5) {
-        // --- THIS IS THE NEW LOGIC ---
-        // Convert the original color to HSV
         var hsv = rgb2hsv(outputColor.rgb);
-        // Shift the Hue by 180 degrees (0.5 on a scale of 0-1)
         hsv.x = fract(hsv.x + 0.5);
-        // Boost the saturation for more vibrancy
         hsv.y = min(hsv.y * 1.2, 1.0);
-        // Convert the new vibrant, complementary color back to RGB
-        outputColor.rgb = hsv2rgb(hsv);
+        
+        // --- FIX IS HERE ---
+        // Construct a new vec4 using the new RGB color and the original alpha
+        outputColor = vec4<f32>(hsv2rgb(hsv), outputColor.a);
     }
 
     return outputColor;
