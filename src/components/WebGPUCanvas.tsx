@@ -28,8 +28,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
     // Load new images
     useEffect(() => {
         if (rendererRef.current && imageVersion > 0) {
-            // --- FIX IS HERE ---
-            // Changed the function call to the correct name: loadImage
             rendererRef.current.loadImage(imageUrl);
         }
     }, [imageVersion, imageUrl]);
@@ -47,14 +45,15 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         const animate = () => {
             if (!active) return;
             if (rendererRef.current) {
-                // Pass a dummy video element for now as it's not used in depth mode
-                rendererRef.current.render(mode, null as any, zoom, panX, panY);
+                // --- FIX IS HERE ---
+                // The render function for this branch only needs the 'mode'.
+                rendererRef.current.render(mode);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY]);
+    }, [mode, zoom, panX, panY]); // zoom, panX, and panY are no longer used but are kept for consistency
 
     // Mouse move handler for parallax
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
