@@ -2,7 +2,6 @@
 @group(0) @binding(1) var u_texture: texture_2d<f32>;
 @group(0) @binding(2) var fillStateTexture: texture_2d<f32>; 
 
-// --- FIX #3: Add uniform buffer for resolutions ---
 struct Uniforms {
     resolutions: vec4<f32>, // canvas.xy, source.xy
 };
@@ -26,7 +25,6 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
-    // --- FIX #4: Add aspect-ratio correction logic ---
     let canvasRes = u.resolutions.xy;
     let textureRes = u.resolutions.zw;
     let canvasAspect = canvasRes.x / canvasRes.y;
@@ -41,11 +39,15 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
 
     let scaledUV = (fragUV - 0.5) * scale + 0.5;
 
-    // Read the original image color, handling out-of-bounds with black
-    var outputColor = vec4(0.0, 0.0, 0.0, 1.0);
-    if (scaledUV.x >= 0.0 && scaledUV.x <= 1.0 && scaledUV.y >= 0.0 && scaledUV.y <= 1.0) {
-        outputColor = textureSample(u_texture, u_sampler, scaledUV);
-    }
+    // --- FIX IS HERE ---
+    // 1. Sample the texture for ALL pixels first (uniform control flow).
+    let textureColor = textureSample(u_texture, u_sampler, scaledUV);
+
+    // 2. Determine if the pixel is out of the image's aspect-ratio-corrected bounds.
+    let outOfBounds = scaledUV.x < 0.0 || scaledUV.x > 1.0 || scaledUV.y < 0.0 || scaledUV.y > 1.0;
+
+    // 3. Select the color. If out of bounds, use black; otherwise, use the sampled texture color.
+    var outputColor = select(textureColor, vec4(0.0, 0.0, 0.0, 1.0), outOfBounds);
     
     let fillState = textureSampleLevel(fillStateTexture, u_sampler, fragUV, 0.0);
 
