@@ -7,9 +7,6 @@ struct Uniforms {
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// --- HELPER FUNCTIONS ---
-
-// RGB to HSV (Hue, Saturation, Value)
 fn rgb2hsv(c: vec3<f32>) -> vec3<f32> {
     let K = vec4<f32>(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
     let p = mix(vec4<f32>(c.bg, K.wz), vec4<f32>(c.gb, K.xy), step(c.b, c.g));
@@ -19,20 +16,16 @@ fn rgb2hsv(c: vec3<f32>) -> vec3<f32> {
     return vec3<f32>(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
-// HSV to RGB
 fn hsv2rgb(c: vec3<f32>) -> vec3<f32> {
     let K = vec4<f32>(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
     let p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
     return c.z * mix(K.xxx, clamp(p - K.xxx, vec3<f32>(0.0), vec3<f32>(1.0)), c.y);
 }
 
-// --- NEW: A simple noise function to create a spray paint texture ---
-// Takes a coordinate and returns a pseudo-random value between 0.0 and 1.0
 fn hash(p: vec2<f32>) -> f32 {
     let h = dot(p, vec2<f32>(127.1, 311.7));
     return fract(sin(h) * 43758.5453123);
 }
-
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -72,21 +65,17 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     let fillState = textureSampleLevel(fillStateTexture, u_sampler, fragUV, 0.0);
 
     if (fillState.r > 0.5) {
-        // --- THIS IS THE NEW "SPRAY PAINT" EFFECT ---
-        
-        // 1. Calculate the vibrant, complementary color like before.
         var hsv = rgb2hsv(outputColor.rgb);
-        hsv.x = fract(hsv.x + 0.5); // Shift hue by 180 degrees
-        hsv.y = min(hsv.y * 1.2, 1.0); // Boost saturation
+        hsv.x = fract(hsv.x + 0.5);
+        hsv.y = min(hsv.y * 1.2, 1.0);
         let vibrantColor = hsv2rgb(hsv);
         
-        // 2. Generate a noise value based on the screen coordinates.
-        // Multiplying by a large number makes the noise finer, like paint speckles.
         let noise = hash(fragUV * 800.0);
         
-        // 3. Mix the original color with our new vibrant color based on the noise.
-        // This creates the textured, speckled look.
-        outputColor.rgb = mix(outputColor.rgb, vibrantColor, noise * 0.85); // noise * 0.85 keeps some original texture
+        // --- FIX IS HERE ---
+        // Construct a new vec4 instead of assigning to .rgb
+        let mixed_rgb = mix(outputColor.rgb, vibrantColor, noise * 0.85);
+        outputColor = vec4<f32>(mixed_rgb, outputColor.a);
     }
 
     return outputColor;
