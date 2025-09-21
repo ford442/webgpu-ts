@@ -25,7 +25,7 @@ export class Renderer {
     private fillUniformBuffer!: GPUBuffer;
     private needsFillReset = false;
     private fillIterations = 0;
-    private readonly MAX_FILL_ITERATIONS = 256;
+    private readonly MAX_FILL_ITERATIONS = 64;
 
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
@@ -33,7 +33,7 @@ export class Renderer {
     public addRipplePoint(x: number, y: number, mode: RenderMode) {
         const point = { x, y, startTime: performance.now() / 1000.0 };
         this.ripplePoints = [point]; // Always just use the latest point
-         if (mode === 'colorFill') {
+        if (mode === 'colorFill') {
             this.needsFillReset = true; // Signal to start a new fill
         }
     }
@@ -69,36 +69,23 @@ export class Renderer {
         }
     }
 
-     public async loadRandomImage(): Promise<void> {
+    public async loadRandomImage(): Promise<void> {
         try {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
 
-            // --- FIX #2: Resize the loaded image to match the canvas resolution ---
-            const offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = this.canvas.width;
-            offscreenCanvas.height = this.canvas.height;
-            const ctx = offscreenCanvas.getContext('2d');
-            if (ctx) {
-                // This stretches the original image to fill our 2048x2048 simulation space
-                ctx.drawImage(imageBitmap, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
-            }
-            const resizedBitmap = await createImageBitmap(offscreenCanvas);
-            // --- End of resizing logic ---
-
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
-                size: [resizedBitmap.width, resizedBitmap.height], // Now guaranteed to be 2048x2048
+                size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING,
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
-            // Copy the resized bitmap to the GPU texture
-            this.device.queue.copyExternalImageToTexture({ source: resizedBitmap }, { texture: this.imageTexture }, [resizedBitmap.width, resizedBitmap.height]);
+            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
             if (this.pipelines.size > 0) {
-                this.createBindGroups();
+                this.createBindGroups(); // Recreate bind groups with new image texture
             }
         } catch (e) { console.error("Failed to load image:", e); }
     }
@@ -180,18 +167,6 @@ export class Renderer {
         this.bindGroups.set('fill_A_to_B', this.device.createBindGroup({ layout: fillLayout, entries: [ { binding: 0, resource: this.imageTexture.createView() }, { binding: 1, resource: this.fillStateTextureA.createView() }, { binding: 2, resource: this.fillStateTextureB.createView() }, { binding: 3, resource: { buffer: this.fillUniformBuffer } }] }));
         this.bindGroups.set('fill_B_to_A', this.device.createBindGroup({ layout: fillLayout, entries: [ { binding: 0, resource: this.imageTexture.createView() }, { binding: 1, resource: this.fillStateTextureB.createView() }, { binding: 2, resource: this.fillStateTextureA.createView() }, { binding: 3, resource: { buffer: this.fillUniformBuffer } }] }));
     }
-
-    This TypeScript error, Cannot find name 'imageVideoPipeline', is happening because the imageVideoPipeline variable was declared inside the scope of a different case block in your switch statement, making it invisible to the 'image' and 'ripple' cases.
-
-To fix this, you need to declare all your pipeline variables at the top of the render method, before the switch statement begins. This will make them accessible to all the case blocks.
-
-File to Edit
-You only need to make a change in src/renderer/Renderer.ts.
-
-Corrected render Method
-Here is the updated method with the variable declarations moved to the correct scope.
-
-TypeScript
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
         if (!this.device || !this.imageTexture) return;
@@ -279,8 +254,6 @@ TypeScript
         const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
-        // **THE FIX IS HERE**
-        // Moved these declarations out of the switch statement so they are in scope for all cases.
         const liquidPipeline = this.pipelines.get('liquid') as GPURenderPipeline;
         const imageVideoPipeline = this.pipelines.get('imageVideo') as GPURenderPipeline;
         const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
@@ -288,25 +261,13 @@ TypeScript
 
         switch (mode) {
             case 'colorFill':
-                 if (colorFillPipeline) {
-                    const finalStateTexture = (this.fillIterations % 2 === 1) ? this.fillStateTextureB : this.fillStateTextureA;
-                    
-                    const uniformArray = new Float32Array(8);
-                    uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-
-                    const colorFillBindGroup = this.device.createBindGroup({ 
-                        layout: colorFillPipeline.getBindGroupLayout(0), 
-                        entries: [
-                            { binding: 0, resource: this.sampler }, 
-                            { binding: 1, resource: this.imageTexture.createView() }, 
-                            { binding: 2, resource: finalStateTexture.createView() },
-                            { binding: 3, resource: { buffer: this.imageVideoUniformBuffer } }
-                        ] 
-                    });
+                 if (colorFillPipeline && this.bindGroups.has('colorFill')) {
+                    // Update bind group to point to the latest state texture
+                    const finalStateTexture = (this.fillIterations % 2 === 0) ? this.fillStateTextureA : this.fillStateTextureB;
+                    this.bindGroups.set('colorFill', this.device.createBindGroup({ layout: colorFillPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: finalStateTexture.createView() }] }));
 
                     passEncoder.setPipeline(colorFillPipeline);
-                    passEncoder.setBindGroup(0, colorFillBindGroup);
+                    passEncoder.setBindGroup(0, this.bindGroups.get('colorFill')!);
                     passEncoder.draw(4);
                 }
                 break;
