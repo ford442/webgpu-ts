@@ -28,7 +28,9 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
     // Load new images
     useEffect(() => {
         if (rendererRef.current && imageVersion > 0) {
-            rendererRef.current.loadRandomImage(imageUrl);
+            // --- FIX IS HERE ---
+            // Changed the function call to the correct name: loadImage
+            rendererRef.current.loadImage(imageUrl);
         }
     }, [imageVersion, imageUrl]);
 
@@ -45,6 +47,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         const animate = () => {
             if (!active) return;
             if (rendererRef.current) {
+                // Pass a dummy video element for now as it's not used in depth mode
                 rendererRef.current.render(mode, null as any, zoom, panX, panY);
             }
             animationFrameId.current = requestAnimationFrame(animate);
