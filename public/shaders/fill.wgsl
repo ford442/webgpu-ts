@@ -21,35 +21,26 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     let currentState = textureLoad(readState, coords);
 
-    // --- LOGIC FIX IS HERE ---
-    // The previous version had a bug where not all pixels were written to on the first pass.
-    // This new logic ensures the entire texture is initialized correctly.
     if (currentState.r == 0.0 && currentState.g == 0.0 && currentState.b == 0.0 && currentState.a == 0.0) {
         let dist = distance(uv, u.clickCoords);
-        if (dist < 0.002) { // Use a tiny radius to find the starting pixel
-            let myColor = textureLoad(originalTexture, coords);
-            if (colorDistance(myColor.rgb, u.targetColor.rgb) < u.threshold) {
-                // Plant the seed: Mark as filled (R=1) and an active edge (G=1)
-                textureStore(writeState, coords, vec4<f32>(1.0, 1.0, 0.0, 1.0));
-            } else {
-                // Clicked on a non-matching color, store empty state.
-                textureStore(writeState, coords, vec4<f32>(0.0, 0.0, 0.0, 1.0));
-            }
+        if (dist < 0.002) {
+            // --- DEBUGGING CHANGE IS HERE ---
+            // For now, we will unconditionally plant the seed without checking the color
+            // to make sure the simulation pipeline is working.
+            textureStore(writeState, coords, vec4<f32>(1.0, 1.0, 0.0, 1.0));
         } else {
             // This is not the seed pixel, so it starts empty.
             textureStore(writeState, coords, vec4<f32>(0.0, 0.0, 0.0, 1.0));
         }
-        return; // This block handles the entire first pass, so we exit.
+        return; 
     }
     
     // If a pixel is already filled, it should not spread further.
-    // Mark it as filled (R=1) but no longer an active edge (G=0).
     if (currentState.r > 0.5) {
         textureStore(writeState, coords, vec4<f32>(1.0, 0.0, 0.0, 1.0));
         return;
     }
 
-    // --- EXPANSION LOGIC ---
     var shouldFill = false;
     for (var y = -1; y <= 1; y = y + 1) {
         for (var x = -1; x <= 1; x = x + 1) {
@@ -60,7 +51,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                 neighborCoords.y >= 0 && neighborCoords.y < i32(dims.y)) {
                 
                 let neighborState = textureLoad(readState, neighborCoords);
-                // Check if the neighbor was part of the last active edge (G > 0.5)
                 if (neighborState.g > 0.5) { 
                     shouldFill = true;
                     break;
@@ -73,14 +63,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (shouldFill) {
         let myColor = textureLoad(originalTexture, coords);
         if (colorDistance(myColor.rgb, u.targetColor.rgb) < u.threshold) {
-            // This pixel matches, make it the NEW active edge.
             textureStore(writeState, coords, vec4<f32>(1.0, 1.0, 0.0, 1.0));
         } else {
-            // This pixel doesn't match, so it's a boundary. Stop the fill here.
             textureStore(writeState, coords, vec4<f32>(0.0, 0.0, 0.0, 1.0));
         }
     } else {
-        // This pixel is not near an active edge, so it remains unchanged.
         textureStore(writeState, coords, currentState);
     }
 }
