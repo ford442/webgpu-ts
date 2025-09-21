@@ -22,7 +22,7 @@ function App() {
     useEffect(() => {
         const loadModel = async () => {
             try {
-                // FIX: Using a known-good, high-quality depth model
+                // Using a known-good, high-quality depth model
                 const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas', {
                     progress_callback: (progress: any) => {
                         setStatus(`Loading Model: ${progress.file} (${Math.round(progress.progress)}%)`);
