@@ -21,8 +21,15 @@ export class Renderer {
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
-    public addRipplePoint(x: number, y: number) {
-        this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
+    public addRipplePoint(x: number, y: number, mode: RenderMode) {
+        const point = { x, y, startTime: performance.now() / 1000.0 };
+        if (mode === 'colorFill') {
+            // For color fill, we only ever want one point: the latest one.
+            this.ripplePoints = [point];
+        } else {
+            // For other modes, we accumulate points.
+            this.ripplePoints.push(point);
+        }
     }
 
     public async init(): Promise<boolean> {
