@@ -191,10 +191,8 @@ export class Renderer {
                 this.fillIterations = 0;
                 const clickPoint = this.ripplePoints[0];
                 
-                // Hard-coded target color (a blue)
-                const targetColor = [0.1, 0.2, 0.8, 1.0];
-                // --- FIX #2: Increased threshold for a looser color match ---
-                // You can tweak this value. Higher = looser, Lower = stricter.
+                // --- FIX #1: Changed target color to grey for better testing ---
+                const targetColor = [0.5, 0.5, 0.5, 1.0];
                 const threshold = 0.5; 
                 const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
                 this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
@@ -210,7 +208,6 @@ export class Renderer {
                 const computePass = commandEncoder.beginComputePass();
                 computePass.setPipeline(this.pipelines.get('fillCompute') as GPUComputePipeline);
                 
-                // Ping-pong between textures
                 if (this.fillIterations % 2 === 1) {
                     computePass.setBindGroup(0, this.bindGroups.get('fill_A_to_B')!);
                 } else {
@@ -220,7 +217,6 @@ export class Renderer {
                 computePass.end();
             }
         }
-
 
         if (mode.startsWith('liquid')) {
 
@@ -262,12 +258,22 @@ export class Renderer {
         const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
         const colorFillPipeline = this.pipelines.get('colorFill') as GPURenderPipeline;
 
-        switch (mode) {
+         switch (mode) {
             case 'colorFill':
                  if (colorFillPipeline && this.bindGroups.has('colorFill')) {
-                    // Update bind group to point to the latest state texture
                     const finalStateTexture = (this.fillIterations % 2 === 0) ? this.fillStateTextureA : this.fillStateTextureB;
-                    this.bindGroups.set('colorFill', this.device.createBindGroup({ layout: colorFillPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: finalStateTexture.createView() }] }));
+                    
+                    // --- FIX #2: Pass image/canvas resolutions to the render shader ---
+                    const uniformArray = new Float32Array(8);
+                    uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
+
+                    this.bindGroups.set('colorFill', this.device.createBindGroup({ layout: colorFillPipeline.getBindGroupLayout(0), entries: [
+                        { binding: 0, resource: this.sampler }, 
+                        { binding: 1, resource: this.imageTexture.createView() }, 
+                        { binding: 2, resource: finalStateTexture.createView() },
+                        { binding: 3, resource: { buffer: this.imageVideoUniformBuffer } } // Pass uniform buffer
+                    ] }));
 
                     passEncoder.setPipeline(colorFillPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('colorFill')!);
