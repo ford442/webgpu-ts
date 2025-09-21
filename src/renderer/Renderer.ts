@@ -181,7 +181,7 @@ export class Renderer {
         this.bindGroups.set('fill_B_to_A', this.device.createBindGroup({ layout: fillLayout, entries: [ { binding: 0, resource: this.imageTexture.createView() }, { binding: 1, resource: this.fillStateTextureB.createView() }, { binding: 2, resource: this.fillStateTextureA.createView() }, { binding: 3, resource: { buffer: this.fillUniformBuffer } }] }));
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
+     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
 
@@ -196,20 +196,22 @@ export class Renderer {
 
         const commandEncoder = this.device.createCommandEncoder();
 
-        // --- FLOOD FILL COMPUTE PASS ---
+        // --- NEW: FLOOD FILL COMPUTE PASS ---
         if (mode === 'colorFill') {
             if (this.needsFillReset && this.ripplePoints.length > 0) {
                 this.needsFillReset = false;
                 this.fillIterations = 0;
                 const clickPoint = this.ripplePoints[0];
                 
-                const targetColor = [0.5, 0.5, 0.5, 1.0];
-                const threshold = 0.5; 
+                // Hard-coded target color (a blue) and threshold
+                const targetColor = [0.1, 0.2, 0.8, 1.0];
+                const threshold = 0.3;
                 const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
                 this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
 
+                // Clear state textures
                 const clearColor = { r: 0, g: 0, b: 0, a: 0 };
-                commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
+                   commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
                 commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureB.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
             }
 
@@ -218,6 +220,7 @@ export class Renderer {
                 const computePass = commandEncoder.beginComputePass();
                 computePass.setPipeline(this.pipelines.get('fillCompute') as GPUComputePipeline);
                 
+                // Ping-pong between textures
                 if (this.fillIterations % 2 === 1) {
                     computePass.setBindGroup(0, this.bindGroups.get('fill_A_to_B')!);
                 } else {
@@ -227,6 +230,7 @@ export class Renderer {
                 computePass.end();
             }
         }
+
 
         if (mode.startsWith('liquid')) {
 
@@ -263,9 +267,6 @@ export class Renderer {
         const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
-        const liquidPipeline = this.pipelines.get('liquid') as GPURenderPipeline;
-        const imageVideoPipeline = this.pipelines.get('imageVideo') as GPURenderPipeline;
-        const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
         const colorFillPipeline = this.pipelines.get('colorFill') as GPURenderPipeline;
 
         switch (mode) {
