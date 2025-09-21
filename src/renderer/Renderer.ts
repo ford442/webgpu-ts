@@ -107,7 +107,7 @@ export class Renderer {
         const stateTextureDesc: GPUTextureDescriptor = {
             size: [width, height],
             format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST| GPUTextureUsage.RENDER_ATTACHMENT,
         };
         this.fillStateTextureA = this.device.createTexture(stateTextureDesc);
         this.fillStateTextureB = this.device.createTexture(stateTextureDesc);
@@ -220,7 +220,34 @@ export class Renderer {
 
 
         if (mode.startsWith('liquid')) {
-            // ... (liquid compute pass remains the same)
+
+
+            const computePass = commandEncoder.beginComputePass();
+            const computeV1BG = this.bindGroups.get('computeV1');
+            const computeBG = this.bindGroups.get('compute');
+
+            if (mode === 'liquid-v1' && computeV1BG) {
+                this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
+                computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
+                computePass.setBindGroup(0, computeV1BG);
+                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+            } else if (mode === 'liquid' && computeBG) {
+                this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
+                if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
+                const computeUniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
+                computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
+                const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
+                for (let i = 0; i < this.ripplePoints.length; i++) {
+                    const point = this.ripplePoints[i];
+                    rippleData.set([point.x, point.y, point.startTime], i * 4);
+                }
+                computeUniformArray.set(rippleData, 4);
+                this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
+                computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
+                computePass.setBindGroup(0, computeBG);
+                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+            }
+            computePass.end();
         }
 
         const textureView = this.context.getCurrentTexture().createView();
