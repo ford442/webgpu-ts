@@ -33,9 +33,25 @@ export class Renderer {
     public addRipplePoint(x: number, y: number, mode: RenderMode) {
         const point = { x, y, startTime: performance.now() / 1000.0 };
         this.ripplePoints = [point]; // Always just use the latest point
-        if (mode === 'colorFill') {
-            this.needsFillReset = true; // Signal to start a new fill
-        }
+         if (mode === 'colorFill') {
+            if (this.needsFillReset && this.ripplePoints.length > 0) {
+                this.needsFillReset = false;
+                this.fillIterations = 0;
+                const clickPoint = this.ripplePoints[0];
+                
+                // Hard-coded target color (a blue)
+                const targetColor = [0.1, 0.2, 0.8, 1.0];
+                // --- FIX #2: Increased threshold for a looser color match ---
+                // You can tweak this value. Higher = looser, Lower = stricter.
+                const threshold = 0.5; 
+                const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
+                this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
+
+                // Clear state textures
+                const clearColor = { r: 0, g: 0, b: 0, a: 0 };
+                   commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
+                commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureB.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
+            }
     }
 
     public async init(): Promise<boolean> {
