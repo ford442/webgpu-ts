@@ -268,18 +268,18 @@ export class Renderer {
         const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
         const colorFillPipeline = this.pipelines.get('colorFill') as GPURenderPipeline;
 
-         switch (mode) {
+        switch (mode) {
             case 'colorFill':
                  if (colorFillPipeline) {
                     const finalStateTexture = (this.fillIterations % 2 === 1) ? this.fillStateTextureB : this.fillStateTextureA;
                     
-                    // First, write the resolution data to the uniform buffer
+                    // Ensure the uniform buffer has the correct resolution data
                     const uniformArray = new Float32Array(8);
                     uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
 
-                    // --- FIX IS HERE ---
-                    // Now, create the bind group with all 4 required entries.
+                    // **THE FIX IS HERE**
+                    // The bind group now includes all 4 entries expected by the shader.
                     const colorFillBindGroup = this.device.createBindGroup({ 
                         layout: colorFillPipeline.getBindGroupLayout(0), 
                         entries: [
