@@ -22,10 +22,11 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
 fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     var outputColor = textureSample(u_texture, u_sampler, fragUV);
     
-    // Sample the fill state texture (don't use a sampler for this)
-    let dims = textureDimensions(fillStateTexture);
-    let coords = vec2<i32>(fragUV * vec2<f32>(dims));
-    let fillState = textureLoad(fillStateTexture, coords, 0);
+    // --- FIX IS HERE ---
+    // Use textureSampleLevel instead of textureLoad.
+    // The '0.0' at the end specifies mip level 0, which gives us
+    // the original, unfiltered texel color, similar to textureLoad.
+    let fillState = textureSampleLevel(fillStateTexture, u_sampler, fragUV, 0.0);
 
     // If the red channel is > 0.5, it means this pixel is filled.
     if (fillState.r > 0.5) {
