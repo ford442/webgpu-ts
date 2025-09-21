@@ -26,7 +26,7 @@ const Controls: React.FC<ControlsProps> = ({
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay
 }) => {
-    const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple';
+    const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple' || mode === 'colorFill';
 
     return (
         <div className="controls">
@@ -37,6 +37,7 @@ const Controls: React.FC<ControlsProps> = ({
                     <option value="shader">Galaxy Shader</option>
                     <option value="image">Static Image</option>
                     <option value="ripple">Ripple Effect</option>
+                    <option value="colorFill">Color Fill</option>
                     <option value="video">Video Texture</option>
                     <option value="liquid-v1">Liquid (Ambient)</option>
                 </select>
