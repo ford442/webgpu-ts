@@ -56,7 +56,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
   // --- Spreading Step (subsequent frames) ---
 
-  let currentState = textureLoad(readState, coords, 0);
+  let currentState = textureLoad(readState, coords);
 
   // If this pixel is already filled, just carry it over and stop.
   if (currentState.r > 0.5) {
@@ -65,7 +65,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   }
 
   // Check if my color is within the fill region
-  let myColor = textureLoad(originalTexture, coords, 0);
+  let myColor = textureLoad(originalTexture, coords);
   if (colorDistance(myColor.rgb, u.targetColor.rgb) >= u.threshold) {
     // My color is wrong, so I can't be filled. Copy old state.
     textureStore(writeState, coords, currentState);
