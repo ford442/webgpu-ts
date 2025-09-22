@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Renderer, RenderMode } from '../renderer/Renderer';
 
 interface WebGPUCanvasProps {
@@ -58,34 +58,33 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
     }, [mode, zoom, panX, panY]);
 
-    const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const addRippleAtMouseEvent = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!rendererRef.current) return;
         const canvas = canvasRef.current!;
         const rect = canvas.getBoundingClientRect();
-        // --- FIX #1: Use rect.width and rect.height for accurate coordinates ---
         const x = (event.clientX - rect.left) / rect.width;
         const y = (event.clientY - rect.top) / rect.height;
         rendererRef.current.addRipplePoint(x, y, mode);
-    };
+    }, [mode]);
 
-    const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const handleMouseDown = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
         setIsMouseDown(true);
         if (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1' || mode === 'colorFill') {
             addRippleAtMouseEvent(event);
         }
-    };
+    }, [mode, addRippleAtMouseEvent]);
 
-    const handleMouseUp = () => setIsMouseDown(false);
-    const handleMouseLeave = () => setIsMouseDown(false);
+    const handleMouseUp = useCallback(() => setIsMouseDown(false), []);
+    const handleMouseLeave = useCallback(() => setIsMouseDown(false), []);
 
-    const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const handleCanvasMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
         if (isMouseDown && (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1' || mode === 'colorFill')) {
             const now = performance.now();
             if (now - lastMouseAddTime.current < 10) return;
             lastMouseAddTime.current = now;
             addRippleAtMouseEvent(event);
         }
-    };
+    }, [isMouseDown, mode, addRippleAtMouseEvent]);
 
     return (
         <canvas ref={canvasRef} width="2048" height="2048" onMouseMove={handleCanvasMouseMove} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave} />
