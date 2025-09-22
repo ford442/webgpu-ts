@@ -60,13 +60,15 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
 
   let textureColor = textureSample(u_texture, u_sampler, scaledUV);
   let outOfBounds = scaledUV.x < 0.0 || scaledUV.x > 1.0 || scaledUV.y < 0.0 || scaledUV.y > 1.0;
-  var outputColor = select(textureColor, vec4(0.0, 0.0, 0.0, 1.0), outOfBounds);
+  
+  // Default to a transparent pixel. The light shader underneath will show through.
+  var outputColor = vec4(0.0, 0.0, 0.0, 0.0);
+  if (!outOfBounds) {
+      outputColor = textureColor;
+  }
     
-  // The magic happens here!
-  // We sample the result of our compute shader simulation.
   let fillState = textureSampleLevel(fillStateTexture, u_sampler, fragUV, 0.0);
 
-  // If the red channel is > 0.5, it means the compute shader filled this pixel.
   if (fillState.r > 0.5) {
     var hsv = rgb2hsv(outputColor.rgb);
     hsv.x = fract(hsv.x + 0.5);
@@ -74,9 +76,11 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     let vibrantColor = hsv2rgb(hsv);
       
     let noise = hash(fragUV * 800.0);
-      
     let mixed_rgb = mix(outputColor.rgb, vibrantColor, noise * 0.85);
-    outputColor = vec4<f32>(mixed_rgb, outputColor.a);
+    
+    // --- FIX IS HERE: Read alpha from the state texture's blue channel ---
+    let alpha = fillState.b;
+    outputColor = vec4<f32>(mixed_rgb, alpha);
   }
 
   return outputColor;
