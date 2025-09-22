@@ -186,6 +186,14 @@ export class Renderer {
                 this.fillIterations = 0;
                 const clickPoint = this.ripplePoints[0];
                 
+                // This is the fix: We now correctly dispatch the compute shader
+                // on the first click to seed the animation.
+                const computePass = commandEncoder.beginComputePass();
+                computePass.setPipeline(this.pipelines.get('fillCompute') as GPUComputePipeline);
+                computePass.setBindGroup(0, this.bindGroups.get('fill_A_to_B')!);
+                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+                computePass.end();
+
                 const targetColor = [0.1, 0.2, 0.8, 1.0];
                 const threshold = 0.3;
                 const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
