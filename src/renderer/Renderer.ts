@@ -80,7 +80,6 @@ export class Renderer {
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                // **THE FIRST FIX IS HERE**
                 // Added STORAGE_BINDING so the compute shader can read from this texture.
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING,
             });
@@ -112,7 +111,8 @@ export class Renderer {
         };
         this.fillStateTextureA = this.device.createTexture(stateTextureDesc);
         this.fillStateTextureB = this.device.createTexture(stateTextureDesc);
-        this.fillUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        // --- FIX IS HERE: Increased buffer size for new resolution data ---
+        this.fillUniformBuffer = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
         await this.loadRandomImage();
     }
@@ -186,21 +186,24 @@ export class Renderer {
                 this.fillIterations = 0;
                 const clickPoint = this.ripplePoints[0];
                 
-                // This is the fix: We now correctly dispatch the compute shader
-                // on the first click to seed the animation.
-                const computePass = commandEncoder.beginComputePass();
-                computePass.setPipeline(this.pipelines.get('fillCompute') as GPUComputePipeline);
-                computePass.setBindGroup(0, this.bindGroups.get('fill_A_to_B')!);
-                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-                computePass.end();
-
                 const targetColor = [0.1, 0.2, 0.8, 1.0];
                 const threshold = 0.3;
-                const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
+
+                // --- FIX IS HERE: Sending resolution data to the shader ---
+                // New uniform layout: vec2, f32, f32(pad), vec4, vec4
+                const uniformData = new Float32Array(12); // 48 bytes
+                uniformData.set([clickPoint.x, clickPoint.y]); // offset 0
+                uniformData.set([threshold], 2); // offset 2
+                // offset 3 is for memory alignment padding in the shader
+                uniformData.set(targetColor, 4); // offset 4
+                uniformData.set([
+                    this.canvas.width, this.canvas.height, 
+                    this.imageTexture.width, this.imageTexture.height
+                ], 8); // offset 8
                 this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
 
                 const clearColor = { r: 0, g: 0, b: 0, a: 0 };
-                   commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
+                commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
                 commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureB.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
             }
 
@@ -240,15 +243,13 @@ export class Renderer {
                     uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
 
-                    // **THE SECOND FIX IS HERE**
-                    // The bind group now includes all 4 entries expected by the shader.
                     const colorFillBindGroup = this.device.createBindGroup({ 
                         layout: colorFillPipeline.getBindGroupLayout(0), 
                         entries: [
                             { binding: 0, resource: this.sampler }, 
                             { binding: 1, resource: this.imageTexture.createView() }, 
                             { binding: 2, resource: finalStateTexture.createView() },
-                            { binding: 3, resource: { buffer: this.imageVideoUniformBuffer } } // Added the missing buffer
+                            { binding: 3, resource: { buffer: this.imageVideoUniformBuffer } }
                         ] 
                     });
 
