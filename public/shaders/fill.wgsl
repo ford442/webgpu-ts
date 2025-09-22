@@ -2,14 +2,15 @@
 @group(0) @binding(1) var readState: texture_storage_2d<rgba8unorm, read>;
 @group(0) @binding(2) var writeState: texture_storage_2d<rgba8unorm, write>;
 
-// --- FIX IS HERE: Simplified struct. The target color is now found inside the shader. ---
 struct Uniforms {
     clickCoords: vec2<f32>,
     threshold: f32,
-    _padding: f32, // Ensures vec4 alignment for the next element
+    avgLuminance: f32, // The new average luminance data
     resolutions: vec4<f32>, // canvas.xy, source.xy
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
+
+const LUMINANCE_VECTOR = vec3<f32>(0.2126, 0.7152, 0.0722);
 
 fn colorDistance(c1: vec3<f32>, c2: vec3<f32>) -> f32 {
     return distance(c1, c2);
@@ -19,7 +20,6 @@ fn colorDistance(c1: vec3<f32>, c2: vec3<f32>) -> f32 {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let coords = vec2<i32>(global_id.xy);
 
-    // --- Aspect Ratio Correction & Target Color Discovery ---
     let canvasRes = u.resolutions.xy;
     let textureRes = u.resolutions.zw;
     let canvasAspect = canvasRes.x / canvasRes.y;
@@ -32,16 +32,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         scale.y = canvasAspect / textureAspect;
     }
 
-    // --- FIX IS HERE: Determine the target color dynamically from the click coordinates ---
     let clickImageUV = (u.clickCoords - 0.5) * scale + 0.5;
     let targetColorCoords = vec2<i32>(floor(clickImageUV * textureRes));
-    let targetColor = textureLoad(originalTexture, targetColorCoords).rgb;
+    let targetColorVec = textureLoad(originalTexture, targetColorCoords);
+    let targetColor = targetColorVec.rgb;
+    let targetLuminance = dot(targetColor, LUMINANCE_VECTOR);
 
-    // --- Current Pixel Information ---
     let canvasUV = vec2<f32>(coords) / canvasRes;
     let imageUV = (canvasUV - 0.5) * scale + 0.5;
 
-    // If this pixel is in a letterboxed (black bar) area, it can't be filled.
     if (imageUV.x < 0.0 || imageUV.x > 1.0 || imageUV.y < 0.0 || imageUV.y > 1.0) {
         textureStore(writeState, coords, vec4<f32>(0.0, 0.0, 0.0, 1.0));
         return;
@@ -51,19 +50,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let myColor = textureLoad(originalTexture, myColorCoords);
     let currentState = textureLoad(readState, coords);
 
-    // If a pixel is already filled, it should stay filled but not spread.
     if (currentState.r > 0.5) {
-        textureStore(writeState, coords, vec4<f32>(1.0, 0.0, 0.0, 1.0));
+        textureStore(writeState, coords, vec4<f32>(1.0, 0.0, currentState.b, 1.0)); // Preserve alpha
         return;
     }
     
-    // --- Seed Planting Logic ---
     let isInitialState = currentState.a < 0.5;
     if (isInitialState) {
         let dist = distance(canvasUV, u.clickCoords);
         if (dist < 0.002) {
             if (colorDistance(myColor.rgb, targetColor) < u.threshold) {
-                textureStore(writeState, coords, vec4<f32>(targetColor.r, 1.0, targetColor.b/2.0, 1.0));
+                // --- FIX IS HERE: Calculate and store alpha on seed pixel ---
+                let myLuminance = dot(myColor.rgb, LUMINANCE_VECTOR);
+                var alpha = 1.0;
+                if (myLuminance < targetLuminance) {
+                    let darknessFactor = 1.0 - smoothstep(0.0, targetLuminance, myLuminance);
+                    alpha = 1.0 - (darknessFactor * 0.85); // 85% max transparency
+                }
+                textureStore(writeState, coords, vec4<f32>(1.0, 1.0, alpha, 1.0));
             } else {
                 textureStore(writeState, coords, vec4<f32>(0.0, 0.0, 0.0, 1.0));
             }
@@ -73,7 +77,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
-    // --- Expansion Logic ---
     var shouldFill = false;
     for (var y = -1; y <= 1; y = y + 1) {
         for (var x = -1; x <= 1; x = x + 1) {
@@ -93,7 +96,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     if (shouldFill) {
         if (colorDistance(myColor.rgb, targetColor) < u.threshold) {
-            textureStore(writeState, coords, vec4<f32>(1.0, 1.0, 0.0, 1.0));
+             // --- FIX IS HERE: Calculate and store alpha on expansion pixels ---
+            let myLuminance = dot(myColor.rgb, LUMINANCE_VECTOR);
+            var alpha = 1.0;
+            if (myLuminance < targetLuminance) {
+                let darknessFactor = 1.0 - smoothstep(0.0, targetLuminance, myLuminance);
+                alpha = 1.0 - (darknessFactor * 0.85);
+            }
+            textureStore(writeState, coords, vec4<f32>(1.0, 1.0, alpha, 1.0));
         } else {
             textureStore(writeState, coords, currentState);
         }
