@@ -142,7 +142,7 @@ export class Renderer {
         this.pipelines.set('liquid', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } }));
         this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }));
         this.pipelines.set('compute', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }));
-        this.pipelines.set('colorFill', this.device.createRenderPipeline({ layout: 'auto', ...commonCofig, fragment: { ...commonConfig.fragment, module: colorFillModule, entryPoint: 'fs_main' } }));
+        this.pipelines.set('colorFill', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: colorFillModule, entryPoint: 'fs_main' } }));
 
         this.pipelines.set('fillCompute', this.device.createComputePipeline({ layout: 'auto', compute: { module: fillComputeModule, entryPoint: 'main' } }));
     }
