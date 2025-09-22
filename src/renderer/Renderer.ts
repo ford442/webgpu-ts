@@ -69,25 +69,36 @@ export class Renderer {
         }
     }
 
-    public async loadRandomImage(): Promise<void> {
+   public async loadRandomImage(): Promise<void> {
         try {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
 
+            // --- THE SECOND FIX IS HERE: Resize the loaded image ---
+            const offscreenCanvas = document.createElement('canvas');
+            offscreenCanvas.width = this.canvas.width;
+            offscreenCanvas.height = this.canvas.height;
+            const ctx = offscreenCanvas.getContext('2d');
+            if (ctx) {
+                // This stretches the original image to fill our simulation space
+                ctx.drawImage(imageBitmap, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+            }
+            const resizedBitmap = await createImageBitmap(offscreenCanvas);
+            // --- End of resizing logic ---
+
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
-                size: [imageBitmap.width, imageBitmap.height],
+                size: [resizedBitmap.width, resizedBitmap.height], // Now guaranteed to match canvas
                 format: 'rgba8unorm',
-                // **THE FIRST FIX IS HERE**
-                // Added STORAGE_BINDING so the compute shader can read from this texture.
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING,
             });
-            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+            // Copy the resized bitmap to the GPU texture
+            this.device.queue.copyExternalImageToTexture({ source: resizedBitmap }, { texture: this.imageTexture }, [resizedBitmap.width, resizedBitmap.height]);
 
             if (this.pipelines.size > 0) {
-                this.createBindGroups(); // Recreate bind groups with new image texture
+                this.createBindGroups();
             }
         } catch (e) { console.error("Failed to load image:", e); }
     }
