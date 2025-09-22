@@ -62,15 +62,14 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         if (!rendererRef.current) return;
         const canvas = canvasRef.current!;
         const rect = canvas.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / canvas.width;
-        const y = (event.clientY - rect.top) / canvas.height;
-        // Pass the current mode to the renderer
+        // --- FIX #1: Use rect.width and rect.height for accurate coordinates ---
+        const x = (event.clientX - rect.left) / rect.width;
+        const y = (event.clientY - rect.top) / rect.height;
         rendererRef.current.addRipplePoint(x, y, mode);
     };
 
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
         setIsMouseDown(true);
-        // --- FIX #1: Added 'colorFill' ---
         if (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1' || mode === 'colorFill') {
             addRippleAtMouseEvent(event);
         }
@@ -80,7 +79,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
     const handleMouseLeave = () => setIsMouseDown(false);
 
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        // --- FIX #2: Added 'colorFill' ---
         if (isMouseDown && (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1' || mode === 'colorFill')) {
             const now = performance.now();
             if (now - lastMouseAddTime.current < 10) return;
