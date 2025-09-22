@@ -84,7 +84,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       if (neighborCoords.x >= 0 && neighborCoords.x < i32(dims.x) &&
           neighborCoords.y >= 0 && neighborCoords.y < i32(dims.y)) {
         
-        let neighborState = textureLoad(readState, neighborCoords, 0);
+        let neighborState = textureLoad(readState, neighborCoords);
         if (neighborState.r > 0.5) { // Is neighbor filled?
           shouldFill = true;
           break;
