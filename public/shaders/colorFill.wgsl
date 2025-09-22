@@ -44,39 +44,40 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
-    let canvasRes = u.resolutions.xy;
-    let textureRes = u.resolutions.zw;
-    let canvasAspect = canvasRes.x / canvasRes.y;
-    let textureAspect = textureRes.x / textureRes.y;
-    var scale = vec2(1.0, 1.0);
+  let canvasRes = u.resolutions.xy;
+  let textureRes = u.resolutions.zw;
+  let canvasAspect = canvasRes.x / canvasRes.y;
+  let textureAspect = textureRes.x / textureRes.y;
+  var scale = vec2(1.0, 1.0);
     
-    if (canvasAspect > textureAspect) {
-        scale.x = textureAspect / canvasAspect;
-    } else {
-        scale.y = canvasAspect / textureAspect;
-    }
+  if (canvasAspect > textureAspect) {
+    scale.x = textureAspect / canvasAspect;
+  } else {
+    scale.y = canvasAspect / textureAspect;
+  }
 
-    let scaledUV = (fragUV - 0.5) * scale + 0.5;
+  let scaledUV = (fragUV - 0.5) * scale + 0.5;
 
-    let textureColor = textureSample(u_texture, u_sampler, scaledUV);
-    let outOfBounds = scaledUV.x < 0.0 || scaledUV.x > 1.0 || scaledUV.y < 0.0 || scaledUV.y > 1.0;
-    var outputColor = select(textureColor, vec4(0.0, 0.0, 0.0, 1.0), outOfBounds);
+  let textureColor = textureSample(u_texture, u_sampler, scaledUV);
+  let outOfBounds = scaledUV.x < 0.0 || scaledUV.x > 1.0 || scaledUV.y < 0.0 || scaledUV.y > 1.0;
+  var outputColor = select(textureColor, vec4(0.0, 0.0, 0.0, 1.0), outOfBounds);
     
-    let fillState = textureSampleLevel(fillStateTexture, u_sampler, fragUV, 0.0);
+  // The magic happens here!
+  // We sample the result of our compute shader simulation.
+  let fillState = textureSampleLevel(fillStateTexture, u_sampler, fragUV, 0.0);
 
-    if (fillState.r > 0.5) {
-        var hsv = rgb2hsv(outputColor.rgb);
-        hsv.x = fract(hsv.x + 0.5);
-        hsv.y = min(hsv.y * 1.2, 1.0);
-        let vibrantColor = hsv2rgb(hsv);
-        
-        let noise = hash(fragUV * 800.0);
-        
-        // --- FIX IS HERE ---
-        // Construct a new vec4 instead of assigning to .rgb
-        let mixed_rgb = mix(outputColor.rgb, vibrantColor, noise * 0.85);
-        outputColor = vec4<f32>(mixed_rgb, outputColor.a);
-    }
+  // If the red channel is > 0.5, it means the compute shader filled this pixel.
+  if (fillState.r > 0.5) {
+    var hsv = rgb2hsv(outputColor.rgb);
+    hsv.x = fract(hsv.x + 0.5);
+    hsv.y = min(hsv.y * 1.2, 1.0);
+    let vibrantColor = hsv2rgb(hsv);
+      
+    let noise = hash(fragUV * 800.0);
+      
+    let mixed_rgb = mix(outputColor.rgb, vibrantColor, noise * 0.85);
+    outputColor = vec4<f32>(mixed_rgb, outputColor.a);
+  }
 
-    return outputColor;
+  return outputColor;
 }
