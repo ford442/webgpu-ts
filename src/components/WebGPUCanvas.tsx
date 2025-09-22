@@ -62,7 +62,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         if (!rendererRef.current) return;
         const canvas = canvasRef.current!;
         const rect = canvas.getBoundingClientRect();
-        // --- FIX #1: Use rect.width and rect.height for accurate coordinates ---
+        // --- THE FIX IS HERE: Use rect.width and rect.height ---
+        // This correctly calculates the mouse position based on the element's displayed size.
         const x = (event.clientX - rect.left) / rect.width;
         const y = (event.clientY - rect.top) / rect.height;
         rendererRef.current.addRipplePoint(x, y, mode);
