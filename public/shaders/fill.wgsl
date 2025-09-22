@@ -1,8 +1,8 @@
 // ---- COMPUTE SHADER ----
 // This shader performs an iterative flood fill.
 
-@group(0) @binding(0) var originalTexture: texture_2d<f32>;
-@group(0) @binding(1) var readState: texture_2d<f32>;
+@group(0) @binding(0) var originalTexture: texture_storage_2d<rgba8unorm, read>;
+@group(0) @binding(1) var readState: texture_storage_2d<rgba8unorm, read>;
 @group(0) @binding(2) var writeState: texture_storage_2d<rgba8unorm, write>;
 
 struct Uniforms {
