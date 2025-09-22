@@ -19,26 +19,22 @@ export class Renderer {
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
 
+    // --- NEW PROPERTIES FOR FLOOD FILL ---
     private fillStateTextureA!: GPUTexture;
     private fillStateTextureB!: GPUTexture;
     private fillUniformBuffer!: GPUBuffer;
     private needsFillReset = false;
     private fillIterations = 0;
-    private readonly MAX_FILL_ITERATIONS = 256;
-
-    // --- NEW: For reading pixel color from the GPU ---
-    private colorReadbackBuffer!: GPUBuffer;
-    private needsColorReadback = false;
+    private readonly MAX_FILL_ITERATIONS = 64;
 
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
     public addRipplePoint(x: number, y: number, mode: RenderMode) {
         const point = { x, y, startTime: performance.now() / 1000.0 };
-        this.ripplePoints = [point]; 
+        this.ripplePoints = [point]; // Always just use the latest point
         if (mode === 'colorFill') {
-            this.needsFillReset = true;
-            this.needsColorReadback = true; // Signal that we need to read the color at this point
+            this.needsFillReset = true; // Signal to start a new fill
         }
     }
 
@@ -73,32 +69,25 @@ export class Renderer {
         }
     }
 
-  public async loadRandomImage(): Promise<void> {
+    public async loadRandomImage(): Promise<void> {
         try {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
 
-            const offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = this.canvas.width;
-            offscreenCanvas.height = this.canvas.height;
-            const ctx = offscreenCanvas.getContext('2d');
-            if (ctx) {
-                ctx.drawImage(imageBitmap, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
-            }
-            const resizedBitmap = await createImageBitmap(offscreenCanvas);
-
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
-                size: [resizedBitmap.width, resizedBitmap.height],
+                size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
+                // **THE FIRST FIX IS HERE**
+                // Added STORAGE_BINDING so the compute shader can read from this texture.
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING,
             });
-            this.device.queue.copyExternalImageToTexture({ source: resizedBitmap }, { texture: this.imageTexture }, [resizedBitmap.width, resizedBitmap.height]);
+            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
             if (this.pipelines.size > 0) {
-                this.createBindGroups();
+                this.createBindGroups(); // Recreate bind groups with new image texture
             }
         } catch (e) { console.error("Failed to load image:", e); }
     }
@@ -124,12 +113,6 @@ export class Renderer {
         this.fillStateTextureA = this.device.createTexture(stateTextureDesc);
         this.fillStateTextureB = this.device.createTexture(stateTextureDesc);
         this.fillUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        
-        // --- NEW: Buffer for reading pixel color ---
-        this.colorReadbackBuffer = this.device.createBuffer({
-            size: 4, // 4 bytes for one RGBA pixel
-            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-        });
 
         await this.loadRandomImage();
     }
@@ -157,7 +140,7 @@ export class Renderer {
         this.pipelines.set('galaxy', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: galaxyModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: galaxyModule, entryPoint: 'fs_main' }, primitive: { topology: 'triangle-list' as GPUPrimitiveTopology } }));
         this.pipelines.set('imageVideo', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: imageVideoModule, entryPoint: 'fs_main' } }));
         this.pipelines.set('liquid', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } }));
-        this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }));
+        this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Code, entryPoint: 'main' } }));
         this.pipelines.set('compute', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }));
         this.pipelines.set('colorFill', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: colorFillModule, entryPoint: 'fs_main' } }));
 
@@ -182,32 +165,35 @@ export class Renderer {
         this.bindGroups.set('fill_B_to_A', this.device.createBindGroup({ layout: fillLayout, entries: [ { binding: 0, resource: this.imageTexture.createView() }, { binding: 1, resource: this.fillStateTextureB.createView() }, { binding: 2, resource: this.fillStateTextureA.createView() }, { binding: 3, resource: { buffer: this.fillUniformBuffer } }] }));
     }
 
-    public async render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): Promise<void> {
+    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
         if (!this.device || !this.imageTexture) return;
-        
-        const commandEncoder = this.device.createCommandEncoder();
+        const currentTime = performance.now() / 1000.0;
 
-        // --- NEW: Read color from texture if requested ---
-        if (mode === 'colorFill' && this.needsColorReadback && this.ripplePoints.length > 0) {
-            this.needsColorReadback = false;
-            const clickPoint = this.ripplePoints[0];
-            const pixelX = Math.floor(clickPoint.x * this.imageTexture.width);
-            const pixelY = Math.floor(clickPoint.y * this.imageTexture.height);
-
-            commandEncoder.copyTextureToBuffer(
-                { texture: this.imageTexture, mipLevel: 0, origin: { x: pixelX, y: pixelY } },
-                { buffer: this.colorReadbackBuffer, bytesPerRow: 256 }, // bytesPerRow must be a multiple of 256
-                { width: 1, height: 1 }
-            );
+        if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
+            if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
+                if (this.videoTexture) this.videoTexture.destroy();
+                this.videoTexture = this.device.createTexture({ size: [videoElement.videoWidth, videoElement.videoHeight], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+                this.createBindGroups();
+            }
+            this.device.queue.copyExternalImageToTexture({ source: videoElement }, { texture: this.videoTexture }, [videoElement.videoWidth, videoElement.videoHeight]);
         }
 
-        // --- UPDATED: Flood fill compute pass ---
+        const commandEncoder = this.device.createCommandEncoder();
+
         if (mode === 'colorFill') {
             if (this.needsFillReset && this.ripplePoints.length > 0) {
                 this.needsFillReset = false;
                 this.fillIterations = 0;
+                const clickPoint = this.ripplePoints[0];
                 
-                // We'll set the uniforms *after* we read the color back
+                const targetColor = [0.1, 0.2, 0.8, 1.0];
+                const threshold = 0.3;
+                const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
+                this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
+
+                const clearColor = { r: 0, g: 0, b: 0, a: 0 };
+                   commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
+                commandEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureB.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
             }
 
             if (this.fillIterations < this.MAX_FILL_ITERATIONS) {
@@ -223,6 +209,11 @@ export class Renderer {
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
                 computePass.end();
             }
+        }
+
+
+        if (mode.startsWith('liquid')) {
+            // ... liquid logic
         }
 
         const textureView = this.context.getCurrentTexture().createView();
@@ -278,26 +269,5 @@ export class Renderer {
 
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
-
-         if (mode === 'colorFill' && this.fillIterations === 0 && this.ripplePoints.length > 0) {
-            await this.colorReadbackBuffer.mapAsync(GPUMapMode.READ);
-            const colorData = new Uint8Array(this.colorReadbackBuffer.getMappedRange());
-            const targetColor = [colorData[0] / 255, colorData[1] / 255, colorData[2] / 255, colorData[3] / 255];
-            this.colorReadbackBuffer.unmap();
-            
-            // Now that we have the color, set the uniforms for the *next* frame's compute pass
-            const clickPoint = this.ripplePoints[0];
-            const threshold = 0.4; // You can tune this
-            const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
-            this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
-
-            // And we still need to clear the state textures to start the simulation
-            const resetEncoder = this.device.createCommandEncoder();
-            const clearColor = { r: 0, g: 0, b: 0, a: 0 };
-            resetEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureA.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
-            resetEncoder.beginRenderPass({ colorAttachments: [{ view: this.fillStateTextureB.createView(), clearValue: clearColor, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] }).end();
-            this.device.queue.submit([resetEncoder.finish()]);
-        }
-        
     }
 }
