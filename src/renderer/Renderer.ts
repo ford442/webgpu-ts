@@ -52,8 +52,9 @@ export class Renderer {
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
 
         await this.fetchImageUrls();
-        await this.createResources();
+        // --- THE FIX IS HERE: The order of these two lines is swapped. ---
         await this.createPipelines();
+        await this.createResources();
         
         return true;
     }
