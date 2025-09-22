@@ -11,29 +11,34 @@ export class Renderer {
     private imageUrls: string[] = [];
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
     private MAX_RIPPLES = 50;
-    private v2ComputeUniformBuffer!: GPUBuffer;
     private v1ComputeUniformBuffer!: GPUBuffer;
     private imageVideoUniformBuffer!: GPUBuffer;
     private galaxyUniformBuffer!: GPUBuffer;
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
-    private writeTexture!: GPUTexture;
+    
+    // --- NEW PROPERTIES FOR LUMINANCE AND LIGHT EFFECT ---
+    private averageLuminance = 0.0;
+    private luminanceResultBuffer!: GPUBuffer;
+    private luminanceStagingBuffer!: GPUBuffer;
+    private lightUniformBuffer!: GPUBuffer;
 
-    // --- NEW PROPERTIES FOR FLOOD FILL ---
+    // --- PROPERTIES FOR FLOOD FILL ---
     private fillStateTextureA!: GPUTexture;
     private fillStateTextureB!: GPUTexture;
     private fillUniformBuffer!: GPUBuffer;
     private needsFillReset = false;
     private fillIterations = 0;
-    private readonly MAX_FILL_ITERATIONS = 2048;
+    private readonly MAX_FILL_ITERATIONS = 64;
+
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
     public addRipplePoint(x: number, y: number, mode: RenderMode) {
         const point = { x, y, startTime: performance.now() / 1000.0 };
-        this.ripplePoints = [point]; // Always just use the latest point
+        this.ripplePoints = [point];
         if (mode === 'colorFill') {
-            this.needsFillReset = true; // Signal to start a new fill
+            this.needsFillReset = true;
         }
     }
 
@@ -49,7 +54,6 @@ export class Renderer {
         await this.fetchImageUrls();
         await this.createResources();
         await this.createPipelines();
-        // createBindGroups is now called after image is loaded
         
         return true;
     }
@@ -84,7 +88,8 @@ export class Renderer {
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
             if (this.pipelines.size > 0) {
-                this.createBindGroups(); // Recreate bind groups with new image texture
+                this.createBindGroups();
+                await this.calculateAverageLuminance();
             }
         } catch (e) { console.error("Failed to load image:", e); }
     }
@@ -95,13 +100,7 @@ export class Renderer {
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.writeTexture = this.device.createTexture({
-            size: [width, height],
-            format: 'rgba8unorm',
-            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-        });
-
+        
         const stateTextureDesc: GPUTextureDescriptor = {
             size: [width, height],
             format: 'rgba8unorm',
@@ -109,73 +108,102 @@ export class Renderer {
         };
         this.fillStateTextureA = this.device.createTexture(stateTextureDesc);
         this.fillStateTextureB = this.device.createTexture(stateTextureDesc);
-        // --- FIX IS HERE: Simplified buffer since the shader now finds the target color ---
         this.fillUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+        // --- NEW BUFFERS ---
+        this.lightUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.luminanceResultBuffer = this.device.createBuffer({ size: 8, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, });
+        this.luminanceStagingBuffer = this.device.createBuffer({ size: 8, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST, });
+
 
         await this.loadRandomImage();
     }
 
     private async createPipelines(): Promise<void> {
-        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode, colorFillCode, fillComputeCode] = await Promise.all([
+        const [galaxyCode, imageVideoCode, liquidV1Code, colorFillCode, fillComputeCode, lightCode, luminanceCode] = await Promise.all([
             fetch('shaders/galaxy.wgsl').then(res => res.text()),
             fetch('shaders/imageVideo.wgsl').then(res => res.text()),
             fetch('shaders/liquid-v1.wgsl').then(res => res.text()),
-            fetch('shaders/liquid.wgsl').then(res => res.text()),
-            fetch('shaders/texture.wgsl').then(res => res.text()),
             fetch('shaders/colorFill.wgsl').then(res => res.text()),
             fetch('shaders/fill.wgsl').then(res => res.text()),
+            fetch('shaders/light.wgsl').then(res => res.text()),
+            fetch('shaders/luminance.wgsl').then(res => res.text()),
         ]);
 
-        const galaxyModule = this.device.createShaderModule({ code: galaxyCode });
-        const imageVideoModule = this.device.createShaderModule({ code: imageVideoCode });
-        const liquidV1Module = this.device.createShaderModule({ code: liquidV1Code });
-        const liquidModule = this.device.createShaderModule({ code: liquidCode });
-        const textureModule = this.device.createShaderModule({ code: textureCode });
-        const colorFillModule = this.device.createShaderModule({ code: colorFillCode });
-        const fillComputeModule = this.device.createShaderModule({ code: fillComputeCode });
+        const commonConfig = { vertex: { module: this.device.createShaderModule({code: imageVideoCode}), entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }] }, primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology } };
+        
+        this.pipelines.set('imageVideo', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig }));
+        this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: this.device.createShaderModule({code: liquidV1Code}), entryPoint: 'main' } }));
+        this.pipelines.set('fillCompute', this.device.createComputePipeline({ layout: 'auto', compute: { module: this.device.createShaderModule({code: fillComputeCode}), entryPoint: 'main' } }));
+        
+        // --- NEW PIPELINES ---
+        this.pipelines.set('luminanceCompute', this.device.createComputePipeline({ layout: 'auto', compute: { module: this.device.createShaderModule({code: luminanceCode}), entryPoint: 'main' } }));
+        const lightModule = this.device.createShaderModule({code: lightCode});
+        this.pipelines.set('light', this.device.createRenderPipeline({ layout: 'auto', vertex: { module: lightModule, entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }], module: lightModule, entryPoint: 'fs_main' }, primitive: { topology: 'triangle-strip' } }));
 
-        const commonConfig = { vertex: { module: imageVideoModule, entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }] }, primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology } };
-       this.pipelines.set('galaxy', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: galaxyModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: galaxyModule, entryPoint: 'fs_main' }, primitive: { topology: 'triangle-list' as GPUPrimitiveTopology } }));
-        this.pipelines.set('imageVideo', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: imageVideoModule, entryPoint: 'fs_main' } }));
-        this.pipelines.set('liquid', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } }));
-        this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }));
-        this.pipelines.set('compute', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }));
-        this.pipelines.set('colorFill', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: colorFillModule, entryPoint: 'fs_main' } }));
-
-        this.pipelines.set('fillCompute', this.device.createComputePipeline({ layout: 'auto', compute: { module: fillComputeModule, entryPoint: 'main' } }));
+        // --- UPDATED PIPELINE WITH BLENDING ---
+        const colorFillModule = this.device.createShaderModule({code: colorFillCode});
+        this.pipelines.set('colorFill', this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: { module: colorFillModule, entryPoint: 'vs_main' },
+            fragment: {
+                module: colorFillModule,
+                entryPoint: 'fs_main',
+                targets: [{
+                    format: this.presentationFormat,
+                    blend: {
+                        color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+                        alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+                    }
+                }]
+            },
+            primitive: { topology: 'triangle-strip' }
+        }));
     }
 
     private createBindGroups(): void {
         if (!this.imageTexture) return;
-
-        if (this.videoTexture) {
-            this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.sampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
-            this.bindGroups.set('video', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.videoTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        }
-
         this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
-        this.bindGroups.set('computeV1', this.device.createBindGroup({ layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() },{ binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } } ] }));
-        this.bindGroups.set('compute', this.device.createBindGroup({ layout: this.pipelines.get('compute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: this.writeTexture.createView() }, { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }] }));
-        
         const fillLayout = this.pipelines.get('fillCompute')!.getBindGroupLayout(0);
         this.bindGroups.set('fill_A_to_B', this.device.createBindGroup({ layout: fillLayout, entries: [ { binding: 0, resource: this.imageTexture.createView() }, { binding: 1, resource: this.fillStateTextureA.createView() }, { binding: 2, resource: this.fillStateTextureB.createView() }, { binding: 3, resource: { buffer: this.fillUniformBuffer } }] }));
         this.bindGroups.set('fill_B_to_A', this.device.createBindGroup({ layout: fillLayout, entries: [ { binding: 0, resource: this.imageTexture.createView() }, { binding: 1, resource: this.fillStateTextureB.createView() }, { binding: 2, resource: this.fillStateTextureA.createView() }, { binding: 3, resource: { buffer: this.fillUniformBuffer } }] }));
+        
+        // --- NEW BIND GROUPS ---
+        this.bindGroups.set('luminance', this.device.createBindGroup({ layout: this.pipelines.get('luminanceCompute')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.imageTexture.createView({format: 'rgba8unorm'}) }, { binding: 1, resource: { buffer: this.luminanceResultBuffer } }] }));
+        this.bindGroups.set('light', this.device.createBindGroup({ layout: this.pipelines.get('light')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.lightUniformBuffer } }] }));
     }
+
+    private async calculateAverageLuminance(): Promise<void> {
+        if (!this.imageTexture || !this.pipelines.has('luminanceCompute')) return;
+
+        const commandEncoder = this.device.createCommandEncoder();
+        const passEncoder = commandEncoder.beginComputePass();
+        passEncoder.setPipeline(this.pipelines.get('luminanceCompute') as GPUComputePipeline);
+        passEncoder.setBindGroup(0, this.bindGroups.get('luminance')!);
+        passEncoder.dispatchWorkgroups(Math.ceil(this.imageTexture.width / 8), Math.ceil(this.imageTexture.height / 8));
+        passEncoder.end();
+
+        commandEncoder.copyBufferToBuffer(this.luminanceResultBuffer, 0, this.luminanceStagingBuffer, 0, 8);
+        this.device.queue.submit([commandEncoder.finish()]);
+
+        await this.luminanceStagingBuffer.mapAsync(GPUMapMode.READ);
+        const data = new Uint32Array(this.luminanceStagingBuffer.getMappedRange());
+        const totalLuminanceScaled = data[0];
+        const totalPixels = data[1];
+        this.luminanceStagingBuffer.unmap();
+        
+        if (totalPixels > 0) {
+            this.averageLuminance = (totalLuminanceScaled / 1000000.0) / totalPixels;
+        } else {
+            this.averageLuminance = 0.5;
+        }
+        // console.log(`Average Luminance: ${this.averageLuminance}`);
+    }
+
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
-
-        if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-            if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
-                if (this.videoTexture) this.videoTexture.destroy();
-                this.videoTexture = this.device.createTexture({ size: [videoElement.videoWidth, videoElement.videoHeight], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
-                this.createBindGroups();
-            }
-            this.device.queue.copyExternalImageToTexture({ source: videoElement }, { texture: this.videoTexture }, [videoElement.videoWidth, videoElement.videoHeight]);
-        }
-
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode === 'colorFill') {
@@ -183,19 +211,12 @@ export class Renderer {
                 this.needsFillReset = false;
                 this.fillIterations = 0;
                 const clickPoint = this.ripplePoints[0];
-                
-                const threshold = 0.3;
-
-                // --- FIX IS HERE: Simplified data being sent. Shader handles the rest. ---
-                // New uniform layout: vec2, f32, f32(pad), vec4
-                const uniformData = new Float32Array(8); // 32 bytes
-                uniformData.set([clickPoint.x, clickPoint.y]); // offset 0
-                uniformData.set([threshold], 2);              // offset 2
-                // offset 3 is for memory alignment padding
-                uniformData.set([
-                    this.canvas.width, this.canvas.height, 
-                    this.imageTexture.width, this.imageTexture.height
-                ], 4);                                        // offset 4
+                const threshold = 0.2;
+                const uniformData = new Float32Array(8);
+                uniformData.set([clickPoint.x, clickPoint.y]);
+                uniformData.set([threshold], 2);
+                uniformData.set([this.averageLuminance], 3);
+                uniformData.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 4);
                 this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
 
                 const clearColor = { r: 0, g: 0, b: 0, a: 0 };
@@ -207,72 +228,50 @@ export class Renderer {
                 this.fillIterations++;
                 const computePass = commandEncoder.beginComputePass();
                 computePass.setPipeline(this.pipelines.get('fillCompute') as GPUComputePipeline);
-                
-                if (this.fillIterations % 2 === 1) {
-                    computePass.setBindGroup(0, this.bindGroups.get('fill_A_to_B')!);
-                } else {
-                    computePass.setBindGroup(0, this.bindGroups.get('fill_B_to_A')!);
-                }
-                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+                computePass.setBindGroup(0, (this.fillIterations % 2 === 1) ? this.bindGroups.get('fill_A_to_B')! : this.bindGroups.get('fill_B_to_A')!);
+                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8);
                 computePass.end();
             }
         }
-
-
-        if (mode.startsWith('liquid')) {
-            // ... liquid logic
-        }
-
+        
         const textureView = this.context.getCurrentTexture().createView();
-        const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] };
-        const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-
-        const colorFillPipeline = this.pipelines.get('colorFill') as GPURenderPipeline;
-        const imageVideoPipeline = this.pipelines.get('imageVideo') as GPURenderPipeline;
-
+        
         switch (mode) {
             case 'colorFill':
-                 if (colorFillPipeline) {
-                    const finalStateTexture = (this.fillIterations % 2 === 1) ? this.fillStateTextureB : this.fillStateTextureA;
-                    
-                    const uniformArray = new Float32Array(8);
-                    uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
+                // --- RENDER PASS 1: The light effect underneath ---
+                const lightPassEncoder = commandEncoder.beginRenderPass({ colorAttachments: [{ view: textureView, clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] });
+                this.device.queue.writeBuffer(this.lightUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
+                lightPassEncoder.setPipeline(this.pipelines.get('light') as GPURenderPipeline);
+                lightPassEncoder.setBindGroup(0, this.bindGroups.get('light')!);
+                lightPassEncoder.draw(4);
+                lightPassEncoder.end();
 
-                    const colorFillBindGroup = this.device.createBindGroup({ 
-                        layout: colorFillPipeline.getBindGroupLayout(0), 
-                        entries: [
-                            { binding: 0, resource: this.sampler }, 
-                            { binding: 1, resource: this.imageTexture.createView() }, 
-                            { binding: 2, resource: finalStateTexture.createView() },
-                            { binding: 3, resource: { buffer: this.imageVideoUniformBuffer } }
-                        ] 
-                    });
-
-                    passEncoder.setPipeline(colorFillPipeline);
-                    passEncoder.setBindGroup(0, colorFillBindGroup);
-                    passEncoder.draw(4);
-                }
+                // --- RENDER PASS 2: The translucent color fill on top ---
+                const colorFillPassEncoder = commandEncoder.beginRenderPass({ colorAttachments: [{ view: textureView, loadOp: 'load' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] });
+                const finalStateTexture = (this.fillIterations % 2 === 1) ? this.fillStateTextureB : this.fillStateTextureA;
+                const uniformArray = new Float32Array([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height]);
+                this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
+                const cfBindGroup = this.device.createBindGroup({ layout: this.pipelines.get('colorFill')!.getBindGroupLayout(0), entries: [ { binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: finalStateTexture.createView() }, { binding: 3, resource: { buffer: this.imageVideoUniformBuffer } }] });
+                colorFillPassEncoder.setPipeline(this.pipelines.get('colorFill') as GPURenderPipeline);
+                colorFillPassEncoder.setBindGroup(0, cfBindGroup);
+                colorFillPassEncoder.draw(4);
+                colorFillPassEncoder.end();
                 break;
-            case 'image':
-            case 'ripple':
-                if (imageVideoPipeline && this.bindGroups.has('image')) {
+            default:
+                const passEncoder = commandEncoder.beginRenderPass({ colorAttachments: [{ view: textureView, clearValue: {r:0,g:0,b:0,a:1}, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }]});
+                if (this.pipelines.has('imageVideo') && this.bindGroups.has('image')) {
                     const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
-                    uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
-                    uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0, 0.0], 4);
-                    for (let i = 0; i < this.ripplePoints.length; i++) {
-                        const point = this.ripplePoints[i];
-                        uniformArray.set([point.x, point.y, point.startTime, 0.0], 8 + i * 4);
-                    }
+                    uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height]);
+                    uniformArray.set([currentTime, this.ripplePoints.length, 0, 0], 4);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-                    passEncoder.setPipeline(imageVideoPipeline);
+                    passEncoder.setPipeline(this.pipelines.get('imageVideo') as GPURenderPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('image')!);
                     passEncoder.draw(4);
                 }
+                passEncoder.end();
                 break;
         }
 
-        passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
     }
 }
