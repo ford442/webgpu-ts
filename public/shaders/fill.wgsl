@@ -41,7 +41,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let dist = distance(uv, u.params.xy);
     // Is this the seed pixel?
     if (dist < 1.0 / dims.x) { // A radius of 1 pixel
-        let myColor = textureLoad(originalTexture, coords, 0);
+        let myColor = textureLoad(originalTexture, coords);
         // Check if the color at the click location matches the target
         if (colorDistance(myColor.rgb, u.targetColor.rgb) < u.threshold) {
              textureStore(writeState, coords, vec4(1.0, 0.0, 0.0, 1.0));
