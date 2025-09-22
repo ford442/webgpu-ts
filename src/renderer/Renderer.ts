@@ -25,7 +25,7 @@ export class Renderer {
     private fillUniformBuffer!: GPUBuffer;
     private needsFillReset = false;
     private fillIterations = 0;
-    private readonly MAX_FILL_ITERATIONS = 64;
+    private readonly MAX_FILL_ITERATIONS = 1024;
 
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
@@ -198,7 +198,7 @@ export class Renderer {
                 const clickPoint = this.ripplePoints[0];
                 
                 const targetColor = [0.1, 0.2, 0.8, 1.0];
-                const threshold = 0.42;
+                const threshold = 0.37;
                 const uniformData = new Float32Array([...[clickPoint.x, clickPoint.y], threshold, 0, ...targetColor]);
                 this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
 
