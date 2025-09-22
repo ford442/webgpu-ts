@@ -130,19 +130,41 @@ export class Renderer {
             fetch('shaders/luminance.wgsl').then(res => res.text()),
         ]);
 
-        const commonConfig = { vertex: { module: this.device.createShaderModule({code: imageVideoCode}), entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }] }, primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology } };
-        
-        this.pipelines.set('imageVideo', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig }));
-        this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: this.device.createShaderModule({code: liquidV1Code}), entryPoint: 'main' } }));
-        this.pipelines.set('fillCompute', this.device.createComputePipeline({ layout: 'auto', compute: { module: this.device.createShaderModule({code: fillComputeCode}), entryPoint: 'main' } }));
-        
-        // --- NEW PIPELINES ---
-        this.pipelines.set('luminanceCompute', this.device.createComputePipeline({ layout: 'auto', compute: { module: this.device.createShaderModule({code: luminanceCode}), entryPoint: 'main' } }));
-        const lightModule = this.device.createShaderModule({code: lightCode});
-        this.pipelines.set('light', this.device.createRenderPipeline({ layout: 'auto', vertex: { module: lightModule, entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }], module: lightModule, entryPoint: 'fs_main' }, primitive: { topology: 'triangle-strip' } }));
+        // Create shader modules
+        const imageVideoModule = this.device.createShaderModule({ code: imageVideoCode });
+        const liquidV1Module = this.device.createShaderModule({ code: liquidV1Code });
+        const fillComputeModule = this.device.createShaderModule({ code: fillComputeCode });
+        const luminanceModule = this.device.createShaderModule({ code: luminanceCode });
+        const lightModule = this.device.createShaderModule({ code: lightCode });
+        const colorFillModule = this.device.createShaderModule({ code: colorFillCode });
 
-        // --- UPDATED PIPELINE WITH BLENDING ---
-        const colorFillModule = this.device.createShaderModule({code: colorFillCode});
+        // --- FIX IS HERE: More explicit pipeline creation ---
+        this.pipelines.set('imageVideo', this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: { module: imageVideoModule, entryPoint: 'vs_main' },
+            fragment: {
+                module: imageVideoModule,
+                entryPoint: 'fs_main',
+                targets: [{ format: this.presentationFormat }]
+            },
+            primitive: { topology: 'triangle-strip' }
+        }));
+
+        this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }));
+        this.pipelines.set('fillCompute', this.device.createComputePipeline({ layout: 'auto', compute: { module: fillComputeModule, entryPoint: 'main' } }));
+        this.pipelines.set('luminanceCompute', this.device.createComputePipeline({ layout: 'auto', compute: { module: luminanceModule, entryPoint: 'main' } }));
+
+        this.pipelines.set('light', this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: { module: lightModule, entryPoint: 'vs_main' },
+            fragment: {
+                module: lightModule,
+                entryPoint: 'fs_main',
+                targets: [{ format: this.presentationFormat }]
+            },
+            primitive: { topology: 'triangle-strip' }
+        }));
+        
         this.pipelines.set('colorFill', this.device.createRenderPipeline({
             layout: 'auto',
             vertex: { module: colorFillModule, entryPoint: 'vs_main' },
@@ -197,7 +219,6 @@ export class Renderer {
         } else {
             this.averageLuminance = 0.5;
         }
-        // console.log(`Average Luminance: ${this.averageLuminance}`);
     }
 
 
