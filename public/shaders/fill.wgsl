@@ -63,7 +63,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let dist = distance(canvasUV, u.clickCoords);
         if (dist < 0.002) {
             if (colorDistance(myColor.rgb, targetColor) < u.threshold) {
-                textureStore(writeState, coords, vec4<f32>(1.0, 1.0, 0.0, 1.0));
+                textureStore(writeState, coords, vec4<f32>(targetColor.r, 1.0, targetColor.b/2.0, 1.0));
             } else {
                 textureStore(writeState, coords, vec4<f32>(0.0, 0.0, 0.0, 1.0));
             }
