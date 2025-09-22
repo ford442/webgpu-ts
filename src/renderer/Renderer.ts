@@ -27,7 +27,6 @@ export class Renderer {
     private fillIterations = 0;
     private readonly MAX_FILL_ITERATIONS = 2048;
 
-
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
     public addRipplePoint(x: number, y: number, mode: RenderMode) {
