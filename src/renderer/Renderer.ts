@@ -29,7 +29,7 @@ export class Renderer {
     private fillUniformBuffer!: GPUBuffer;
     private needsFillReset = false;
     private fillIterations = 0;
-    private readonly MAX_FILL_ITERATIONS = 2048;
+    private readonly MAX_FILL_ITERATIONS = 64;
 
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
@@ -138,7 +138,6 @@ export class Renderer {
         const lightModule = this.device.createShaderModule({ code: lightCode });
         const colorFillModule = this.device.createShaderModule({ code: colorFillCode });
 
-        // --- FIX IS HERE: More explicit pipeline creation ---
         this.pipelines.set('imageVideo', this.device.createRenderPipeline({
             layout: 'auto',
             vertex: { module: imageVideoModule, entryPoint: 'vs_main' },
@@ -165,6 +164,7 @@ export class Renderer {
             primitive: { topology: 'triangle-strip' }
         }));
         
+        // --- FIX IS HERE: Casting strings to their specific GPU types ---
         this.pipelines.set('colorFill', this.device.createRenderPipeline({
             layout: 'auto',
             vertex: { module: colorFillModule, entryPoint: 'vs_main' },
@@ -174,8 +174,16 @@ export class Renderer {
                 targets: [{
                     format: this.presentationFormat,
                     blend: {
-                        color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
-                        alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+                        color: { 
+                            srcFactor: 'src-alpha' as GPUBlendFactor, 
+                            dstFactor: 'one-minus-src-alpha' as GPUBlendFactor, 
+                            operation: 'add' as GPUBlendOperation 
+                        },
+                        alpha: { 
+                            srcFactor: 'one' as GPUBlendFactor, 
+                            dstFactor: 'one-minus-src-alpha' as GPUBlendFactor, 
+                            operation: 'add' as GPUBlendOperation 
+                        }
                     }
                 }]
             },
