@@ -37,7 +37,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     // If a pixel is already filled, it should not spread further.
     if (currentState.r > 0.5) {
-        textureStore(writeState, coords, vec4<f32>(1.0, 0.0, 0.0, 1.0));
+        textureStore(writeState, coords, vec4<f32>(1.0, 1.0, 0.0, 1.0));
         return;
     }
 
