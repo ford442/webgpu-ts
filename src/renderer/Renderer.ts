@@ -25,7 +25,7 @@ export class Renderer {
     private fillUniformBuffer!: GPUBuffer;
     private needsFillReset = false;
     private fillIterations = 0;
-    private readonly MAX_FILL_ITERATIONS = 2048;
+    private readonly MAX_FILL_ITERATIONS = 64;
 
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
@@ -80,7 +80,6 @@ export class Renderer {
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                // Added STORAGE_BINDING so the compute shader can read from this texture.
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
@@ -111,8 +110,8 @@ export class Renderer {
         };
         this.fillStateTextureA = this.device.createTexture(stateTextureDesc);
         this.fillStateTextureB = this.device.createTexture(stateTextureDesc);
-        // --- FIX IS HERE: Increased buffer size for new resolution data ---
-        this.fillUniformBuffer = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        // --- FIX IS HERE: Simplified buffer since the shader now finds the target color ---
+        this.fillUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
         await this.loadRandomImage();
     }
@@ -186,20 +185,18 @@ export class Renderer {
                 this.fillIterations = 0;
                 const clickPoint = this.ripplePoints[0];
                 
-                const targetColor = [0.1, 0.2, 0.8, 1.0];
                 const threshold = 0.3;
 
-                // --- FIX IS HERE: Sending resolution data to the shader ---
-                // New uniform layout: vec2, f32, f32(pad), vec4, vec4
-                const uniformData = new Float32Array(12); // 48 bytes
+                // --- FIX IS HERE: Simplified data being sent. Shader handles the rest. ---
+                // New uniform layout: vec2, f32, f32(pad), vec4
+                const uniformData = new Float32Array(8); // 32 bytes
                 uniformData.set([clickPoint.x, clickPoint.y]); // offset 0
-                uniformData.set([threshold], 2); // offset 2
-                // offset 3 is for memory alignment padding in the shader
-                uniformData.set(targetColor, 4); // offset 4
+                uniformData.set([threshold], 2);              // offset 2
+                // offset 3 is for memory alignment padding
                 uniformData.set([
                     this.canvas.width, this.canvas.height, 
                     this.imageTexture.width, this.imageTexture.height
-                ], 8); // offset 8
+                ], 4);                                        // offset 4
                 this.device.queue.writeBuffer(this.fillUniformBuffer, 0, uniformData);
 
                 const clearColor = { r: 0, g: 0, b: 0, a: 0 };
