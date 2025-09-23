@@ -1,3 +1,5 @@
+// src/App.tsx
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
@@ -18,42 +20,46 @@ function App() {
     const [depthMap, setDepthMap] = useState<any>(null);
     const [status, setStatus] = useState('Loading Model...');
     
-    // --- FIX #2: Create a ref for our new debug canvas ---
     const debugCanvasRef = useRef<HTMLCanvasElement>(null);
 
     // Load the AI model
     useEffect(() => {
         const loadModel = async () => {
             try {
-                // --- FIX #1: Force remote loading, ignore local models ---
                 const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas', {
                     progress_callback: (progress: any) => {
                         setStatus(`Loading Model: ${progress.file} (${Math.round(progress.progress)}%)`);
                     },
-                    local_files_only: false, // Ensure it downloads from the hub
+                    local_files_only: false,
                 });
                 setDepthEstimator(estimator);
                 setStatus('Model Loaded. Click "New Random Image" to start.');
             } catch (e) {
                 console.error(e);
-                setStatus('Failed to load AI model.');
+                // --- THIS IS THE FIX ---
+                // We now display a more informative error message in the UI.
+                if (e instanceof Error) {
+                    setStatus(`Failed to load AI model: ${e.message}. Check the browser console's network tab for more details.`);
+                } else {
+                    setStatus('Failed to load AI model due to an unknown error.');
+                }
             }
         };
         loadModel();
     }, []);
     
-    // --- FIX #2: useEffect to draw the depth map to the debug canvas ---
+    // ... (the rest of the file remains the same)
+    
+    // useEffect to draw the depth map to the debug canvas
     useEffect(() => {
         if (depthMap && debugCanvasRef.current) {
             const canvas = debugCanvasRef.current;
             const context = canvas.getContext('2d');
             if (!context) return;
             
-            // The model returns a tensor; we need to convert it to a visual image.
             const { data, width, height } = depthMap.predicted_depth;
             const imageData = new ImageData(width, height);
             
-            // Normalize the depth data to a 0-255 grayscale range
             let min = data[0];
             let max = data[0];
             for (let i = 1; i < data.length; ++i) {
@@ -64,10 +70,10 @@ function App() {
 
             for (let i = 0; i < data.length; ++i) {
                 const value = Math.round(((data[i] - min) / range) * 255);
-                imageData.data[i * 4] = value;     // R
-                imageData.data[i * 4 + 1] = value; // G
-                imageData.data[i * 4 + 2] = value; // B
-                imageData.data[i * 4 + 3] = 255;   // A
+                imageData.data[i * 4] = value;
+                imageData.data[i * 4 + 1] = value;
+                imageData.data[i * 4 + 2] = value;
+                imageData.data[i * 4 + 3] = 255;
             }
             
             canvas.width = width;
@@ -80,7 +86,6 @@ function App() {
         if (!depthEstimator) return;
         setStatus('Analyzing Image...');
         try {
-            // Ensure the input is a URL string
             const image = await RawImage.fromURL(url);
             const result = await depthEstimator(image);
             setDepthMap(result);
@@ -120,7 +125,6 @@ function App() {
                 imageUrl={imageUrl}
                 depthMap={depthMap}
             />
-            {/* --- FIX #2: Add the debug canvas below the main one --- */}
             <div style={{ marginTop: '20px' }}>
                 <h2>AI Model Output (Depth Map)</h2>
                 <canvas ref={debugCanvasRef} style={{ border: '1px solid grey' }} />
