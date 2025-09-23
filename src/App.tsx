@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
 import { RenderMode } from './renderer/Renderer';
 import './style.css';
 
-import { pipeline } from '@xenova/transformers';
+import { pipeline, RawImage } from '@xenova/transformers';
 
 function App() {
     const [mode, setMode] = useState<RenderMode>('depth');
@@ -17,16 +17,20 @@ function App() {
     const [depthEstimator, setDepthEstimator] = useState<any>(null);
     const [depthMap, setDepthMap] = useState<any>(null);
     const [status, setStatus] = useState('Loading Model...');
+    
+    // --- FIX #2: Create a ref for our new debug canvas ---
+    const debugCanvasRef = useRef<HTMLCanvasElement>(null);
 
     // Load the AI model
     useEffect(() => {
         const loadModel = async () => {
             try {
-                // Using a known-good, high-quality depth model
+                // --- FIX #1: Force remote loading, ignore local models ---
                 const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas', {
                     progress_callback: (progress: any) => {
                         setStatus(`Loading Model: ${progress.file} (${Math.round(progress.progress)}%)`);
-                    }
+                    },
+                    local_files_only: false, // Ensure it downloads from the hub
                 });
                 setDepthEstimator(estimator);
                 setStatus('Model Loaded. Click "New Random Image" to start.');
@@ -37,13 +41,48 @@ function App() {
         };
         loadModel();
     }, []);
+    
+    // --- FIX #2: useEffect to draw the depth map to the debug canvas ---
+    useEffect(() => {
+        if (depthMap && debugCanvasRef.current) {
+            const canvas = debugCanvasRef.current;
+            const context = canvas.getContext('2d');
+            if (!context) return;
+            
+            // The model returns a tensor; we need to convert it to a visual image.
+            const { data, width, height } = depthMap.predicted_depth;
+            const imageData = new ImageData(width, height);
+            
+            // Normalize the depth data to a 0-255 grayscale range
+            let min = data[0];
+            let max = data[0];
+            for (let i = 1; i < data.length; ++i) {
+                if (data[i] < min) min = data[i];
+                if (data[i] > max) max = data[i];
+            }
+            const range = max - min;
 
-    // Function to run depth estimation
+            for (let i = 0; i < data.length; ++i) {
+                const value = Math.round(((data[i] - min) / range) * 255);
+                imageData.data[i * 4] = value;     // R
+                imageData.data[i * 4 + 1] = value; // G
+                imageData.data[i * 4 + 2] = value; // B
+                imageData.data[i * 4 + 3] = 255;   // A
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            context.putImageData(imageData, 0, 0);
+        }
+    }, [depthMap]);
+
     const runDepthEstimation = useCallback(async (url: string) => {
         if (!depthEstimator) return;
         setStatus('Analyzing Image...');
         try {
-            const result = await depthEstimator(url);
+            // Ensure the input is a URL string
+            const image = await RawImage.fromURL(url);
+            const result = await depthEstimator(image);
             setDepthMap(result);
             setStatus('Ready');
         } catch (e) {
@@ -81,6 +120,11 @@ function App() {
                 imageUrl={imageUrl}
                 depthMap={depthMap}
             />
+            {/* --- FIX #2: Add the debug canvas below the main one --- */}
+            <div style={{ marginTop: '20px' }}>
+                <h2>AI Model Output (Depth Map)</h2>
+                <canvas ref={debugCanvasRef} style={{ border: '1px solid grey' }} />
+            </div>
         </div>
     );
 }
