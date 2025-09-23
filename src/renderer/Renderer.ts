@@ -50,6 +50,7 @@ export class Renderer {
     }
 
     public async loadRandomImage(): Promise<string | null> {
+        this.isReady = false; // Immediately stop rendering
         try {
             if (this.imageUrls.length === 0) return null;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
@@ -95,7 +96,7 @@ export class Renderer {
     }
 
     public async loadImage(imageUrl: string): Promise<void> {
-        this.isReady = false;
+        this.isReady = false; // Immediately stop rendering
         try {
             const urlToFetch = imageUrl.startsWith('https://storage.googleapis.com/') ? imageUrl : `https://corsproxy.io/?${encodeURIComponent(imageUrl)}`;
             const response = await fetch(urlToFetch);
@@ -146,7 +147,7 @@ export class Renderer {
                 { binding: 3, resource: { buffer: this.uniformBuffer } },
             ]
         }));
-        this.isReady = true;
+        this.isReady = true; // Restart rendering only when everything is ready
     }
 
     public render(): void {
