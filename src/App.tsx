@@ -18,11 +18,9 @@ function App() {
     const [depthMap, setDepthMap] = useState<any>(null);
     const [status, setStatus] = useState('Loading Model...');
 
-    // Load the AI model
     useEffect(() => {
         const loadModel = async () => {
             try {
-                // Using a known-good, high-quality depth model
                 const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas', {
                     progress_callback: (progress: any) => {
                         setStatus(`Loading Model: ${progress.file} (${Math.round(progress.progress)}%)`);
@@ -38,7 +36,6 @@ function App() {
         loadModel();
     }, []);
 
-    // Function to run depth estimation
     const runDepthEstimation = useCallback(async (url: string) => {
         if (!depthEstimator) return;
         setStatus('Analyzing Image...');
