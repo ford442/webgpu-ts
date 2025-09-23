@@ -80,6 +80,7 @@ export class Renderer {
     }
 
     private async createPipelines(): Promise<void> {
+        // We assume parallax.wgsl exists from our previous steps
         const parallaxCode = await fetch('shaders/parallax.wgsl').then(res => res.text());
         const parallaxModule = this.device.createShaderModule({ code: parallaxCode });
 
