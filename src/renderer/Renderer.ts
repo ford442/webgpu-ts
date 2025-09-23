@@ -49,9 +49,9 @@ export class Renderer {
         }
     }
 
-    public async loadRandomImage(): Promise<void> {
+    public async loadRandomImage(): Promise<string | null> {
         try {
-            if (this.imageUrls.length === 0) return;
+            if (this.imageUrls.length === 0) return null;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
@@ -64,10 +64,11 @@ export class Renderer {
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
-            if (this.pipelines.size > 0) {
-                this.createBindGroups();
-            }
-        } catch (e) { console.error("Failed to load image:", e); }
+            return imageUrl;
+        } catch (e) { 
+            console.error("Failed to load image:", e);
+            return null;
+        }
     }
 
     public async init(): Promise<boolean> {
