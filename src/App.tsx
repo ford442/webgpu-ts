@@ -13,29 +13,25 @@ function App() {
     const [zoom, setZoom] = useState(1.0);
     const [panX, setPanX] = useState(0.5);
     const [panY, setPanY] = useState(0.5);
-    const [imageVersion, setImageVersion] = useState(0);
     
-    // --- FIX for ESLint warning: We will now use setImageUrl ---
+    // State for the URL input field
     const [imageUrl, setImageUrl] = useState('https://i.imgur.com/vCNL2sT.jpeg');
-    
+    // State for the image that should be rendered in the canvas
+    const [imageToRender, setImageToRender] = useState('');
+
     const [depthEstimator, setDepthEstimator] = useState<any>(null);
     const [depthMap, setDepthMap] = useState<any>(null);
     const [status, setStatus] = useState('Loading Model...');
     
     const debugCanvasRef = useRef<HTMLCanvasElement>(null);
 
-    // Load the AI model
+    // Load the AI model (no changes here)
     useEffect(() => {
         const loadModel = async () => {
             try {
-                const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas', {
-                    progress_callback: (progress: any) => {
-                        setStatus(`Loading Model: ${progress.file} (${Math.round(progress.progress)}%)`);
-                    },
-                    local_files_only: false,
-                });
+                const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
                 setDepthEstimator(estimator);
-                setStatus('Model Loaded. Enter an image URL and click "New Image".');
+                setStatus('Model Loaded. Click "New Random Image" to start.');
             } catch (e) {
                 console.error(e);
                 if (e instanceof Error) {
@@ -48,7 +44,7 @@ function App() {
         loadModel();
     }, []);
     
-    // useEffect to draw the depth map to the debug canvas... (no changes here)
+    // Draw the depth map to the debug canvas (no changes here)
     useEffect(() => {
         if (depthMap && debugCanvasRef.current) {
             const canvas = debugCanvasRef.current;
@@ -76,24 +72,41 @@ function App() {
         }
     }, [depthMap]);
 
-    const runDepthEstimation = useCallback(async (url: string) => {
-        if (!depthEstimator || !url) return;
+    // This is the core function for processing the image
+    const processNewImage = useCallback(async (url: string) => {
+        if (!depthEstimator) {
+            setStatus("Model not ready yet.");
+            return;
+        }
+        if (!url) {
+            setStatus("Please enter an image URL.");
+            return;
+        }
+
         setStatus('Analyzing Image...');
         try {
-            // --- THIS IS THE FIX for the crash ---
-            // Pass the URL string directly to the estimator.
+            // Let the pipeline handle the fetching and analysis.
             const result = await depthEstimator(url);
+
+            // --- SEQUENTIAL LOGIC ---
+            // ONLY after the analysis is successful, update the state for the renderer.
             setDepthMap(result);
+            setImageToRender(url); // This will trigger the canvas to update.
             setStatus('Ready');
+
         } catch (e) {
-            console.error(e);
-            setStatus(`Failed to analyze image: ${e.message}`);
+            console.error("Error during depth estimation:", e);
+            if (e instanceof Error) {
+                setStatus(`Failed to analyze image: ${e.message}`);
+            } else {
+                setStatus('Failed to analyze image due to an unknown error.');
+            }
         }
     }, [depthEstimator]);
 
-    const handleNewImage = () => {
-        setImageVersion(v => v + 1);
-        runDepthEstimation(imageUrl);
+    // The button click handler now calls our main processing function.
+    const handleNewImageClick = () => {
+        processNewImage(imageUrl);
     };
 
     return (
@@ -101,7 +114,6 @@ function App() {
             <h1>React, WebGPU & Transformers.js</h1>
             <p><strong>Status:</strong> {status}</p>
             
-            {/* --- FIX for ESLint warning: Add an input to change the URL --- */}
             <div className="control-group" style={{ justifyContent: 'center', marginBottom: '15px' }}>
                 <label htmlFor="image-url-input">Image URL:</label>
                 <input 
@@ -118,7 +130,7 @@ function App() {
                 zoom={zoom} setZoom={setZoom}
                 panX={panX} setPanX={setPanX}
                 panY={panY} setPanY={setPanY}
-                onNewImage={handleNewImage}
+                onNewImage={handleNewImageClick}
                 autoChangeEnabled={false}
                 setAutoChangeEnabled={() => {}}
                 autoChangeDelay={5}
@@ -127,8 +139,7 @@ function App() {
             <WebGPUCanvas
                 mode={mode}
                 zoom={zoom} panX={panX} panY={panY}
-                imageVersion={imageVersion}
-                imageUrl={imageUrl}
+                imageUrl={imageToRender} // Pass the new state variable here
                 depthMap={depthMap}
             />
             <div style={{ marginTop: '20px' }}>
