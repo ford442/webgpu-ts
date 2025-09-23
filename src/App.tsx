@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
-import { RenderMode } from './renderer/Renderer';
 import './style.css';
-import { pipeline, RawImage } from '@xenova/transformers';
+import { pipeline } from '@xenova/transformers';
 
 function App() {
     const [status, setStatus] = useState('Click "Load Model" to start.');
@@ -12,17 +11,17 @@ function App() {
     const [depthMapResult, setDepthMapResult] = useState<any>(null);
     const debugCanvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<any>(null);
-
+    
     const [parallaxStrength, setParallaxStrength] = useState(0.05);
     const [numSteps, setNumSteps] = useState(32);
     const [occlusionStrength, setOcclusionStrength] = useState(0.3);
     const [ambientLight, setAmbientLight] = useState(0.3);
-
+    
     useEffect(() => {
         rendererRef.current?.updateParams({
-            strength: parallaxStrength,
+            strength: parallaxStrength, 
             layers: numSteps,
-            occlusion: occlusionStrength,
+            occlusion: occlusionStrength, 
             ambient: ambientLight
         });
     }, [parallaxStrength, numSteps, occlusionStrength, ambientLight]);
@@ -34,7 +33,7 @@ function App() {
             const canvas = debugCanvasRef.current;
             const context = canvas.getContext('2d');
             if (!width || !height || !context) return;
-
+            
             const imageData = context.createImageData(width, height);
             let min = Infinity, max = -Infinity;
             data.forEach((v: number) => {
@@ -44,12 +43,12 @@ function App() {
             const range = max - min;
             for (let i = 0; i < data.length; ++i) {
                 const value = Math.round(((data[i] - min) / range) * 255);
-                imageData.data[i * 4 + 0] = value;
+                imageData.data[i * 4 + 0] = value; 
                 imageData.data[i * 4 + 1] = value;
-                imageData.data[i * 4 + 2] = value;
+                imageData.data[i * 4 + 2] = value; 
                 imageData.data[i * 4 + 3] = 255;
             }
-            canvas.width = width;
+            canvas.width = width; 
             canvas.height = height;
             context.putImageData(imageData, 0, 0);
         }
@@ -68,60 +67,58 @@ function App() {
         }
     };
 
-    const processNewImage = useCallback(async (url: string) => {
-        if (!depthEstimator) { setStatus("Please load the model first."); return; }
-        if (!rendererRef.current) { setStatus("Renderer not ready."); return; }
-        if (!url) { setStatus("Please enter an image URL."); return; }
-
-        setImageUrl(url); // Update the input box with the new URL
-        setStatus('Analyzing Image...');
+    const runDepthAnalysis = useCallback(async (url: string) => {
+        if (!depthEstimator || !rendererRef.current) return;
+        setStatus('Analyzing Image with AI model...');
         try {
             const result = await depthEstimator(url);
             const { data, dims } = result.predicted_depth;
             const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
 
-            setStatus('Loading image & depth map to GPU...');
-            // If we are processing from a URL input, we need to load it first.
-            // If it's a random image, it's already loaded in the texture.
-            if (!rendererRef.current.isReady) {
-                 await rendererRef.current.loadImage(url);
-            }
+            setStatus('Updating depth map on GPU...');
             rendererRef.current.updateDepthMap(data, width, height);
             rendererRef.current.createBindGroups();
-
-            if (!rendererRef.current.isReady) {
-                throw new Error("Bind group creation failed.");
-            }
+            
+            if (!rendererRef.current.isReady) throw new Error("Bind group creation failed.");
 
             setDepthMapResult(result);
             setStatus('Ready. Move mouse over the image.');
         } catch (e: any) {
-            console.error("Error during processing:", e);
-            setStatus(`Failed to process image: ${e.message}`);
+            console.error("Error during analysis:", e);
+            setStatus(`Failed to analyze image: ${e.message}`);
         }
     }, [depthEstimator]);
 
-    useEffect(() => {
-        if (depthEstimator && rendererRef.current) {
-            processNewImage('https://i.imgur.com/vCNL2sT.jpeg');
+    const handleAnalyzeUrl = useCallback(async (url: string) => {
+        if (!rendererRef.current || !url || !depthEstimator) {
+            setStatus("Please load the model first and enter a URL.");
+            return;
         }
-    }, [depthEstimator, processNewImage]);
+        setStatus('Loading image from URL...');
+        await rendererRef.current.loadImage(url);
+        await runDepthAnalysis(url);
+    }, [runDepthAnalysis, depthEstimator]);
 
-    const handleLoadRandom = async () => {
-        if (!rendererRef.current) { setStatus("Renderer not ready."); return; }
-        if (!depthEstimator) { setStatus("Please load the model first."); return; }
-        
-        setStatus('Loading and processing random image...');
-        // The renderer loads the image into a texture and gives us the URL
+    const handleLoadRandom = useCallback(async () => {
+        if (!rendererRef.current || !depthEstimator) {
+            setStatus("Please load the model first.");
+            return;
+        }
+        setStatus('Loading random image...');
         const newImageUrl = await rendererRef.current.loadRandomImage();
-        
         if (newImageUrl) {
-            // We then process that URL with the AI model
-            await processNewImage(newImageUrl);
+            setImageUrl(newImageUrl);
+            await runDepthAnalysis(newImageUrl);
         } else {
             setStatus('Failed to load a random image.');
         }
-    };
+    }, [runDepthAnalysis, depthEstimator]);
+
+    useEffect(() => {
+        if (depthEstimator) {
+            handleAnalyzeUrl(imageUrl);
+        }
+    }, [depthEstimator, handleAnalyzeUrl]);
 
     return (
         <div id="app-container">
@@ -131,7 +128,7 @@ function App() {
                 imageUrl={imageUrl}
                 setImageUrl={setImageUrl}
                 onLoadModel={loadModel}
-                onAnalyze={processNewImage}
+                onAnalyze={() => handleAnalyzeUrl(imageUrl)}
                 onLoadRandom={handleLoadRandom}
                 parallaxStrength={parallaxStrength}
                 setParallaxStrength={setParallaxStrength}
