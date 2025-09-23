@@ -23,9 +23,7 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     return output;
 }
 
-// NOTE: Renamed for clarity, as this is now the ONLY sampling function used.
 fn sample_at_level_zero(tex: texture_2d<f32>, smp: sampler, uv: vec2<f32>) -> vec4<f32> {
-    // We use textureSampleLevel with LOD 0.0. This is allowed in non-uniform control flow.
     return textureSampleLevel(tex, smp, clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0);
 }
 
@@ -44,14 +42,12 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     var currentRayDepth = 0.0;
     var currentUV = fragUV;
     
-    // The first sample can be outside the loop.
     var currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r * occlusionStrength;
 
     for (var i: i32 = 0; i < maxSteps; i = i + 1) {
         if (currentRayDepth >= currentDepthMapValue) { break; }
         currentRayDepth += stepSize;
         currentUV -= parallaxDirection * stepSize;
-        // This is now legal because we use textureSampleLevel.
         currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r * occlusionStrength;
     }
 
@@ -75,12 +71,12 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     var shadowUV = finalUV + lightDir * shadowStepSize;
     var shadow = 1.0; // 1.0 = lit, 0.0 = shadowed
 
-    // This loop is also divergent, so we must use textureSampleLevel here too.
     for (var j: i32 = 0; j < maxSteps / 2; j = j + 1) {
         let shadowDepthMapValue = sample_at_level_zero(depthMap, u_sampler, shadowUV).r * occlusionStrength;
-        if (shadowRayDepth > shadowDepthMapValue) {
-            shadow = 0.0;
-            break; // This early exit is efficient and now perfectly legal.
+        // THE FIX IS HERE: Changed > to <
+        if (shadowDepthMapValue > shadowRayDepth) {
+            shadow = 0.0; // The surface is occluded, so it's in shadow.
+            break;
         }
         shadowUV += lightDir * shadowStepSize;
         shadowRayDepth += shadowStepSize;
