@@ -1,3 +1,5 @@
+// src/components/WebGPUCanvas.tsx
+
 import React, { useRef, useEffect } from 'react';
 import { Renderer, RenderMode } from '../renderer/Renderer';
 
@@ -6,12 +8,11 @@ interface WebGPUCanvasProps {
     zoom: number;
     panX: number;
     panY: number;
-    imageVersion: number;
-    imageUrl: string;
+    imageUrl: string; // imageVersion is no longer needed
     depthMap: any;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion, imageUrl, depthMap }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageUrl, depthMap }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<Renderer | null>(null);
     const animationFrameId = useRef<number>(0);
@@ -25,12 +26,13 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         });
     }, []);
 
-    // Load new images
+    // --- THIS IS THE CHANGE ---
+    // Load a new image whenever the imageUrl prop changes.
     useEffect(() => {
-        if (rendererRef.current && imageVersion > 0) {
+        if (rendererRef.current && imageUrl) {
             rendererRef.current.loadImage(imageUrl);
         }
-    }, [imageVersion, imageUrl]);
+    }, [imageUrl]);
 
     // Update the depth map when it's ready
     useEffect(() => {
@@ -39,23 +41,21 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         }
     }, [depthMap]);
 
-    // Main render loop
+    // Main render loop (no changes here)
     useEffect(() => {
         let active = true;
         const animate = () => {
             if (!active) return;
             if (rendererRef.current) {
-                // --- FIX IS HERE ---
-                // The render function for this branch only needs the 'mode'.
                 rendererRef.current.render(mode);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY]); // zoom, panX, and panY are no longer used but are kept for consistency
+    }, [mode, zoom, panX, panY]); 
 
-    // Mouse move handler for parallax
+    // Mouse move handler for parallax (no changes here)
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (rendererRef.current && mode === 'depth') {
             const canvas = canvasRef.current!;
