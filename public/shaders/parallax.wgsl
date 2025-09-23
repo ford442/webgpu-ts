@@ -16,17 +16,17 @@ struct VertexOutput {
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     var output: VertexOutput;
-    // Create a full-screen quad using a triangle strip.
     let x = f32(in_vertex_index % 2u) * 2.0 - 1.0;
     let y = f32(in_vertex_index / 2u) * -2.0 + 1.0;
     output.position = vec4<f32>(x, y, 0.0, 1.0);
-    // Correctly map from clip space [-1, 1] to UV space [0, 1] with Y-axis flip.
     output.fragUV = vec2<f32>((x + 1.0) * 0.5, (y - 1.0) * -0.5);
     return output;
 }
 
-fn textureSampleClamp(tex: texture_2d<f32>, smp: sampler, uv: vec2<f32>) -> vec4<f32> {
-    return textureSample(tex, smp, clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)));
+// NOTE: Renamed for clarity, as this is now the ONLY sampling function used.
+fn sample_at_level_zero(tex: texture_2d<f32>, smp: sampler, uv: vec2<f32>) -> vec4<f32> {
+    // We use textureSampleLevel with LOD 0.0. This is allowed in non-uniform control flow.
+    return textureSampleLevel(tex, smp, clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0);
 }
 
 @fragment
@@ -43,22 +43,26 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     let stepSize = 1.0 / f32(maxSteps);
     var currentRayDepth = 0.0;
     var currentUV = fragUV;
-    var currentDepthMapValue = textureSample(depthMap, u_sampler, currentUV).r * occlusionStrength;
+    
+    // The first sample can be outside the loop.
+    var currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r * occlusionStrength;
 
     for (var i: i32 = 0; i < maxSteps; i = i + 1) {
         if (currentRayDepth >= currentDepthMapValue) { break; }
         currentRayDepth += stepSize;
         currentUV -= parallaxDirection * stepSize;
-        currentDepthMapValue = textureSample(depthMap, u_sampler, currentUV).r * occlusionStrength;
+        // This is now legal because we use textureSampleLevel.
+        currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r * occlusionStrength;
     }
 
+    // --- Refine Intersection ---
     let prevUV = currentUV + parallaxDirection * stepSize;
     let prevRayDepth = currentRayDepth - stepSize;
-    let prevDepthMapValue = textureSample(depthMap, u_sampler, prevUV).r * occlusionStrength;
+    let prevDepthMapValue = sample_at_level_zero(depthMap, u_sampler, prevUV).r * occlusionStrength;
     
-    let weight = (currentDepthMapValue - currentRayDepth) / ((currentDepthMapValue - currentRayDepth) - (prevDepthMapValue - prevRayDepth) + 0.0001);
-    let finalUV = mix(currentUV, prevUV, saturate(weight));
-    let surfaceDepth = mix(currentRayDepth, prevRayDepth, saturate(weight));
+    let weight = (prevDepthMapValue - prevRayDepth) / ((prevDepthMapValue - prevRayDepth) - (currentDepthMapValue - currentRayDepth) + 0.0001);
+    let finalUV = mix(prevUV, currentUV, saturate(weight));
+    let surfaceDepth = mix(prevRayDepth, currentRayDepth, saturate(weight));
 
     // === 2. Self-Shadowing Calculation ===
     let lightPos = u.mouse_lightPos.zw;
@@ -67,21 +71,23 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     let lightDir = normalize(surfaceToLight);
     
     let shadowStepSize = lightDist / f32(maxSteps / 2);
-    var shadowRayDepth = surfaceDepth + 0.01; 
+    var shadowRayDepth = surfaceDepth + 0.01; // Start just above the surface.
     var shadowUV = finalUV + lightDir * shadowStepSize;
-    var shadow = 1.0;
+    var shadow = 1.0; // 1.0 = lit, 0.0 = shadowed
 
-  for (var j: i32 = 0; j < maxSteps / 2; j = j + 1) {
-                    let shadowDepthMapValue = textureSample(depthMap, u_sampler, shadowUV).r * occlusionStrength;
-                    let is_occluded = step(shadowDepthMapValue, shadowRayDepth);
-                    shadow = mix(shadow, 0.0, is_occluded);
-                    
-                    shadowUV += lightDir * shadowStepSize;
-                    shadowRayDepth += shadowStepSize;
-                }
+    // This loop is also divergent, so we must use textureSampleLevel here too.
+    for (var j: i32 = 0; j < maxSteps / 2; j = j + 1) {
+        let shadowDepthMapValue = sample_at_level_zero(depthMap, u_sampler, shadowUV).r * occlusionStrength;
+        if (shadowRayDepth > shadowDepthMapValue) {
+            shadow = 0.0;
+            break; // This early exit is efficient and now perfectly legal.
+        }
+        shadowUV += lightDir * shadowStepSize;
+        shadowRayDepth += shadowStepSize;
+    }
     
     // === 3. Combine Lighting and Final Color ===
-    let litColor = textureSampleClamp(sourceImage, u_sampler, finalUV).rgb;
+    let litColor = sample_at_level_zero(sourceImage, u_sampler, finalUV).rgb;
     let lighting = ambientLight + (1.0 - ambientLight) * shadow;
     let finalColor = litColor * lighting;
 
