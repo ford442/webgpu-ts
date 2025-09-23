@@ -11,10 +11,11 @@ export class Renderer {
     private imageTexture!: GPUTexture;
     private depthTexture!: GPUTexture;
     private uniformBuffer!: GPUBuffer;
-    
+
     private mouseState = { x: 0.5, y: 0.5 };
     private params = { strength: 0.05, layers: 24, occlusion: 0.2, ambient: 0.3 };
     public isReady = false;
+    private imageUrls: string[] = [];
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
@@ -34,29 +35,64 @@ export class Renderer {
         this.device.queue.writeTexture({ texture: this.depthTexture }, data, { bytesPerRow: width * 4 }, [width, height]);
     }
 
+    private async fetchImageUrls(): Promise<void> {
+        const bucketName = 'my-sd35-space-images-2025';
+        const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            const data = await response.json();
+            this.imageUrls = data.items ? data.items.map((item: { name: string }) => `https://storage.googleapis.com/${bucketName}/${item.name}`) : [];
+        } catch (e) {
+            console.error("Failed to fetch image list:", e);
+            this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
+        }
+    }
+
+    public async loadRandomImage(): Promise<void> {
+        try {
+            if (this.imageUrls.length === 0) return;
+            const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
+            const response = await fetch(imageUrl);
+            const imageBitmap = await createImageBitmap(await response.blob());
+
+            if (this.imageTexture) this.imageTexture.destroy();
+            this.imageTexture = this.device.createTexture({
+                size: [imageBitmap.width, imageBitmap.height],
+                format: 'rgba8unorm',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+            });
+            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+
+            if (this.pipelines.size > 0) {
+                this.createBindGroups();
+            }
+        } catch (e) { console.error("Failed to load image:", e); }
+    }
+
     public async init(): Promise<boolean> {
         if (!navigator.gpu) return false;
         const adapter = await navigator.gpu.requestAdapter();
         if (!adapter) return false;
-this.device = await adapter.requestDevice({
-    // FIX: Assert the type to satisfy the strict linter.
-    requiredFeatures: ['float32-filterable'] as GPUFeatureName[],
-});
+        this.device = await adapter.requestDevice({
+            requiredFeatures: ['float32-filterable'] as GPUFeatureName[],
+        });
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-        
-        this.context.configure({ 
-            device: this.device, 
-            format: this.presentationFormat, 
+
+        this.context.configure({
+            device: this.device,
+            format: this.presentationFormat,
             alphaMode: 'premultiplied',
-            usage: GPUTextureUsage.RENDER_ATTACHMENT // This is a crucial flag
+            usage: GPUTextureUsage.RENDER_ATTACHMENT
         });
 
+        await this.fetchImageUrls();
         await this.createResources();
         await this.createPipelines();
         return true;
     }
-    
+
     public async loadImage(imageUrl: string): Promise<void> {
         this.isReady = false;
         try {
@@ -78,7 +114,7 @@ this.device = await adapter.requestDevice({
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.uniformBuffer = this.device.createBuffer({
-            size: 32, // vec4 for mouse/light + vec4 for params
+            size: 32,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
     }
@@ -97,9 +133,9 @@ this.device = await adapter.requestDevice({
     }
 
     public createBindGroups(): void {
-        this.isReady = false; 
+        this.isReady = false;
         if (!this.imageTexture || !this.depthTexture || !this.pipelines.has('depth')) return;
-        
+
         this.bindGroups.set('depth', this.device.createBindGroup({
             layout: this.pipelines.get('depth')!.getBindGroupLayout(0),
             entries: [
@@ -109,7 +145,7 @@ this.device = await adapter.requestDevice({
                 { binding: 3, resource: { buffer: this.uniformBuffer } },
             ]
         }));
-        this.isReady = true; 
+        this.isReady = true;
     }
 
     public render(): void {
