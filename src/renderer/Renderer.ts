@@ -1,5 +1,3 @@
-// src/renderer/Renderer.ts
-
 export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid' | 'depth';
 
 export class Renderer {
@@ -45,40 +43,24 @@ export class Renderer {
         this.device = await adapter.requestDevice();
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-        
-        // --- THIS IS THE FIX for the WebGPU warning ---
-        // Explicitly set the usage flags for the canvas's texture.
-        this.context.configure({ 
-            device: this.device, 
-            format: this.presentationFormat, 
-            alphaMode: 'premultiplied',
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST,
-        });
+        this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
 
         await this.createResources();
         await this.createPipelines();
-        // We now load the initial image from App.tsx to ensure the model runs first
-        // await this.loadImage('https://i.imgur.com/vCNL2sT.jpeg'); 
+        await this.loadImage('https://i.imgur.com/vCNL2sT.jpeg');
         
         return true;
     }
     
     public async loadImage(imageUrl: string): Promise<void> {
         try {
-            // Add a proxy to help with potential CORS issues
-            const proxyUrl = 'https://corsproxy.io/?';
-            const response = await fetch(proxyUrl + imageUrl);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch image. Status: ${response.statusText}`);
-            }
+            const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
 
             if (this.imageTexture) this.imageTexture.destroy();
-            
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                // This texture is a source for sampling and a destination for the copy
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
@@ -128,7 +110,7 @@ export class Renderer {
     }
 
     public render(mode: RenderMode): void {
-        if (!this.device || !this.context) return;
+        if (!this.device) return;
 
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = this.context.getCurrentTexture().createView();
