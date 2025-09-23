@@ -72,14 +72,14 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     var shadow = 1.0;
 
     for (var j: i32 = 0; j < maxSteps / 2; j = j + 1) {
-        let shadowDepthMapValue = textureSample(depthMap, u_sampler, shadowUV).r * occlusionStrength;
-        if (shadowRayDepth > shadowDepthMapValue) {
-            shadow = 0.0;
-            break;
-        }
-        shadowUV += lightDir * shadowStepSize;
-        shadowRayDepth += shadowStepSize;
-    }
+       let shadowDepthMapValue = textureSample(...);
+    // step() returns 1.0 if we are in shadow, 0.0 otherwise.
+    let is_occluded = step(shadowDepthMapValue, shadowRayDepth);
+    // mix() blends between the current shadow value and 0.0.
+    // If not occluded, we mix with 0% of 0.0 (shadow stays 1.0).
+    // If occluded, we mix with 100% of 0.0 (shadow becomes 0.0).
+    shadow = mix(shadow, 0.0, is_occluded);
+}
     
     // === 3. Combine Lighting and Final Color ===
     let litColor = textureSampleClamp(sourceImage, u_sampler, finalUV).rgb;
