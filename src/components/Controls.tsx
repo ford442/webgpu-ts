@@ -5,6 +5,7 @@ interface ControlsProps {
     setImageUrl: (url: string) => void;
     onLoadModel: () => void;
     onAnalyze: (url: string) => void;
+    onLoadRandom: () => void;
     parallaxStrength: number;
     setParallaxStrength: (value: number) => void;
     occlusionStrength: number;
@@ -15,8 +16,6 @@ interface ControlsProps {
     setAmbientLight: (value: number) => void;
 }
 
-// FIX: Corrected the type definition for the `onChange` function prop.
-// It was missing the "=> void" to specify the return type.
 const Slider: React.FC<{label: string, value: number, onChange: (val: number) => void, min: string, max: string, step: string, id: string}> = ({ label, value, onChange, ...props }) => (
     <div className="control-group">
         <label htmlFor={props.id}>{label}:</label>
@@ -28,6 +27,7 @@ const Slider: React.FC<{label: string, value: number, onChange: (val: number) =>
 const Controls: React.FC<ControlsProps> = ({
     imageUrl, setImageUrl,
     onLoadModel, onAnalyze,
+    onLoadRandom,
     parallaxStrength, setParallaxStrength,
     occlusionStrength, setOcclusionStrength,
     numSteps, setNumSteps,
@@ -37,6 +37,7 @@ const Controls: React.FC<ControlsProps> = ({
         <div className="controls">
             <div className="control-group">
                 <button onClick={onLoadModel}>1. Load Model</button>
+                <button onClick={onLoadRandom}>Load Random Image</button>
             </div>
             <div className="control-group">
                 <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} style={{ width: '400px' }} />
@@ -51,4 +52,3 @@ const Controls: React.FC<ControlsProps> = ({
 };
 
 export default Controls;
-
