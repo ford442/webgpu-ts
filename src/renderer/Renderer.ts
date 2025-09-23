@@ -39,8 +39,10 @@ export class Renderer {
         const adapter = await navigator.gpu.requestAdapter();
         if (!adapter) return false;
 this.device = await adapter.requestDevice({
-    requiredFeatures: ['float32-filterable'],
-});        this.context = this.canvas.getContext('webgpu')!;
+    // FIX: Assert the type to satisfy the strict linter.
+    requiredFeatures: ['float32-filterable'] as GPUFeatureName[],
+});
+        this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         
         this.context.configure({ 
