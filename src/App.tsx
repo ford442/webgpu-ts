@@ -12,17 +12,17 @@ function App() {
     const [depthMapResult, setDepthMapResult] = useState<any>(null);
     const debugCanvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<any>(null);
-    
+
     const [parallaxStrength, setParallaxStrength] = useState(0.05);
     const [numSteps, setNumSteps] = useState(32);
     const [occlusionStrength, setOcclusionStrength] = useState(0.3);
     const [ambientLight, setAmbientLight] = useState(0.3);
-    
+
     useEffect(() => {
         rendererRef.current?.updateParams({
-            strength: parallaxStrength, 
+            strength: parallaxStrength,
             layers: numSteps,
-            occlusion: occlusionStrength, 
+            occlusion: occlusionStrength,
             ambient: ambientLight
         });
     }, [parallaxStrength, numSteps, occlusionStrength, ambientLight]);
@@ -34,7 +34,7 @@ function App() {
             const canvas = debugCanvasRef.current;
             const context = canvas.getContext('2d');
             if (!width || !height || !context) return;
-            
+
             const imageData = context.createImageData(width, height);
             let min = Infinity, max = -Infinity;
             data.forEach((v: number) => {
@@ -44,12 +44,12 @@ function App() {
             const range = max - min;
             for (let i = 0; i < data.length; ++i) {
                 const value = Math.round(((data[i] - min) / range) * 255);
-                imageData.data[i * 4 + 0] = value; 
+                imageData.data[i * 4 + 0] = value;
                 imageData.data[i * 4 + 1] = value;
-                imageData.data[i * 4 + 2] = value; 
+                imageData.data[i * 4 + 2] = value;
                 imageData.data[i * 4 + 3] = 255;
             }
-            canvas.width = width; 
+            canvas.width = width;
             canvas.height = height;
             context.putImageData(imageData, 0, 0);
         }
@@ -83,7 +83,7 @@ function App() {
             await rendererRef.current.loadImage(url);
             rendererRef.current.updateDepthMap(data, width, height);
             rendererRef.current.createBindGroups();
-            
+
             if (!rendererRef.current.isReady) {
                 throw new Error("Bind group creation failed.");
             }
@@ -96,6 +96,18 @@ function App() {
         }
     }, [depthEstimator]);
 
+    const handleLoadRandom = async () => {
+        if (!rendererRef.current) {
+            setStatus("Renderer not ready.");
+            return;
+        }
+        setStatus('Loading random image...');
+        await rendererRef.current.loadRandomImage();
+        // After loading a random image, you might want to re-run analysis
+        // For now, we just set a status.
+        setStatus('Random image loaded. Analyze if you wish.');
+    };
+
     return (
         <div id="app-container">
             <h1>WebGPU Viewer: Self-Shadowing Parallax</h1>
@@ -105,6 +117,7 @@ function App() {
                 setImageUrl={setImageUrl}
                 onLoadModel={loadModel}
                 onAnalyze={processNewImage}
+                onLoadRandom={handleLoadRandom}
                 parallaxStrength={parallaxStrength}
                 setParallaxStrength={setParallaxStrength}
                 occlusionStrength={occlusionStrength}
