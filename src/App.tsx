@@ -61,7 +61,7 @@ function App() {
             setStatus('Loading model...');
             const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
             setDepthEstimator(() => estimator);
-            setStatus('Model Loaded. Analyze an image.');
+            setStatus('Model Loaded. Processing initial image...');
         } catch (e: any) {
             console.error(e);
             setStatus(`Failed to load model: ${e.message}`);
@@ -73,6 +73,7 @@ function App() {
         if (!rendererRef.current) { setStatus("Renderer not ready."); return; }
         if (!url) { setStatus("Please enter an image URL."); return; }
 
+        setImageUrl(url); // Update the input box with the new URL
         setStatus('Analyzing Image...');
         try {
             const result = await depthEstimator(url);
@@ -80,7 +81,11 @@ function App() {
             const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
 
             setStatus('Loading image & depth map to GPU...');
-            await rendererRef.current.loadImage(url);
+            // If we are processing from a URL input, we need to load it first.
+            // If it's a random image, it's already loaded in the texture.
+            if (!rendererRef.current.isReady) {
+                 await rendererRef.current.loadImage(url);
+            }
             rendererRef.current.updateDepthMap(data, width, height);
             rendererRef.current.createBindGroups();
 
@@ -96,16 +101,26 @@ function App() {
         }
     }, [depthEstimator]);
 
-    const handleLoadRandom = async () => {
-        if (!rendererRef.current) {
-            setStatus("Renderer not ready.");
-            return;
+    useEffect(() => {
+        if (depthEstimator && rendererRef.current) {
+            processNewImage('https://i.imgur.com/vCNL2sT.jpeg');
         }
-        setStatus('Loading random image...');
-        await rendererRef.current.loadRandomImage();
-        // After loading a random image, you might want to re-run analysis
-        // For now, we just set a status.
-        setStatus('Random image loaded. Analyze if you wish.');
+    }, [depthEstimator, processNewImage]);
+
+    const handleLoadRandom = async () => {
+        if (!rendererRef.current) { setStatus("Renderer not ready."); return; }
+        if (!depthEstimator) { setStatus("Please load the model first."); return; }
+        
+        setStatus('Loading and processing random image...');
+        // The renderer loads the image into a texture and gives us the URL
+        const newImageUrl = await rendererRef.current.loadRandomImage();
+        
+        if (newImageUrl) {
+            // We then process that URL with the AI model
+            await processNewImage(newImageUrl);
+        } else {
+            setStatus('Failed to load a random image.');
+        }
     };
 
     return (
