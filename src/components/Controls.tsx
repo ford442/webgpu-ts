@@ -15,7 +15,9 @@ interface ControlsProps {
     setAmbientLight: (value: number) => void;
 }
 
-const Slider: React.FC<{label: string, value: number, onChange: (val: number), min: string, max: string, step: string, id: string}> = ({ label, value, onChange, ...props }) => (
+// FIX: Corrected the type definition for the `onChange` function prop.
+// It was missing the "=> void" to specify the return type.
+const Slider: React.FC<{label: string, value: number, onChange: (val: number) => void, min: string, max: string, step: string, id: string}> = ({ label, value, onChange, ...props }) => (
     <div className="control-group">
         <label htmlFor={props.id}>{label}:</label>
         <input type="range" value={value} onChange={e => onChange(parseFloat(e.target.value))} {...props} />
@@ -49,3 +51,4 @@ const Controls: React.FC<ControlsProps> = ({
 };
 
 export default Controls;
+
