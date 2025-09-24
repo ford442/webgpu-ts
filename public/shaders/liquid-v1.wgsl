@@ -30,7 +30,7 @@ if(((color.r+color.g+color.b)/3.0)>.75){
      d1 = sin(uv.x * frequency + time) * strength;
      d2 = cos(uv.y * frequency * 0.7 + time) * strength;
      displacedUV = uv + vec2<f32>(d1, d2);
-     color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
+     color = mix(color,textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0),.75);
 }
 
 if(((color.r+color.g+color.b)/3.0)<.25){
@@ -38,7 +38,7 @@ if(((color.r+color.g+color.b)/3.0)<.25){
      d1 = sin(uv.x * frequency + time) * strength;
      d2 = cos(uv.y * frequency * 0.7 + time) * strength;
      displacedUV = uv + vec2<f32>(d1, d2);
-    color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
+    color = mix(color,textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0),.25);
 }
 
     textureStore(writeTexture, global_id.xy, color);
