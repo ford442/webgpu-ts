@@ -175,11 +175,6 @@ export class Renderer {
             const computePass = commandEncoder.beginComputePass();
             const computeV1BG = this.bindGroups.get('computeV1');
             const computeBG = this.bindGroups.get('compute');
-            if (mode === 'liquid-v1' && computeV1BG) {
-                this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
-                computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
-                computePass.setBindGroup(0, computeV1BG);
-                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
                 if (mode === 'liquid' && computeBG) {
                 // Filter out old ripples
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
