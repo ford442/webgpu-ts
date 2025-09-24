@@ -270,6 +270,6 @@ export class Renderer {
             }
             passEncoder.end();
             this.device.queue.submit([commandEncoder.finish()]);
-            }
-    }
+        }
 }
+
