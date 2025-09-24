@@ -1,6 +1,5 @@
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(1) var readTexture: texture_2d<f32>;
-
 @group(0) @binding(2) var writeTexture: texture_storage_2d<rgba16float, write>;
 
 struct Ripple {
