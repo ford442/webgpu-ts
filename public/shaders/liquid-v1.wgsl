@@ -24,7 +24,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     let color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
 
-let xy = global_id.xy;
+var xy = global_id.xy;
 
 if(((color.r+color.g+color.b)/3.0)>.75){
 xy.x -= u32(d1/4.0);
