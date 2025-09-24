@@ -42,10 +42,6 @@ export class Renderer {
       color: [Math.random(), Math.random(), Math.random()], // A random color for fun!
     });
     }
-    
-    public addRipplePoint(x: number, y: number) {
-        this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
-    }
 
     public async init(): Promise<boolean> {
         if (!navigator.gpu) return false;
