@@ -1,12 +1,50 @@
-// ... (All previous bindings, structs, and helper functions are the same) ...
+@group(0) @binding(0) var u_sampler: sampler;
+@group(0) @binding(1) var readTexture: texture_2d<f32>;
+@group(0) @binding(2) var writeTexture: texture_storage_2d<rgba8unorm, write>;
 
-struct Ripple { /* ... */ };
-struct Uniforms { /* ... */ };
+// The new, cleaner struct for a single ripple.
+// WGSL aligns this struct to 32 bytes.
+struct Ripple {
+  center: vec2<f32>,   // 8 bytes
+  startTime: f32,     // 4 bytes
+  intensity: f32,     // 4 bytes (Total so far: 16 bytes)
+  color: vec3<f32>,     // Starts at offset 16. Size 12 bytes.
+  // WGSL adds 4 bytes of padding here automatically.
+}; // Total size per ripple: 32 bytes.
+
+struct Uniforms {
+  // config: x=time, y=rippleCount, z=resolutionX, w=resolutionY
+  config: vec4<f32>,
+  ripples: array<Ripple, 50>,
+};
+
 @group(0) @binding(3) var<uniform> u: Uniforms;
-fn hash(p: vec2<f32>) -> f32 { /* ... */ }
-fn noise(p: vec2<f32>) -> f32 { /* ... */ }
-fn fbm(p: vec2<f32>) -> f32 { /* ... */ }
+fn hash(p: vec2<f32>) -> f32 {
+  let h = dot(p, vec2<f32>(127.1, 311.7));
+  return fract(sin(h) * 43758.5453);
+}
 
+fn noise(p: vec2<f32>) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f); // Smoothstep
+  return mix(
+    mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+    u.y
+  );
+}
+
+fn fbm(p: vec2<f32>) -> f32 {
+  var value = 0.0;
+  var amplitude = 0.5;
+  for (var i = 0; i < 4; i = i + 1) {
+    value += amplitude * noise(p);
+    p *= 2.0;
+    amplitude *= 0.5;
+  }
+  return value;
+}
 
 // --- NEW: Color Grading Function ---
 fn color_grade(color: vec3<f32>) -> vec3<f32> {
