@@ -44,7 +44,6 @@ fn fbm(p: vec2<f32>) -> f32 {
   return value;
 }
 
-// --- Color Grading Function ---
 fn color_grade(color: vec3<f32>) -> vec3<f32> {
   let contrasted = smoothstep(vec3(0.1), vec3(0.9), color);
   let luma = dot(contrasted, vec3(0.299, 0.587, 0.114));
