@@ -174,6 +174,13 @@ export class Renderer {
                 { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }
             ] 
         }));
+        this.bindGroups.set('tonemap', this.device.createBindGroup({
+          layout: this.pipelines.get('tonemap')!.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: this.sampler },
+            { binding: 1, resource: this.writeTexture.createView() }
+          ]
+        }));
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
@@ -278,15 +285,16 @@ export class Renderer {
                     break;
                 case 'liquid-v1':
                 case 'liquid':
-                    if (liquidPipeline && this.bindGroups.has('liquid')) {
-                        passEncoder.setPipeline(liquidPipeline);
-                        passEncoder.setBindGroup(0, this.bindGroups.get('liquid')!);
-                        passEncoder.draw(4);
-                    }
-                    break;
+                // --- MODIFIED: Use the new tonemap pipeline for the final render
+                const tonemapPipeline = this.pipelines.get('tonemap') as GPURenderPipeline;
+                if (tonemapPipeline && this.bindGroups.has('tonemap')) {
+                  passEncoder.setPipeline(tonemapPipeline);
+                  passEncoder.setBindGroup(0, this.bindGroups.get('tonemap')!);
+                  passEncoder.draw(4);
+                }
+                break;
             }
             passEncoder.end();
             this.device.queue.submit([commandEncoder.finish()]);
         }
 }
-
