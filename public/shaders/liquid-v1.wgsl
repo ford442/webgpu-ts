@@ -13,7 +13,8 @@ struct Uniforms {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = vec2<f32>(u.resolutionX, u.resolutionY);
     let uv = vec2<f32>(global_id.xy) / resolution;
-    let time = u.time * .5;
+    let rate = 0.5;
+    let time = u.time * rate;
     let strength = 0.02;
     let frequency = 15.0;
     
@@ -24,17 +25,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     let color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
 
-var xy = global_id.xy;
-
 if(((color.r+color.g+color.b)/3.0)>.75){
-xy.x -= u32(d1/4.0);
-xy.y -= u32(d2/4.0);
+    let time = u.time * .65;
+     d1 = sin(uv.x * frequency + time) * strength;
+     d2 = cos(uv.y * frequency * 0.7 + time) * strength;
+     displacedUV = uv + vec2<f32>(d1, d2);
+     color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
 }
 
 if(((color.r+color.g+color.b)/3.0)<.25){
-xy.x += u32(d1/4.0);
-xy.y += u32(d2/4.0);
+    let time = u.time * .45;
+     d1 = sin(uv.x * frequency + time) * strength;
+     d2 = cos(uv.y * frequency * 0.7 + time) * strength;
+     displacedUV = uv + vec2<f32>(d1, d2);
+    color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
 }
 
-    textureStore(writeTexture, xy, color);
+    textureStore(writeTexture, global_id.xy, color);
 }
