@@ -44,7 +44,47 @@ function App() {
         setStatus('Analyzing Image...');
         try {
             const result = await depthEstimator(url);
-            setDepthMap(result);
+            
+            // --- START: Normalization Fix ---
+            const rawDepth = result.predicted_depth.data;
+            let minDepth = Infinity;
+            let maxDepth = -Infinity;
+
+            // Find the min and max depth values in the raw data
+            for (let i = 0; i < rawDepth.length; i++) {
+                if (rawDepth[i] < minDepth) minDepth = rawDepth[i];
+                if (rawDepth[i] > maxDepth) maxDepth = rawDepth[i];
+            }
+
+            // Create a new array to hold the normalized values
+            const normalizedDepth = new Float32Array(rawDepth.length);
+            const range = maxDepth - minDepth;
+
+            // Normalize the data to a 0.0 - 1.0 range (and invert it)
+            for (let i = 0; i < rawDepth.length; i++) {
+                // Inverting the normalization: 1.0 - ...
+                // This makes closer objects have higher values (e.g., 1.0) 
+                // and farther objects have lower values (e.g., 0.0),
+                // which is standard for parallax effects.
+                if (range > 0) {
+                    normalizedDepth[i] = 1.0 - (rawDepth[i] - minDepth) / range;
+                } else {
+                    normalizedDepth[i] = 0.0; // Handle case where all depths are the same
+                }
+            }
+
+            // Create a new object to store with the normalized data
+            const normalizedResult = {
+                predicted_depth: {
+                    data: normalizedDepth,
+                    width: result.predicted_depth.width,
+                    height: result.predicted_depth.height
+                }
+            };
+            
+            setDepthMap(normalizedResult);
+            // --- END: Normalization Fix ---
+
             setStatus('Ready');
         } catch (e) {
             console.error(e);
