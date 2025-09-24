@@ -128,9 +128,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // B. Caustics Simulation: Distort a noise pattern using the displacement
   let caustic_uv = uv + totalDisplacement * 0.1;
   let caustics = fbm(caustic_uv * 12.0 + time * 0.5) * causticStrength;
-  finalColor.r += caustics * 0.4);
-  finalColor.g += caustics * 0.4);
-  finalColor.b += caustics * 0.4);
+  finalColor.r += caustics * 0.4;
+  finalColor.g += caustics * 0.4;
+  finalColor.b += caustics * 0.4;
   // C. Apply added color "dye" and specular highlights
   finalColor.r = mix(finalColor.rgb, addedColor, clamp(length(addedColor), 0.0, 1.0)).r;
   finalColor.g = mix(finalColor.rgb, addedColor, clamp(length(addedColor), 0.0, 1.0)).g;
