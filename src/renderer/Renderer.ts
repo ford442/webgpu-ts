@@ -9,7 +9,7 @@ export class Renderer {
     private bindGroups = new Map<string, GPUBindGroup>();
     private sampler!: GPUSampler;
     private imageUrls: string[] = [];
-    private ripplePoints: { x: number, y: number, startTime: number }[] = [];
+    private ripplePoints: { x: number, y: number, startTime: number, strength: number }[] = [];
     private MAX_RIPPLES = 50;
     private v2ComputeUniformBuffer!: GPUBuffer;
     private v1ComputeUniformBuffer!: GPUBuffer;
@@ -20,11 +20,17 @@ export class Renderer {
     private writeTexture!: GPUTexture;
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
-
-    public addRipplePoint(x: number, y: number) {
-        this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
+    
+    private uniforms = {
+        config: new Float32Array(4),      // time, rippleCount, resX, resY
+        params: new Float32Array(4),      // refraction, chromaticAberration, caustics, ambient
+        ripples: new Float32Array(this.MAX_RIPPLES * 4), // x, y, startTime, strength
+    };
+    
+    public addRipplePoint(x: number, y: number, strength = 0.05) {
+        this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0, strength });
     }
-
+    
     public async init(): Promise<boolean> {
         if (!navigator.gpu) return false;
         const adapter = await navigator.gpu.requestAdapter();
@@ -62,12 +68,10 @@ export class Renderer {
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
-
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                // --- FIX #1: Added COPY_SRC usage flag ---
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
@@ -77,14 +81,17 @@ export class Renderer {
             }
         } catch (e) { console.error("Failed to load image:", e); }
     }
-
+    
     private async createResources(): Promise<void> {
         const { width, height } = this.canvas;
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.v2ComputeUniformBuffer = this.device.createBuffer({
+            size: this.uniforms.config.byteLength + this.uniforms.params.byteLength + this.uniforms.ripples.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
         this.writeTexture = this.device.createTexture({
             size: [width, height],
             format: 'rgba8unorm',
@@ -136,14 +143,14 @@ export class Renderer {
             ] 
         }));
 
-        this.bindGroups.set('compute', this.device.createBindGroup({ 
-            layout: this.pipelines.get('compute')!.getBindGroupLayout(0), 
+        this.bindGroups.set('compute', this.device.createBindGroup({
+            layout: this.pipelines.get('compute')!.getBindGroupLayout(0),
             entries: [
-                { binding: 0, resource: this.sampler }, 
-                { binding: 1, resource: this.imageTexture.createView() }, 
-                { binding: 2, resource: this.writeTexture.createView() }, 
-                { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }
-            ] 
+                { binding: 0, resource: this.sampler },
+                { binding: 1, resource: this.imageTexture.createView() },
+                { binding: 2, resource: this.writeTexture.createView() },
+                { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } } // Binds the correct buffer
+            ]
         }));
     }
 
@@ -163,32 +170,47 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-
-
             const computePass = commandEncoder.beginComputePass();
             const computeV1BG = this.bindGroups.get('computeV1');
             const computeBG = this.bindGroups.get('compute');
-
             if (mode === 'liquid-v1' && computeV1BG) {
                 this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
                 computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeV1BG);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
             } else if (mode === 'liquid' && computeBG) {
-                this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
-                if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
-                const computeUniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
-                computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
-                const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
+                // 1. Cull old ripples
+                this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 3.5); // Use the new lifetime
+                if (this.ripplePoints.length > this.MAX_RIPPLES) {
+                    this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
+                }
+                // 2. Populate the structured 'uniforms' object on the CPU
+                this.uniforms.config.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height]);
+                this.uniforms.params.set([
+                    0.03,  // refractionStrength
+                    0.015, // chromaticAberration
+                    0.4,   // causticStrength
+                    0.02,  // ambientStrength
+                ]);
                 for (let i = 0; i < this.ripplePoints.length; i++) {
                     const point = this.ripplePoints[i];
-                    rippleData.set([point.x, point.y, point.startTime], i * 4);
+                    // The offset in the flat array is i * 4
+                    this.uniforms.ripples.set([point.x, point.y, point.startTime, point.strength], i * 4);
                 }
-                computeUniformArray.set(rippleData, 4);
-                this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
+                // Clear out old ripple data in the buffer to prevent ghost ripples
+                if (this.ripplePoints.length < this.MAX_RIPPLES) {
+                    const start = this.ripplePoints.length * 4;
+                    const end = this.MAX_RIPPLES * 4;
+                    this.uniforms.ripples.fill(0, start, end);
+                }
+                // 3. Write the CPU data to the GPU uniform buffer at the correct offsets
+                this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, this.uniforms.config);
+                this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, this.uniforms.config.byteLength, this.uniforms.params);
+                this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, this.uniforms.config.byteLength + this.uniforms.params.byteLength, this.uniforms.ripples);
+                // 4. Dispatch the compute shader
                 computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeBG);
-                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+                computePass.dispatchWorkgroups(Math.ceil(this.canvas.width / 8), Math.ceil(this.canvas.height / 8), 1);
             }
             computePass.end();
         }
