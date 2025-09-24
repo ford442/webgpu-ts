@@ -47,14 +47,20 @@ fn fbm(p: vec2<f32>) -> f32 {
   return value;
 }
 
-// --- NEW: Color Grading Function ---
 fn color_grade(color: vec3<f32>) -> vec3<f32> {
-  // 1. Apply a cinematic S-curve for contrast
-  let contrasted = smoothstep(0.1, 0.9, color);
-  // 2. Boost saturation
-  let luma = dot(contrasted, vec3(0.299, 0.587, 0.114));
-  let saturated = mix(vec3(luma), contrasted, 1.2); // 1.2 = 20% saturation boost
-  return saturated;
+    // 1. Convert to HSL (or calculate luminance) to separate brightness from hue/saturation
+    // We'll calculate luminance here for simplicity
+    let luma = dot(color, vec3(0.299, 0.587, 0.114));
+    // 2. Apply a cinematic S-curve to the luminance.
+    // A more suitable S-curve can be created with a custom function.
+    let s_curve_luma = smoothstep(0.0, 1.0, 1.0 - (1.0 - luma) * (1.0 - luma));
+    // 3. Re-mix the original color with the new, S-curved luminance
+    // This maintains the original color's hue while applying the contrast.
+    let contrasted = mix(vec3(s_curve_luma), color, 0.5); // The 0.5 can be tweaked for intensity
+    // 4. Boost saturation
+    let luma_contrasted = dot(contrasted, vec3(0.299, 0.587, 0.114));
+    let saturated = mix(vec3(luma_contrasted), contrasted, 1.2); // 1.2 = 20% saturation boost
+    return saturated;
 }
 
 @compute @workgroup_size(8, 8, 1)
