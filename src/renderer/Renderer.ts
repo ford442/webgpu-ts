@@ -102,33 +102,50 @@ export class Renderer {
           size: v2UniformBufferSize,
           usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
-        this.writeTexture = this.device.createTexture({
-            size: [width, height],
-            format: 'rgba8unorm',
-            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-        });
+  this.writeTexture = this.device.createTexture({
+      size: [width, height],
+      format: 'rgba16float', // <-- The key change for HDR!
+      usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    });
         await this.loadRandomImage();
     }
 
-    private async createPipelines(): Promise<void> {
-        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode] = await Promise.all([
-            fetch('shaders/galaxy.wgsl').then(res => res.text()),
-            fetch('shaders/imageVideo.wgsl').then(res => res.text()),
-            fetch('shaders/liquid-v1.wgsl').then(res => res.text()),
-            fetch('shaders/liquid.wgsl').then(res => res.text()),
-            fetch('shaders/texture.wgsl').then(res => res.text()),
-        ]);
+  private async createPipelines(): Promise<void> {
+    const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode, tonemapCode] = await Promise.all([
+      fetch('shaders/galaxy.wgsl').then(res => res.text()),
+      fetch('shaders/imageVideo.wgsl').then(res => res.text()),
+      fetch('shaders/liquid-v1.wgsl').then(res => res.text()),
+      fetch('shaders/liquid.wgsl').then(res => res.text()),
+      fetch('shaders/texture.wgsl').then(res => res.text()),
+      fetch('shaders/tonemap.wgsl').then(res => res.text()), // <-- ADDED
+    ]);
         const galaxyModule = this.device.createShaderModule({ code: galaxyCode });
         const imageVideoModule = this.device.createShaderModule({ code: imageVideoCode });
         const liquidV1Module = this.device.createShaderModule({ code: liquidV1Code });
         const liquidModule = this.device.createShaderModule({ code: liquidCode });
         const textureModule = this.device.createShaderModule({ code: textureCode });
+        const tonemapModule = this.device.createShaderModule({ code: tonemapCode }); // <-- ADDED
         const commonConfig = { vertex: { module: imageVideoModule, entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }] }, primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology } };
         this.pipelines.set('galaxy', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: galaxyModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: galaxyModule, entryPoint: 'fs_main' }, primitive: { topology: 'triangle-list' as GPUPrimitiveTopology } }));
         this.pipelines.set('imageVideo', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: imageVideoModule, entryPoint: 'fs_main' } }));
         this.pipelines.set('liquid', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } }));
         this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }));
         this.pipelines.set('compute', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }));
+        this.pipelines.set('tonemap', this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: {
+              module: tonemapModule,
+              entryPoint: 'vs_main',
+            },
+            fragment: {
+              module: tonemapModule,
+              entryPoint: 'fs_main',
+              targets: [{ format: this.presentationFormat }],
+            },
+            primitive: {
+              topology: 'triangle-strip',
+            },
+          }));
     }
 
     private createBindGroups(): void {
