@@ -27,13 +27,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 let xy = global_id.xy;
 
 if(((color.r+color.g+color.b)/3.0)>.75){
-xy.x -= d1/4.0;
-xy.y -= d2/4.0;
+xy.x -= u32(d1/4.0);
+xy.y -= u32(d2/4.0);
 }
 
 if(((color.r+color.g+color.b)/3.0)<.25){
-xy.x += d1/4.0;
-xy.y += d2/4.0;
+xy.x += u32(d1/4.0);
+xy.y += u32(d2/4.0);
 }
 
     textureStore(writeTexture, xy, color);
