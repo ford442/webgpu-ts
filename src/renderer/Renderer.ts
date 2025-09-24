@@ -18,7 +18,6 @@ export class Renderer {
     private bindGroups = new Map<string, GPUBindGroup>();
     private sampler!: GPUSampler;
     private imageUrls: string[] = [];
-    private ripplePoints: { x: number, y: number, startTime: number }[] = [];
     private MAX_RIPPLES = 50;
     private v2ComputeUniformBuffer!: GPUBuffer;
     private v1ComputeUniformBuffer!: GPUBuffer;
@@ -27,12 +26,13 @@ export class Renderer {
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
-
-    constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
-
+  
+    constructor(canvas: HTMLCanvasElement) {
+      this.canvas = canvas; 
+    }
+  
     private ripplePoints: RipplePoint[] = [];
-
-  // +++ MODIFIED: This method now creates a full RipplePoint object
+    // +++ MODIFIED: This method now creates a full RipplePoint object
     public addRipplePoint(x: number, y: number) {
     this.ripplePoints.push({
       x,
