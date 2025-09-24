@@ -57,7 +57,7 @@ fn fbm(p: vec2<f32>) -> f32 {
   var amplitude = 0.5;
   for (var i = 0; i < 4; i = i + 1) {
     value += amplitude * noise(p);
-    p *= 2.0;
+    p = p * 2.0;
     amplitude *= 0.5;
   }
   return value;
