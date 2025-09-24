@@ -85,7 +85,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     causticStrength += ambientDisplacement.x * 2.0;
     // B. Interactive Ripples
     // We loop through the ripples and calculate their effects on the current pixel.
-    var m = f32(u.config.y);
+    var m = u32(u.config.y);
     for (var i = 0u; i < m; i++) {
         let p = u.ripples[i];
         let distance = length(uv - p.center);
