@@ -14,7 +14,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = vec2<f32>(u.resolutionX, u.resolutionY);
     let uv = vec2<f32>(global_id.xy) / resolution;
     let rate = 0.5;
-    let time = u.time * rate;
+    var time = u.time * rate;
     let strength = 0.02;
     let frequency = 15.0;
     
