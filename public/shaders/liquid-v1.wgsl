@@ -18,15 +18,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let strength = 0.02;
     let frequency = 15.0;
     
-    let d1 = sin(uv.x * frequency + time) * strength;
-    let d2 = cos(uv.y * frequency * 0.7 + time) * strength;
+    var d1 = sin(uv.x * frequency + time) * strength;
+    var d2 = cos(uv.y * frequency * 0.7 + time) * strength;
     
-    let displacedUV = uv + vec2<f32>(d1, d2);
+    var displacedUV = uv + vec2<f32>(d1, d2);
     
-    let color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
+    var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
 
 if(((color.r+color.g+color.b)/3.0)>.75){
-    let time = u.time * .65;
+     time = u.time * .65;
      d1 = sin(uv.x * frequency + time) * strength;
      d2 = cos(uv.y * frequency * 0.7 + time) * strength;
      displacedUV = uv + vec2<f32>(d1, d2);
@@ -34,7 +34,7 @@ if(((color.r+color.g+color.b)/3.0)>.75){
 }
 
 if(((color.r+color.g+color.b)/3.0)<.25){
-    let time = u.time * .45;
+     time = u.time * .45;
      d1 = sin(uv.x * frequency + time) * strength;
      d2 = cos(uv.y * frequency * 0.7 + time) * strength;
      displacedUV = uv + vec2<f32>(d1, d2);
