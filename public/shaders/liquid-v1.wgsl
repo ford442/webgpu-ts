@@ -13,8 +13,7 @@ struct Uniforms {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = vec2<f32>(u.resolutionX, u.resolutionY);
     let uv = vec2<f32>(global_id.xy) / resolution;
-    
-    let time = u.time * tan(0.5);
+    let time = u.time * cos(0.75);
     let strength = 0.02;
     let frequency = 15.0;
     
