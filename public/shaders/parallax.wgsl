@@ -20,7 +20,7 @@ struct VertexOutput {
 const GRID_SIZE = 256u;
 
 @vertex
-fn vs_main(@builtin(vertex_index) u32) -> VertexOutput {
+fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     let x = in_vertex_index % GRID_SIZE;
     let y = in_vertex_index / GRID_SIZE;
 
