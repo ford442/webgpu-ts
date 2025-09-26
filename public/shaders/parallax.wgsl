@@ -6,6 +6,7 @@ struct Uniforms {
     mouse_lightPos: vec4<f32>, // xy = mouse, zw = lightPos
     params: vec4<f32>, // x: parallax, y: steps, z: occlusion, w: ambientLight
 };
+
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 struct VertexOutput {
