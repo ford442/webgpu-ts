@@ -84,21 +84,33 @@ export class Renderer {
         }
     }
     public async loadRandomImage(): Promise<string | null> {
-        this.isReady = false; 
+        this.isReady = false;
         try {
             if (this.imageUrls.length === 0) return null;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
+
             if (this.imageTexture) this.imageTexture.destroy();
+
+            const mipLevelCount = Math.floor(Math.log2(Math.max(imageBitmap.width, imageBitmap.height))) + 1;
+
             this.imageTexture = this.device.createTexture({
-                size: [imageBitmap.width, imageBitmap.height],
+                size: [imageBitmap.width, imageBitmap.height, 1],
+                mipLevelCount,
                 format: 'rgba8unorm',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
             });
-            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+
+            this.device.queue.copyExternalImageToTexture(
+                { source: imageBitmap },
+                { texture: this.imageTexture },
+                [imageBitmap.width, imageBitmap.height]
+            );
+
+            await this.generateMipmaps(this.imageTexture);
             return imageUrl;
-        } catch (e) { 
+        } catch (e) {
             console.error("Failed to load image:", e);
             return null;
         }
@@ -117,23 +129,100 @@ export class Renderer {
         return true;
     }
     public async loadImage(imageUrl: string): Promise<void> {
-        this.isReady = false; 
+        this.isReady = false;
         try {
             const urlToFetch = imageUrl.startsWith('https://storage.googleapis.com/') ? imageUrl : `https://corsproxy.io/?${encodeURIComponent(imageUrl)}`;
             const response = await fetch(urlToFetch);
             if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
             const imageBitmap = await createImageBitmap(await response.blob());
+
             if (this.imageTexture) this.imageTexture.destroy();
+
+            const mipLevelCount = Math.floor(Math.log2(Math.max(imageBitmap.width, imageBitmap.height))) + 1;
+
             this.imageTexture = this.device.createTexture({
-                size: [imageBitmap.width, imageBitmap.height],
+                size: [imageBitmap.width, imageBitmap.height, 1],
+                mipLevelCount,
                 format: 'rgba8unorm',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
             });
-            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
-        } catch (e) { console.error("Failed to load image:", e); throw e; }
+
+            this.device.queue.copyExternalImageToTexture(
+                { source: imageBitmap },
+                { texture: this.imageTexture },
+                [imageBitmap.width, imageBitmap.height]
+            );
+
+            await this.generateMipmaps(this.imageTexture);
+        } catch (e) {
+            console.error("Failed to load image:", e);
+            throw e;
+        }
+    }
+    private blitPipeline!: GPURenderPipeline; // To be created on demand
+
+    private async generateMipmaps(texture: GPUTexture): Promise<void> {
+        // 1. Create the blit pipeline if it doesn't exist
+        if (!this.blitPipeline) {
+            const blitShaderModule = this.device.createShaderModule({
+                code: await fetch('shaders/blit.wgsl').then(r => r.text()),
+            });
+            this.blitPipeline = this.device.createRenderPipeline({
+                layout: 'auto',
+                vertex: { module: blitShaderModule, entryPoint: 'vs_main' },
+                fragment: {
+                    module: blitShaderModule,
+                    entryPoint: 'fs_main',
+                    targets: [{ format: texture.format }],
+                },
+                primitive: { topology: 'triangle-strip' },
+            });
+        }
+
+        // 2. Create a sampler for the blit operation
+        const blitSampler = this.device.createSampler({
+            magFilter: 'linear',
+            minFilter: 'linear',
+        });
+
+        // 3. Loop through mip levels and blit
+        let srcView = texture.createView({ baseMipLevel: 0, mipLevelCount: 1 });
+
+        for (let i = 1; i < texture.mipLevelCount; i++) {
+            const dstView = texture.createView({ baseMipLevel: i, mipLevelCount: 1 });
+
+            const commandEncoder = this.device.createCommandEncoder();
+
+            const passEncoder = commandEncoder.beginRenderPass({
+                colorAttachments: [{
+                    view: dstView,
+                    loadOp: 'clear',
+                    storeOp: 'store',
+                    clearValue: [0, 0, 0, 0],
+                }],
+            });
+
+            const bindGroup = this.device.createBindGroup({
+                layout: this.blitPipeline.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: blitSampler },
+                    { binding: 1, resource: srcView },
+                ],
+            });
+
+            passEncoder.setPipeline(this.blitPipeline);
+            passEncoder.setBindGroup(0, bindGroup);
+            passEncoder.draw(4);
+            passEncoder.end();
+
+            this.device.queue.submit([commandEncoder.finish()]);
+
+            srcView = dstView; // The destination of this pass is the source for the next
+        }
     }
     private async createResources(): Promise<void> {
-        this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+        // Now with mipmapping support
+        this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
         this.uniformBuffer = this.device.createBuffer({
             size: 48, // Now holds rotation, zoom, displace, ambient, smooth, light, pointsize
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
