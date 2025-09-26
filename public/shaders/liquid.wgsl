@@ -17,29 +17,57 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let resolution = u.config.zw;
   let uv = vec2<f32>(global_id.xy) / resolution;
   let currentTime = u.config.x;
+  let pixel_size = 1.0 / resolution;
   
-  // --- MODIFIED: Start of changes ---
-  // Create separate vectors for each type of displacement
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
   var ambientDisplacement = vec2<f32>(0.0, 0.0);
-  // --- MODIFIED: End of changes ---
 
-  // Sample the current depth to influence BOTH effects
-  let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
-  let depthFactor = 1.0 - depth; 
+  // --- MODIFIED: Start of Occlusion Logic ---
+  // Sample depth at the current pixel and its immediate neighbors
+  let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
+  let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(0.0, pixel_size.y), 0.0).r;
+  let depth_down = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(0.0, pixel_size.y), 0.0).r;
+  let depth_left = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(pixel_size.x, 0.0), 0.0).r;
+  let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(pixel_size.x, 0.0), 0.0).r;
 
-  // --- Ambient Wobble (modified by depth) ---
+  // Check if any neighbors are significantly in front of the current pixel.
+  // max(0.0, ...) ensures we only get positive values (foreground influence).
+  let foreground_influence = 
+      max(0.0, depth_up - center_depth) +
+      max(0.0, depth_down - center_depth) +
+      max(0.0, depth_left - center_depth) +
+      max(0.0, depth_right - center_depth);
+  
+  // Create an occlusion factor. If foreground influence is high, this factor will be close to 0.
+  // This will dampen the motion of pixels that are "behind" others.
+  let occlusion_factor = 1.0 - smoothstep(0.05, 0.2, foreground_influence);
+  // --- MODIFIED: End of Occlusion Logic ---
+
+
+  let depthFactor = 1.0 - center_depth; 
+
+  // --- MODIFIED: Start of Directional Breathing Logic ---
   let time = currentTime * 0.5;
-  let ambient_strength = 0.02 * depthFactor;
+  var ambient_strength = 0.02 * depthFactor;
   let ambient_freq = 15.0;
-  let d1 = sin(uv.x * ambient_freq + time) * ambient_strength;
-  let d2 = cos(uv.y * ambient_freq * 0.7 + time) * ambient_strength;
-  // --- MODIFIED: Start of changes ---
-  // Store this displacement in its own dedicated vector
-  ambientDisplacement += vec2<f32>(d1, d2);
-  // --- MODIFIED: End of changes ---
 
-  // --- Click Ripples (modified by depth) ---
+  // Define two different motion patterns.
+  // Pattern 1: A slower, horizontal wave for the background.
+  let motion_far = vec2<f32>(sin(uv.y * ambient_freq * 0.8 + time * 0.8), 0.0);
+  // Pattern 2: A slightly faster, vertical wave for the foreground.
+  let motion_close = vec2<f32>(0.0, cos(uv.x * ambient_freq * 1.2 + time * 1.2));
+
+  // Blend between the two patterns based on the pixel's depth.
+  // smoothstep creates a nice transition in the mid-ground.
+  let mixed_motion = mix(motion_far, motion_close, smoothstep(0.25, 0.75, center_depth));
+  
+  // Apply the occlusion factor to the final strength.
+  ambient_strength = ambient_strength * occlusion_factor;
+
+  ambientDisplacement += mixed_motion * ambient_strength;
+  // --- MODIFIED: End of Directional Breathing Logic ---
+  
+  // --- Click Ripples (This part remains unchanged) ---
   let rippleCount = u32(u.config.y);
   for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
     let rippleData = u.ripples[i];
@@ -62,26 +90,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let falloff = 1.0 / (dist * 20.0 + 1.0);
         let displacement = wave * ripple_amplitude * attenuation * falloff;
         let direction = direction_vec / dist;
-        // --- MODIFIED: Start of changes ---
-        // Store this displacement in its own dedicated vector
         mouseDisplacement += direction * displacement;
-        // --- MODIFIED: End of changes ---
       }
     }
   }
-
-  // --- MODIFIED: Start of changes ---
   
-  // 1. Advect the COLOR using the TOTAL displacement (Ambient + Mouse)
+  // --- Advection (This part remains unchanged) ---
   let totalDisplacement = mouseDisplacement + ambientDisplacement;
   let colorDisplacedUV = uv + totalDisplacement;
   let color = textureSampleLevel(readTexture, u_sampler, colorDisplacedUV, 0.0);
   textureStore(writeTexture, global_id.xy, color);
 
-  // 2. Advect the DEPTH using ONLY the MOUSE displacement
   let depthDisplacedUV = uv + mouseDisplacement;
   let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthDisplacedUV, 0.0).r;
   textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
-
-  // --- MODIFIED: End of changes ---
 }
