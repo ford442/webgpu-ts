@@ -32,8 +32,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let base_ambient_strength = 0.015; 
   let ambient_freq = 15.0;
 
-  let motion_far = vec2<f32>(0.0, cos(uv.x * ambient_freq + time));
-  let motion_close = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0);
+  let motion_far = vec2<f32>(0.0, cos(uv.x * ambient_freq + currentTime));
+  let motion_close = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + currentTime * 1.2), 0.0);
 
   // --- MODIFIED: Start of new logic ---
   let raw_avg_depth = u.depth_stats.x;
