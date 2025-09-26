@@ -6,7 +6,6 @@ interface WebGPUCanvasProps {
     zoom: number;
     panX: number;
     panY: number;
-    imageVersion: number;
     rendererRef: React.MutableRefObject<Renderer | null>; // Accept the ref from props
 }
 
@@ -25,7 +24,9 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         (async () => {
             const success = await renderer.init();
             if (success) {
-                rendererRef.current = renderer;
+                if (rendererRef && 'current' in rendererRef) {
+                    (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
+                }
                 videoRef.current = document.createElement('video');
                 videoRef.current.src = 'https://test.1ink.us/webgputs/big_buck_bunny_720p_surround.mp4';
                 videoRef.current.crossOrigin = 'anonymous';
