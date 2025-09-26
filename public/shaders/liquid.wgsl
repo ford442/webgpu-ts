@@ -1,9 +1,16 @@
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(1) var readTexture: texture_2d<f32>;
 @group(0) @binding(2) var writeTexture: texture_storage_2d<rgba16float, write>;
-@group(0) @binding(4) var depthTexture: texture_2d<f32>;
-// NEW: Add a binding for the non-filtering sampler
+
+// --- MODIFIED: Start of changes ---
+
+// @binding(4) now reads from the "current" depth map
+@group(0) @binding(4) var readDepthTexture: texture_2d<f32>;
 @group(0) @binding(5) var non_filtering_sampler: sampler;
+// Add a new binding for the "next" depth map, which we will write to
+@group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
+
+// --- MODIFIED: End of changes ---
 
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
@@ -20,8 +27,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let currentTime = u.config.x;
   
   // --- Depth Integration ---
-  // NEW: Sample the depth map using the non_filtering_sampler
-  let depth = textureSampleLevel(depthTexture, non_filtering_sampler, uv, 0.0).r;
+  // Sample from the READ depth texture
+  let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
   let depthFactor = 1.0 - depth; 
 
   // --- Ambient Wobble (modified by depth) ---
@@ -45,8 +52,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let dist = length(direction_vec);
 
       if (dist > 0.0001) {
-        // NEW: Sample the ripple origin depth using the non_filtering_sampler
-        let rippleOriginDepth = textureSampleLevel(depthTexture, non_filtering_sampler, rippleCenter, 0.0).r;
+        // Sample the ripple origin depth from the READ texture
+        let rippleOriginDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, rippleCenter, 0.0).r;
         let rippleOriginDepthFactor = 1.0 - rippleOriginDepth;
 
         let ripple_speed = mix(1.0, 2.0, rippleOriginDepthFactor);
@@ -66,7 +73,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   }
 
   let displacedUV = uv + totalDisplacement;
-  // The main image texture still uses the original filtering sampler
+
+  // 1. Advect the COLOR (same as before)
   let color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
   textureStore(writeTexture, global_id.xy, color);
+
+  // --- MODIFIED: Start of changes ---
+  // 2. Advect the DEPTH
+  // Sample the depth from the upstream position and write it to the new depth texture
+  let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV, 0.0).r;
+  textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
+  // --- MODIFIED: End of changes ---
 }
