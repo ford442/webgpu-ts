@@ -27,29 +27,26 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let depth_down = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(0.0, pixel_size.y), 0.0).r;
   let depth_left = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(pixel_size.x, 0.0), 0.0).r;
   let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(pixel_size.x, 0.0), 0.0).r;
-  
-  let depthFactor = 1.0 - center_depth; 
 
-  // --- MODIFIED: Start of Directional Breathing Logic ---
+  // --- MODIFIED: Start of Strength Fix ---
   let time = currentTime * 0.5;
-  let ambient_strength = 0.02 * depthFactor;
+  // Use a constant base strength instead of one tied to depth, ensuring all parts of the image can move.
+  let base_ambient_strength = 0.015; 
   let ambient_freq = 15.0;
 
-  // 1. Swap Directions & Fix Speeds
-  // Background motion is now vertical (up/down) and runs at the normal speed.
   let motion_far = vec2<f32>(0.0, cos(uv.x * ambient_freq + time));
-  // Foreground motion is now horizontal (left/right) and is 20% faster/higher frequency.
   let motion_close = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0);
 
   let transition_factor = smoothstep(0.4, 0.6, center_depth);
   let mixed_motion = mix(motion_far, motion_close, transition_factor);
   
-  let strength_boost = mix(1.0, 1.5, transition_factor);
+  // The strength modifier now boosts from the constant base strength.
+  let strength_modifier = mix(1.0, 1.5, transition_factor);
   
-  ambientDisplacement = mixed_motion * ambient_strength * strength_boost;
-  // --- MODIFIED: End of Directional Breathing Logic ---
+  ambientDisplacement = mixed_motion * base_ambient_strength * strength_modifier;
+  // --- MODIFIED: End of Strength Fix ---
 
-  // --- Occlusion Logic (remains unchanged) ---
+  // --- MODIFIED: Start of Occlusion NaN Fix ---
   let foreground_influence = 
       max(0.0, depth_up - center_depth) +
       max(0.0, depth_down - center_depth) +
@@ -59,13 +56,22 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   if (foreground_influence > 0.05) {
       let grad_x = (depth_right - depth_left);
       let grad_y = (depth_up - depth_down);
-      let gradient = normalize(vec2<f32>(grad_x, grad_y));
-      let projection = dot(ambientDisplacement, gradient);
+      let gradient_vec = vec2<f32>(grad_x, grad_y);
+      // Use squared length to avoid an expensive sqrt()
+      let grad_len_sq = dot(gradient_vec, gradient_vec);
 
-      if (projection > 0.0) {
-        ambientDisplacement = ambientDisplacement - projection * gradient;
+      // SAFETY CHECK: Only perform redirection if the gradient is strong enough to be valid.
+      // This prevents normalizing a zero vector and generating NaN values.
+      if (grad_len_sq > 0.00001) {
+        let gradient = normalize(gradient_vec);
+        let projection = dot(ambientDisplacement, gradient);
+
+        if (projection > 0.0) {
+          ambientDisplacement = ambientDisplacement - projection * gradient;
+        }
       }
   }
+  // --- MODIFIED: End of Occlusion NaN Fix ---
   
   // --- Click Ripples (remains unchanged) ---
   let rippleCount = u32(u.config.y);
