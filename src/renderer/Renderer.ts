@@ -169,7 +169,8 @@ export class Renderer {
                 layout: 'auto',
                 vertex: { module, entryPoint: 'vs_main' },
                 fragment: { module, entryPoint: 'fs_main', targets: [{ format: this.presentationFormat }] },
-                primitive: { topology: 'triangle-strip' }
+                // --- FIX IS HERE: Change the topology to 'point-list' ---
+                primitive: { topology: 'point-list' }
             }));
         } catch(e) { console.error("Pipeline creation failed:", e); }
     }
