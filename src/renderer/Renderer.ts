@@ -1,6 +1,6 @@
 export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid' | 'depth';
 
-const GRID_SIZE = 256; // Must match GRID_SIZE in the shader
+const GRID_SIZE = 256;
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -14,7 +14,7 @@ export class Renderer {
     private depthTexture!: GPUTexture;
     private uniformBuffer!: GPUBuffer;
 
-    // New state for orbit controls
+    private mouseState = { x: 0.5, y: 0.5 }; // For light position
     private cameraState = {
         rotationX: 0.5,
         rotationY: 0,
@@ -32,23 +32,21 @@ export class Renderer {
     public updateParams(params: any) { this.params = params; }
 
     public updateMouse(x: number, y: number, isDragging: boolean) {
+        // Update light position (normalized 0-1)
+        this.mouseState.x = x / this.canvas.width;
+        this.mouseState.y = y / this.canvas.height;
+        
         if (isDragging) {
             if (!this.cameraState.isDragging) {
-                // Start of a new drag
                 this.cameraState.isDragging = true;
                 this.cameraState.lastMouseX = x;
                 this.cameraState.lastMouseY = y;
             } else {
-                // Continuing a drag
                 const dx = x - this.cameraState.lastMouseX;
                 const dy = y - this.cameraState.lastMouseY;
-
                 this.cameraState.rotationY += dx * 0.01;
                 this.cameraState.rotationX += dy * 0.01;
-                
-                // Clamp rotationX to prevent flipping
                 this.cameraState.rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.cameraState.rotationX));
-
                 this.cameraState.lastMouseX = x;
                 this.cameraState.lastMouseY = y;
             }
@@ -61,7 +59,7 @@ export class Renderer {
 
     public updateZoom(deltaY: number) {
         this.cameraState.zoom += deltaY * 0.001;
-        this.cameraState.zoom = Math.max(0.2, Math.min(5.0, this.cameraState.zoom)); // Clamp zoom
+        this.cameraState.zoom = Math.max(0.2, Math.min(5.0, this.cameraState.zoom));
     }
 
     public updateDepthMap(data: Float32Array, width: number, height: number) {
@@ -76,8 +74,9 @@ export class Renderer {
         }
         this.device.queue.writeTexture({ texture: this.depthTexture }, data, { bytesPerRow: width * 4 }, [width, height]);
     }
-
-    private async fetchImageUrls(): Promise<void> {
+    
+    // ... (fetchImageUrls, loadRandomImage, loadImage, init methods remain the same) ...
+    public async fetchImageUrls(): Promise<void> {
         const bucketName = 'my-sd35-space-images-2025';
         const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
         try {
@@ -113,7 +112,6 @@ export class Renderer {
             return null;
         }
     }
-
     public async init(): Promise<boolean> {
         if (!navigator.gpu) return false;
         const adapter = await navigator.gpu.requestAdapter();
@@ -136,7 +134,6 @@ export class Renderer {
         await this.createPipelines();
         return true;
     }
-
     public async loadImage(imageUrl: string): Promise<void> {
         this.isReady = false; 
         try {
@@ -155,10 +152,11 @@ export class Renderer {
         } catch (e) { console.error("Failed to load image:", e); throw e; }
     }
 
+
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.uniformBuffer = this.device.createBuffer({
-            size: 32, // 2 for rotation, 1 for zoom, 1 for displace, 1 for ambient, 1 for smooth
+            size: 48, // Increased size for lightPos vec2
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
     }
@@ -204,10 +202,12 @@ export class Renderer {
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
             new Float32Array([
-                this.cameraState.rotationX, this.cameraState.rotationY, this.cameraState.zoom,
+                this.cameraState.rotationX, this.cameraState.rotationY,
+                this.cameraState.zoom,
                 this.params.displacementScale,
                 this.params.ambient,
-                this.params.smoothness
+                this.params.smoothness,
+                this.mouseState.x, this.mouseState.y
             ])
         );
 
