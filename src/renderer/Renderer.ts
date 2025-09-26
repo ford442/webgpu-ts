@@ -185,13 +185,14 @@ export class Renderer {
             minFilter: 'linear',
         });
 
-        // 3. Loop through mip levels and blit
+        // 3. Create a single command encoder
+        const commandEncoder = this.device.createCommandEncoder();
+
+        // 4. Loop through mip levels and record the blit commands
         let srcView = texture.createView({ baseMipLevel: 0, mipLevelCount: 1 });
 
         for (let i = 1; i < texture.mipLevelCount; i++) {
             const dstView = texture.createView({ baseMipLevel: i, mipLevelCount: 1 });
-
-            const commandEncoder = this.device.createCommandEncoder();
 
             const passEncoder = commandEncoder.beginRenderPass({
                 colorAttachments: [{
@@ -215,10 +216,11 @@ export class Renderer {
             passEncoder.draw(4);
             passEncoder.end();
 
-            this.device.queue.submit([commandEncoder.finish()]);
-
             srcView = dstView; // The destination of this pass is the source for the next
         }
+
+        // 5. Submit all recorded commands at once
+        this.device.queue.submit([commandEncoder.finish()]);
     }
     private async createResources(): Promise<void> {
         // Now with mipmapping support
@@ -259,7 +261,7 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = this.context.getCurrentTexture().createView();
         const passEncoder = commandEncoder.beginRenderPass({
-            colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1 } }]
+            colorAttachments: [{ view: textureView, loadOp: 'clear', storeOp: 'store', clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1 } }]
         });
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
