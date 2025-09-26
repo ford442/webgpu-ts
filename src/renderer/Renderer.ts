@@ -20,11 +20,6 @@ export class Renderer {
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
 
-    private minDepth = 0.0;
-    private maxDepth = 1.0;
-    private averageDepth = 0.5;
-    
-    // We now have two depth textures for our ping-pong system
     private depthTextureRead!: GPUTexture;
     private depthTextureWrite!: GPUTexture;
 
@@ -129,12 +124,6 @@ export class Renderer {
     this.createBindGroups();
   }
     
-    public setDepthStats(min: number, max: number, average: number): void {
-        this.minDepth = min;
-        this.maxDepth = max;
-        this.averageDepth = average;
-    }
-    
     private async createResources(): Promise<void> {
         const { width, height } = this.canvas;
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
@@ -143,7 +132,7 @@ export class Renderer {
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     
         // --- MODIFIED: Start of changes ---
         // Create placeholder 1x1 depth textures. They will be replaced by the AI model's output.
@@ -271,7 +260,7 @@ export class Renderer {
             } else if (mode === 'liquid' && computeBG) {
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
-                const computeUniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
+                const computeUniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
                 computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
                 computeUniformArray.set([this.averageDepth, this.minDepth, this.maxDepth, 0.0], 4);
                 const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
@@ -279,7 +268,7 @@ export class Renderer {
                     const point = this.ripplePoints[i];
                     rippleData.set([point.x, point.y, point.startTime], i * 4);
                 }
-                computeUniformArray.set(rippleData, 8);
+                computeUniformArray.set(rippleData, 4);
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
                 computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeBG);
