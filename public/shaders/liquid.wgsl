@@ -22,7 +22,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
   var ambientDisplacement = vec2<f32>(0.0, 0.0);
 
-  // --- Edge Detection (for occlusion) ---
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
   let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(0.0, pixel_size.y), 0.0).r;
   let depth_down = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(0.0, pixel_size.y), 0.0).r;
@@ -31,19 +30,29 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   
   let depthFactor = 1.0 - center_depth; 
 
-  // --- Directional Breathing (same as before) ---
+  // --- MODIFIED: Start of Directional Breathing Logic ---
   let time = currentTime * 0.5;
   let ambient_strength = 0.02 * depthFactor;
   let ambient_freq = 15.0;
+
+  // Motion patterns remain the same
   let motion_far = vec2<f32>(sin(uv.y * ambient_freq * 0.8 + time * 0.8), 0.0);
   let motion_close = vec2<f32>(0.0, cos(uv.x * ambient_freq * 1.2 + time * 1.2));
-  let mixed_motion = mix(motion_far, motion_close, smoothstep(0.25, 0.75, center_depth));
-  
-  // Calculate the potential displacement before applying occlusion
-  ambientDisplacement = mixed_motion * ambient_strength;
 
-  // --- MODIFIED: Start of NEW Occlusion Logic ---
-  // Check if there is a foreground object nearby
+  // 1. Sharpen the transition band
+  // The blend now happens over a much narrower depth range (0.4 to 0.6 instead of 0.25 to 0.75).
+  let transition_factor = smoothstep(0.4, 0.6, center_depth);
+  let mixed_motion = mix(motion_far, motion_close, transition_factor);
+
+  // 2. Add a strength boost to the foreground
+  // This increases the motion strength by up to 50% for the very closest objects.
+  let strength_boost = mix(1.0, 1.5, transition_factor);
+  
+  // Calculate the final potential displacement with the boost applied
+  ambientDisplacement = mixed_motion * ambient_strength * strength_boost;
+  // --- MODIFIED: End of Directional Breathing Logic ---
+
+  // --- Occlusion Logic (remains unchanged) ---
   let foreground_influence = 
       max(0.0, depth_up - center_depth) +
       max(0.0, depth_down - center_depth) +
@@ -51,25 +60,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       max(0.0, depth_right - center_depth);
 
   if (foreground_influence > 0.05) {
-      // Calculate the depth gradient. This vector points "uphill" from the background toward the foreground.
       let grad_x = (depth_right - depth_left);
       let grad_y = (depth_up - depth_down);
       let gradient = normalize(vec2<f32>(grad_x, grad_y));
-
-      // Project the displacement vector onto the gradient.
       let projection = dot(ambientDisplacement, gradient);
 
-      // If the displacement is trying to flow INTO the foreground (projection > 0),
-      // subtract that component from the displacement vector.
       if (projection > 0.0) {
-        // This effectively removes any motion directed into the foreground,
-        // leaving only the motion that is parallel to the edge.
         ambientDisplacement = ambientDisplacement - projection * gradient;
       }
   }
-  // --- MODIFIED: End of NEW Occlusion Logic ---
   
-  // --- Click Ripples (This part remains unchanged) ---
+  // --- Click Ripples (remains unchanged) ---
   let rippleCount = u32(u.config.y);
   for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
     let rippleData = u.ripples[i];
@@ -97,7 +98,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
   }
   
-  // --- Advection (This part remains unchanged) ---
+  // --- Advection (remains unchanged) ---
   let totalDisplacement = mouseDisplacement + ambientDisplacement;
   let colorDisplacedUV = uv + totalDisplacement;
   let color = textureSampleLevel(readTexture, u_sampler, colorDisplacedUV, 0.0);
