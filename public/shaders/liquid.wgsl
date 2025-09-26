@@ -7,7 +7,7 @@
 
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
-  depth_stats: vec4<f32>,          // average_depth, unused, unused, unused
+  depth_stats: vec4<f32>,          // average_depth, min_depth, max_depth, unused
   ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
 };
 
@@ -31,30 +31,36 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   
   let base_ambient_strength = 0.015; 
   let ambient_freq = 15.0;
+// --- MODIFIED: Start of new logic ---
+  // Motion directions are the same as you requested
+  let motion_background = vec2<f32>(0.0, cos(uv.x * ambient_freq + time));
+  let motion_foreground = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0);
 
-  let motion_far = vec2<f32>(0.0, cos(uv.x * ambient_freq + currentTime));
-  let motion_close = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + currentTime * 1.2), 0.0);
+  // Get the real depth range from the uniforms
+  let min_depth = u.depth_stats.y;
+  let max_depth = u.depth_stats.z;
+  let depth_range = max_depth - min_depth;
 
-  // --- MODIFIED: Start of new logic ---
-  let raw_avg_depth = u.depth_stats.x;
+  // Define the boundaries for the three zones
+  let background_end = min_depth + depth_range * 0.33;
+  let foreground_start = max_depth - depth_range * 0.33;
 
-  // Stabilize the split point by blending the image's true average with a fixed midpoint of 0.5.
-  // This pulls the split point towards the center and prevents extreme depth distributions
-  // from making one motion type dominate the entire image. We trust the image's average for 75% of the decision.
-  let split_point = mix(0.5, raw_avg_depth, 0.75);
+  // Calculate the influence of each motion type based on the current pixel's depth
+  // `1.0 - smoothstep(...)` creates a fade-out effect.
+  let background_influence = 1.0 - smoothstep(min_depth, background_end, center_depth);
+  // `smoothstep(...)` creates a fade-in effect.
+  let foreground_influence = smoothstep(foreground_start, max_depth, center_depth);
+  
+  // Combine the motions. In the middle zone, both influences will be low.
+  let mixed_motion = (motion_background * background_influence) + (motion_foreground * foreground_influence);
+  
+  // Calculate a "quiet zone" factor for the middle
+  // This will be 1.0 at the edges and dip down to 0.5 in the very center of the mid-ground.
+  let mid_quiet_factor = 1.0 - (1.0 - smoothstep(background_end, (background_end + foreground_start) / 2.0, center_depth)) * (smoothstep(foreground_start, (background_end + foreground_start) / 2.0, center_depth));
 
-  // Widen the transition slightly for a smoother, more pleasing blend
-  let transition_width = 0.3; 
-  let transition_start = split_point - (transition_width / 2.0);
-  let transition_end = split_point + (transition_width / 2.0);
-  let transition_factor = smoothstep(transition_start, transition_end, center_depth);
+  // Apply the base strength and the quiet factor
+  ambientDisplacement = mixed_motion * base_ambient_strength * (mid_quiet_factor * 0.5 + 0.5);
   // --- MODIFIED: End of new logic ---
-
-  let mixed_motion = mix(motion_far, motion_close, transition_factor);
-  
-  let strength_modifier = mix(1.0, 1.5, transition_factor);
-  
-  ambientDisplacement = mixed_motion * base_ambient_strength * strength_modifier;
 
   let foreground_influence = 
       max(0.0, depth_up - center_depth) +
