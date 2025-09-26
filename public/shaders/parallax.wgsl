@@ -42,7 +42,7 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     var currentRayDepth = 0.0;
     var currentUV = fragUV;
     
-    var currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r * occlusionStrength;
+        currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r;
 
     for (var i: i32 = 0; i < maxSteps; i = i + 1) {
         if (currentRayDepth >= currentDepthMapValue) { break; }
@@ -54,7 +54,7 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     // --- Refine Intersection ---
     let prevUV = currentUV + parallaxDirection * stepSize;
     let prevRayDepth = currentRayDepth - stepSize;
-    let prevDepthMapValue = sample_at_level_zero(depthMap, u_sampler, prevUV).r * occlusionStrength;
+    let prevDepthMapValue = sample_at_level_zero(depthMap, u_sampler, prevUV).r;
     
     let weight = (prevDepthMapValue - prevRayDepth) / ((prevDepthMapValue - prevRayDepth) - (currentDepthMapValue - currentRayDepth) + 0.0001);
     let finalUV = mix(prevUV, currentUV, saturate(weight));
@@ -72,7 +72,7 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     var shadow = 1.0; // 1.0 = lit, 0.0 = shadowed
 
     for (var j: i32 = 0; j < maxSteps / 2; j = j + 1) {
-        let shadowDepthMapValue = sample_at_level_zero(depthMap, u_sampler, shadowUV).r * occlusionStrength;
+        let shadowDepthMapValue = sample_at_level_zero(depthMap, u_sampler, shadowUV).r;
         // THE FIX IS HERE: Changed > to <
         if (shadowDepthMapValue > shadowRayDepth) {
             shadow = 0.0; // The surface is occluded, so it's in shadow.
