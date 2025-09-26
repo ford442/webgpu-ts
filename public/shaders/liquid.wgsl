@@ -22,50 +22,52 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
   var ambientDisplacement = vec2<f32>(0.0, 0.0);
 
-  // --- MODIFIED: Start of Occlusion Logic ---
-  // Sample depth at the current pixel and its immediate neighbors
+  // --- Edge Detection (for occlusion) ---
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
   let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(0.0, pixel_size.y), 0.0).r;
   let depth_down = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(0.0, pixel_size.y), 0.0).r;
   let depth_left = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(pixel_size.x, 0.0), 0.0).r;
   let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(pixel_size.x, 0.0), 0.0).r;
+  
+  let depthFactor = 1.0 - center_depth; 
 
-  // Check if any neighbors are significantly in front of the current pixel.
-  // max(0.0, ...) ensures we only get positive values (foreground influence).
+  // --- Directional Breathing (same as before) ---
+  let time = currentTime * 0.5;
+  let ambient_strength = 0.02 * depthFactor;
+  let ambient_freq = 15.0;
+  let motion_far = vec2<f32>(sin(uv.y * ambient_freq * 0.8 + time * 0.8), 0.0);
+  let motion_close = vec2<f32>(0.0, cos(uv.x * ambient_freq * 1.2 + time * 1.2));
+  let mixed_motion = mix(motion_far, motion_close, smoothstep(0.25, 0.75, center_depth));
+  
+  // Calculate the potential displacement before applying occlusion
+  ambientDisplacement = mixed_motion * ambient_strength;
+
+  // --- MODIFIED: Start of NEW Occlusion Logic ---
+  // Check if there is a foreground object nearby
   let foreground_influence = 
       max(0.0, depth_up - center_depth) +
       max(0.0, depth_down - center_depth) +
       max(0.0, depth_left - center_depth) +
       max(0.0, depth_right - center_depth);
-  
-  // Create an occlusion factor. If foreground influence is high, this factor will be close to 0.
-  // This will dampen the motion of pixels that are "behind" others.
-  let occlusion_factor = 1.0 - smoothstep(0.05, 0.2, foreground_influence);
-  // --- MODIFIED: End of Occlusion Logic ---
 
+  if (foreground_influence > 0.05) {
+      // Calculate the depth gradient. This vector points "uphill" from the background toward the foreground.
+      let grad_x = (depth_right - depth_left);
+      let grad_y = (depth_up - depth_down);
+      let gradient = normalize(vec2<f32>(grad_x, grad_y));
 
-  let depthFactor = 1.0 - center_depth; 
+      // Project the displacement vector onto the gradient.
+      let projection = dot(ambientDisplacement, gradient);
 
-  // --- MODIFIED: Start of Directional Breathing Logic ---
-  let time = currentTime * 0.5;
-  var ambient_strength = 0.02 * depthFactor;
-  let ambient_freq = 15.0;
-
-  // Define two different motion patterns.
-  // Pattern 1: A slower, horizontal wave for the background.
-  let motion_far = vec2<f32>(sin(uv.y * ambient_freq * 0.8 + time * 0.8), 0.0);
-  // Pattern 2: A slightly faster, vertical wave for the foreground.
-  let motion_close = vec2<f32>(0.0, cos(uv.x * ambient_freq * 1.2 + time * 1.2));
-
-  // Blend between the two patterns based on the pixel's depth.
-  // smoothstep creates a nice transition in the mid-ground.
-  let mixed_motion = mix(motion_far, motion_close, smoothstep(0.25, 0.75, center_depth));
-  
-  // Apply the occlusion factor to the final strength.
-  ambient_strength = ambient_strength * occlusion_factor;
-
-  ambientDisplacement += mixed_motion * ambient_strength;
-  // --- MODIFIED: End of Directional Breathing Logic ---
+      // If the displacement is trying to flow INTO the foreground (projection > 0),
+      // subtract that component from the displacement vector.
+      if (projection > 0.0) {
+        // This effectively removes any motion directed into the foreground,
+        // leaving only the motion that is parallel to the edge.
+        ambientDisplacement = ambientDisplacement - projection * gradient;
+      }
+  }
+  // --- MODIFIED: End of NEW Occlusion Logic ---
   
   // --- Click Ripples (This part remains unchanged) ---
   let rippleCount = u32(u.config.y);
