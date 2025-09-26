@@ -12,19 +12,16 @@ function App() {
     const debugCanvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<any>(null);
     
-    const [parallaxStrength, setParallaxStrength] = useState(0.05);
-    const [numSteps, setNumSteps] = useState(32);
-    const [occlusionStrength, setOcclusionStrength] = useState(0.3);
-    const [ambientLight, setAmbientLight] = useState(0.3);
+    // New state for displacement
+    const [displacementScale, setDisplacementScale] = useState(0.3);
+    const [ambientLight, setAmbientLight] = useState(0.2);
     
     useEffect(() => {
         rendererRef.current?.updateParams({
-            strength: parallaxStrength, 
-            layers: numSteps,
-            occlusion: occlusionStrength, 
+            displacementScale: displacementScale, 
             ambient: ambientLight
         });
-    }, [parallaxStrength, numSteps, occlusionStrength, ambientLight]);
+    }, [displacementScale, ambientLight]);
 
     useEffect(() => {
         if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
@@ -122,7 +119,7 @@ function App() {
 
     return (
         <div id="app-container">
-            <h1>WebGPU Viewer: Self-Shadowing Parallax</h1>
+            <h1>WebGPU Viewer: 3D Displacement Mapping</h1>
             <p><strong>Status:</strong> {status}</p>
             <Controls
                 imageUrl={imageUrl}
@@ -130,12 +127,8 @@ function App() {
                 onLoadModel={loadModel}
                 onAnalyze={() => handleAnalyzeUrl(imageUrl)}
                 onLoadRandom={handleLoadRandom}
-                parallaxStrength={parallaxStrength}
-                setParallaxStrength={setParallaxStrength}
-                occlusionStrength={occlusionStrength}
-                setOcclusionStrength={setOcclusionStrength}
-                numSteps={numSteps}
-                setNumSteps={setNumSteps}
+                displacementScale={displacementScale}
+                setDisplacementScale={setDisplacementScale}
                 ambientLight={ambientLight}
                 setAmbientLight={setAmbientLight}
             />
