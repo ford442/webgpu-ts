@@ -12,16 +12,17 @@ function App() {
     const debugCanvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<any>(null);
     
-    // New state for displacement
     const [displacementScale, setDisplacementScale] = useState(0.3);
     const [ambientLight, setAmbientLight] = useState(0.2);
+    const [smoothness, setSmoothness] = useState(1.0); // New state for smoothness
     
     useEffect(() => {
         rendererRef.current?.updateParams({
             displacementScale: displacementScale, 
-            ambient: ambientLight
+            ambient: ambientLight,
+            smoothness: smoothness // Pass smoothness to renderer
         });
-    }, [displacementScale, ambientLight]);
+    }, [displacementScale, ambientLight, smoothness]);
 
     useEffect(() => {
         if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
@@ -131,6 +132,8 @@ function App() {
                 setDisplacementScale={setDisplacementScale}
                 ambientLight={ambientLight}
                 setAmbientLight={setAmbientLight}
+                smoothness={smoothness}
+                setSmoothness={setSmoothness}
             />
             <WebGPUCanvas rendererRef={rendererRef} />
             {depthMapResult && (
