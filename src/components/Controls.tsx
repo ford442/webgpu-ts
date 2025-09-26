@@ -1,52 +1,75 @@
 import React from 'react';
+import { RenderMode } from '../renderer/Renderer';
 
 interface ControlsProps {
-    imageUrl: string;
-    setImageUrl: (url: string) => void;
-    onLoadModel: () => void;
-    onAnalyze: (url: string) => void;
-    onLoadRandom: () => void;
-    parallaxStrength: number;
-    setParallaxStrength: (value: number) => void;
-    occlusionStrength: number;
-    setOcclusionStrength: (value: number) => void;
-    numSteps: number;
-    setNumSteps: (value: number) => void;
-    ambientLight: number;
-    setAmbientLight: (value: number) => void;
+    mode: RenderMode;
+    setMode: (mode: RenderMode) => void;
+    zoom: number;
+    setZoom: (zoom: number) => void;
+    panX: number;
+    setPanX: (panX: number) => void;
+    panY: number;
+    setPanY: (panY: number) => void;
+    onNewImage: () => void;
+    autoChangeEnabled: boolean;
+    setAutoChangeEnabled: (enabled: boolean) => void;
+    autoChangeDelay: number;
+    setAutoChangeDelay: (delay: number) => void;
 }
 
-const Slider: React.FC<{label: string, value: number, onChange: (val: number) => void, min: string, max: string, step: string, id: string}> = ({ label, value, onChange, ...props }) => (
-    <div className="control-group">
-        <label htmlFor={props.id}>{label}:</label>
-        <input type="range" value={value} onChange={e => onChange(parseFloat(e.target.value))} {...props} />
-        <span>{value.toFixed(props.step.includes('0.000') ? 4 : (props.step.includes('0.00') ? 3 : 2))}</span>
-    </div>
-);
-
-const Controls: React.FC<ControlsProps> = ({
-    imageUrl, setImageUrl,
-    onLoadModel, onAnalyze,
-    onLoadRandom,
-    parallaxStrength, setParallaxStrength,
-    occlusionStrength, setOcclusionStrength,
-    numSteps, setNumSteps,
-    ambientLight, setAmbientLight
+const Controls: React.FC<ControlsProps> = ({ 
+    mode, setMode, 
+    zoom, setZoom, 
+    panX, setPanX, 
+    panY, setPanY, 
+    onNewImage,
+    autoChangeEnabled, setAutoChangeEnabled,
+    autoChangeDelay, setAutoChangeDelay
 }) => {
+    const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple' || mode === 'depth';
+
     return (
         <div className="controls">
             <div className="control-group">
-                <button onClick={onLoadModel}>1. Load Model</button>
-                <button onClick={onLoadRandom}>Load Random Image</button>
+                <label htmlFor="mode-select">Render Mode:</label>
+                <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
+                    <option value="shader">Galaxy Shader</option>
+                    <option value="image">Static Image</option>
+                    <option value="ripple">Ripple Effect</option>
+                    <option value="video">Video Texture</option>
+                    <option value="liquid">Liquid (Interactive)</option>
+                    <option value="depth">Depth Parallax</option>
+                </select>
+            </div>
+             {isImageMode && (
+                <>
+                    <div className="control-group">
+                        <button onClick={onNewImage}>New Image & Depth Map</button>
+                    </div>
+                    <div className="control-group">
+                        <label htmlFor="auto-change-toggle">Auto Change:</label>
+                        <input type="checkbox" id="auto-change-toggle" checked={autoChangeEnabled} onChange={(e) => setAutoChangeEnabled(e.target.checked)} />
+                    </div>
+                    {autoChangeEnabled && (
+                        <div className="control-group">
+                            <label htmlFor="delay-slider">Delay ({autoChangeDelay}s):</label>
+                            <input type="range" id="delay-slider" min="1" max="10" step="1" value={autoChangeDelay} onChange={(e) => setAutoChangeDelay(Number(e.target.value))} />
+                        </div>
+                    )}
+                </>
+            )}
+            <div className="control-group">
+                <label htmlFor="zoom-slider">Zoom:</label>
+                <input type="range" id="zoom-slider" min="50" max="200" value={zoom * 100} onChange={(e) => setZoom(parseFloat(e.target.value) / 100)} />
             </div>
             <div className="control-group">
-                <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} style={{ width: '400px' }} />
-                <button onClick={() => onAnalyze(imageUrl)}>2. Analyze from URL</button>
+                <label htmlFor="pan-x-slider">Pan X:</label>
+                <input type="range" id="pan-x-slider" min="0" max="200" value={panX * 100} onChange={(e) => setPanX(parseFloat(e.target.value) / 100)} />
             </div>
-            <Slider label="Parallax Strength" id="p_str" value={parallaxStrength} onChange={setParallaxStrength} min="0" max="0.2" step="0.005" />
-            <Slider label="Occlusion Strength" id="p_occ" value={occlusionStrength} onChange={setOcclusionStrength} min="0" max="1.0" step="0.01" />
-            <Slider label="Raymarching Steps" id="p_steps" value={numSteps} onChange={setNumSteps} min="4" max="64" step="1" />
-            <Slider label="Ambient Light" id="p_amb" value={ambientLight} onChange={setAmbientLight} min="0" max="1.0" step="0.01" />
+            <div className="control-group">
+                <label htmlFor="pan-y-slider">Pan Y:</label>
+                <input type="range" id="pan-y-slider" min="0" max="200" value={panY * 100} onChange={(e) => setPanY(parseFloat(e.target.value) / 100)} />
+            </div>
         </div>
     );
 };
