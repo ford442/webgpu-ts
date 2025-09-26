@@ -87,8 +87,6 @@ function App() {
         if (depthEstimator) {
             await runDepthAnalysis(newImageUrl);
         } else {
-            // If no model, just recreate the bind groups for the new image.
-            rendererRef.current.createBindGroups();
             setStatus('Ready. Load AI model to add depth effects.');
         }
     } else {
