@@ -40,7 +40,10 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     let x = in_vertex_index % GRID_SIZE;
     let y = in_vertex_index / GRID_SIZE;
     let uv = vec2<f32>(f32(x) / f32(GRID_SIZE - 1u), f32(y) / f32(GRID_SIZE - 1u));
-    let texelSize = 1.0 / vec2<f32>(GRID_SIZE - 1u);
+    
+    // --- FIX IS HERE ---
+    // Explicitly cast the u32 integer to an f32 float before creating the vector
+    let texelSize = 1.0 / vec2<f32>(f32(GRID_SIZE - 1u));
 
     // === Normal Calculation ===
     let hL = sample_depth(uv - vec2<f32>(texelSize.x, 0.0));
