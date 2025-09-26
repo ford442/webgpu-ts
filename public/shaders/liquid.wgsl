@@ -5,6 +5,7 @@
 @group(0) @binding(5) var non_filtering_sampler: sampler;
 @group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
 
+// Revert the Uniforms struct to its original simple form
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
   ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
@@ -27,7 +28,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // Define the three distinct motion types
   let motion_background = vec2<f32>(0.0, cos(uv.x * ambient_freq + time)); // Up/Down
   let motion_foreground = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0); // Left/Right
-  let motion_mid = vec2<f32>(cos(time * 0.4), sin(time * 0.4)); // Slow, circular motion for mid-ground
+  let motion_mid = vec2<f32>(cos(time * 0.4), sin(time * 0.4)); // Slow, circular motion
 
   // Define the zone boundaries with a small overlap for smooth blending
   let background_end = 0.33;
@@ -37,10 +38,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // Calculate the influence (from 0.0 to 1.0) for each zone
   let background_influence = 1.0 - smoothstep(background_end - blend_width, background_end + blend_width, center_depth);
   let foreground_influence = smoothstep(foreground_start - blend_width, foreground_start + blend_width, center_depth);
-  // Mid-ground is active when neither background nor foreground are
+  // The mid-ground is active only when the other two are not
   let mid_influence = (1.0 - background_influence) * (1.0 - foreground_influence);
 
-  // Combine the motions based on their influence
+  // Combine the motions based on their influence factors
   var mixed_motion = (motion_background * background_influence) + 
                      (motion_foreground * foreground_influence) +
                      (motion_mid * mid_influence * 0.4); // Mid-ground motion is at 40% strength
@@ -79,7 +80,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   }
   
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
-  let rippleCount = u32(u.config.y); // Corrected: rippleCount is the second uniform value
+  let rippleCount = u32(u.config.y);
   for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
     let rippleData = u.ripples[i];
     let rippleCenter = rippleData.xy;
@@ -113,5 +114,5 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
   let depthDisplacedUV = uv + mouseDisplacement;
   let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthDisplacedUV, 0.0).r;
-  textureStore(writeTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
+  textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
 }
