@@ -1,6 +1,6 @@
 export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid' | 'depth';
 
-const GRID_SIZE = 128; // Must match GRID_SIZE in the shader
+const GRID_SIZE = 256; // Must match GRID_SIZE in the shader
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -15,7 +15,7 @@ export class Renderer {
     private uniformBuffer!: GPUBuffer;
 
     private mouseState = { x: 0.5, y: 0.5 };
-    private params = { displacementScale: 0.3, ambient: 0.3 };
+    private params = { displacementScale: 0.3, ambient: 0.3, smoothness: 1.0 }; // Add smoothness
     public isReady = false;
     private imageUrls: string[] = [];
 
@@ -52,7 +52,7 @@ export class Renderer {
     }
 
     public async loadRandomImage(): Promise<string | null> {
-        this.isReady = false; // Immediately stop rendering
+        this.isReady = false; 
         try {
             if (this.imageUrls.length === 0) return null;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
@@ -98,7 +98,7 @@ export class Renderer {
     }
 
     public async loadImage(imageUrl: string): Promise<void> {
-        this.isReady = false; // Immediately stop rendering
+        this.isReady = false; 
         try {
             const urlToFetch = imageUrl.startsWith('https://storage.googleapis.com/') ? imageUrl : `https://corsproxy.io/?${encodeURIComponent(imageUrl)}`;
             const response = await fetch(urlToFetch);
@@ -118,7 +118,7 @@ export class Renderer {
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.uniformBuffer = this.device.createBuffer({
-            size: 16, // 2 floats for mouse, 1 for scale, 1 for light = 4 * 4 bytes
+            size: 32, // Increased size for new float: 2+1+1+1 + padding = 5 floats -> 8 floats with padding
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
     }
@@ -166,13 +166,14 @@ export class Renderer {
             new Float32Array([
                 this.mouseState.x, this.mouseState.y,
                 this.params.displacementScale,
-                this.params.ambient
+                this.params.ambient,
+                this.params.smoothness
             ])
         );
 
         passEncoder.setPipeline(this.pipelines.get('depth')!);
         passEncoder.setBindGroup(0, this.bindGroups.get('depth')!);
-        passEncoder.draw(GRID_SIZE * GRID_SIZE); // Draw all vertices in the grid
+        passEncoder.draw(GRID_SIZE * GRID_SIZE);
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
     }
