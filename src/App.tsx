@@ -1,34 +1,59 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
-import { RenderMode } from './renderer/Renderer';
 import './style.css';
-
 import { pipeline } from '@xenova/transformers';
 
-// Define a clear type for our depth map data for better type safety.
-interface DepthMapData {
-    predicted_depth: {
-        data: Float32Array;
-        width: number;
-        height: number;
-    }
-}
-
 function App() {
-    const [mode, setMode] = useState<RenderMode>('depth');
-    const [zoom, setZoom] = useState(1.0);
-    const [panX, setPanX] = useState(0.5);
-    const [panY, setPanY] = useState(0.5);
-    const [imageVersion, setImageVersion] = useState(0);
+    const [status, setStatus] = useState('Click "Load Model" to start.');
     const [imageUrl, setImageUrl] = useState('https://i.imgur.com/vCNL2sT.jpeg');
-    
     const [depthEstimator, setDepthEstimator] = useState<any>(null);
-    // Use our new interface for the state, allowing it to be DepthMapData or null.
-    const [depthMap, setDepthMap] = useState<DepthMapData | null>(null);
-    const [status, setStatus] = useState('Loading Model...');
+    const [depthMapResult, setDepthMapResult] = useState<any>(null);
+    const debugCanvasRef = useRef<HTMLCanvasElement>(null);
+    const rendererRef = useRef<any>(null);
+    
+    const [parallaxStrength, setParallaxStrength] = useState(0.05);
+    const [numSteps, setNumSteps] = useState(32);
+    const [occlusionStrength, setOcclusionStrength] = useState(0.3);
+    const [ambientLight, setAmbientLight] = useState(0.3);
+    
+    useEffect(() => {
+        rendererRef.current?.updateParams({
+            strength: parallaxStrength, 
+            layers: numSteps,
+            occlusion: occlusionStrength, 
+            ambient: ambientLight
+        });
+    }, [parallaxStrength, numSteps, occlusionStrength, ambientLight]);
 
-    // Load the AI model
+    useEffect(() => {
+        if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
+            const { data, dims } = depthMapResult.predicted_depth;
+            const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
+            const canvas = debugCanvasRef.current;
+            const context = canvas.getContext('2d');
+            if (!width || !height || !context) return;
+            
+            const imageData = context.createImageData(width, height);
+            let min = Infinity, max = -Infinity;
+            data.forEach((v: number) => {
+                if (v < min) min = v;
+                if (v > max) max = v;
+            });
+            const range = max - min;
+            for (let i = 0; i < data.length; ++i) {
+                const value = Math.round(((data[i] - min) / range) * 255);
+                imageData.data[i * 4 + 0] = value; 
+                imageData.data[i * 4 + 1] = value;
+                imageData.data[i * 4 + 2] = value; 
+                imageData.data[i * 4 + 3] = 255;
+            }
+            canvas.width = width; 
+            canvas.height = height;
+            context.putImageData(imageData, 0, 0);
+        }
+    }, [depthMapResult]);
+
     const loadModel = async () => {
         if (depthEstimator) { setStatus('Model already loaded.'); return; }
         try {
@@ -42,97 +67,85 @@ function App() {
         }
     };
 
-    // Function to run depth estimation with robust error handling.
-    const runDepthEstimation = useCallback(async (url: string) => {
-        if (!depthEstimator) return;
-        setStatus('Analyzing Image...');
+    const runDepthAnalysis = useCallback(async (url: string) => {
+        if (!depthEstimator || !rendererRef.current) return;
+        setStatus('Analyzing Image with AI model...');
         try {
             const result = await depthEstimator(url);
+            const { data, dims } = result.predicted_depth;
+            const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
+
+            setStatus('Updating depth map on GPU...');
+            rendererRef.current.updateDepthMap(data, width, height);
+            rendererRef.current.createBindGroups();
             
-            const rawDepth = result.predicted_depth.data as Float32Array;
-            let minDepth = Infinity;
-            let maxDepth = -Infinity;
+            if (!rendererRef.current.isReady) throw new Error("Bind group creation failed.");
 
-            for (let i = 0; i < rawDepth.length; i++) {
-                const val = rawDepth[i];
-                if (isFinite(val)) {
-                    if (val < minDepth) minDepth = val;
-                    if (val > maxDepth) maxDepth = val;
-                }
-            }
-            
-            if (!isFinite(minDepth)) {
-                console.error("Depth estimation resulted in non-finite data. Using a flat map as a fallback.");
-                const flatDepth = new Float32Array(rawDepth.length).fill(0.5);
-                setDepthMap({ // This call should now compile correctly.
-                    predicted_depth: {
-                        data: flatDepth,
-                        width: result.predicted_depth.width,
-                        height: result.predicted_depth.height,
-                    }
-                });
-                setStatus('Ready (using fallback depth)');
-                return;
-            }
-
-            const normalizedDepth = new Float32Array(rawDepth.length);
-            const range = maxDepth - minDepth;
-
-            for (let i = 0; i < rawDepth.length; i++) {
-                const val = rawDepth[i];
-                if (isFinite(val) && range > 0) {
-                    normalizedDepth[i] = 1.0 - (val - minDepth) / range;
-                } else {
-                    normalizedDepth[i] = 0.5; 
-                }
-            }
-
-            const normalizedResult = {
-                predicted_depth: {
-                    data: normalizedDepth,
-                    width: result.predicted_depth.width,
-                    height: result.predicted_depth.height
-                }
-            };
-            
-            setDepthMap(normalizedResult);
-            setStatus('Ready');
-        } catch (e) {
-            console.error(e);
-            setStatus('Failed to analyze image.');
+            setDepthMapResult(result);
+            setStatus('Ready. Move mouse over the image.');
+        } catch (e: any) {
+            console.error("Error during analysis:", e);
+            setStatus(`Failed to analyze image: ${e.message}`);
         }
-        // Added state setters to the dependency array for completeness.
-    }, [depthEstimator, setStatus, setDepthMap]);
+    }, [depthEstimator]);
 
-    const handleNewImage = () => {
-        setImageVersion(v => v + 1);
-        runDepthEstimation(imageUrl);
-    };
+    const handleAnalyzeUrl = useCallback(async (url: string) => {
+        if (!rendererRef.current || !url || !depthEstimator) {
+            setStatus("Please load the model first and enter a URL.");
+            return;
+        }
+        setStatus('Loading image from URL...');
+        await rendererRef.current.loadImage(url);
+        await runDepthAnalysis(url);
+    }, [runDepthAnalysis, depthEstimator]);
+
+    const handleLoadRandom = useCallback(async () => {
+        if (!rendererRef.current || !depthEstimator) {
+            setStatus("Please load the model first.");
+            return;
+        }
+        setStatus('Loading random image...');
+        const newImageUrl = await rendererRef.current.loadRandomImage();
+        if (newImageUrl) {
+            setImageUrl(newImageUrl);
+            await runDepthAnalysis(newImageUrl);
+        } else {
+            setStatus('Failed to load a random image.');
+        }
+    }, [runDepthAnalysis, depthEstimator]);
+
+    useEffect(() => {
+        if (depthEstimator) {
+            handleAnalyzeUrl(imageUrl);
+        }
+    }, [depthEstimator, handleAnalyzeUrl]);
 
     return (
         <div id="app-container">
-            <h1>React, WebGPU & Transformers.js</h1>
+            <h1>WebGPU Viewer: Self-Shadowing Parallax</h1>
             <p><strong>Status:</strong> {status}</p>
             <Controls
-                mode={mode} setMode={setMode}
-                zoom={zoom} setZoom={setZoom}
-                panX={panX} setPanX={setPanX}
-                panY={panY} setPanY={setPanY}
-                onNewImage={handleNewImage}
-                autoChangeEnabled={false}
-                setAutoChangeEnabled={() => {}}
-                autoChangeDelay={5}
-                setAutoChangeDelay={() => {}}
-            />
-            <WebGPUCanvas
-                mode={mode}
-                zoom={zoom}
-                panX={panX}
-                panY={panY}
-                imageVersion={imageVersion}
                 imageUrl={imageUrl}
-                depthMap={depthMap}
+                setImageUrl={setImageUrl}
+                onLoadModel={loadModel}
+                onAnalyze={() => handleAnalyzeUrl(imageUrl)}
+                onLoadRandom={handleLoadRandom}
+                parallaxStrength={parallaxStrength}
+                setParallaxStrength={setParallaxStrength}
+                occlusionStrength={occlusionStrength}
+                setOcclusionStrength={setOcclusionStrength}
+                numSteps={numSteps}
+                setNumSteps={setNumSteps}
+                ambientLight={ambientLight}
+                setAmbientLight={setAmbientLight}
             />
+            <WebGPUCanvas rendererRef={rendererRef} />
+            {depthMapResult && (
+                <div style={{ marginTop: '20px' }}>
+                    <h2>AI Model Output (Debug Depth Map)</h2>
+                    <canvas ref={debugCanvasRef} style={{ border: '1px solid grey', maxWidth: '100%', height: 'auto' }} />
+                </div>
+            )}
         </div>
     );
 }
