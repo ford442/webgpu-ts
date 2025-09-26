@@ -3,90 +3,80 @@
 @group(0) @binding(2) var depthMap: texture_2d<f32>;
 
 struct Uniforms {
-    mouse_lightPos: vec4<f32>, // xy = mouse, zw = lightPos
-    params: vec4<f32>, // x: parallax, y: steps, z: occlusion, w: ambientLight
+    mouse: vec2<f32>,
+    displacementScale: f32,
+    ambientLight: f32,
 };
-
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) fragUV: vec2<f32>,
+    @location(1) depth: f32,
 };
+
+// We create a grid of vertices instead of a simple quad
+const GRID_SIZE = 128u;
 
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
+    let x = in_vertex_index % GRID_SIZE;
+    let y = in_vertex_index / GRID_SIZE;
+
+    let uv = vec2<f32>(f32(x) / f32(GRID_SIZE - 1u), f32(y) / f32(GRID_SIZE - 1u));
+
+    let depthValue = textureSampleLevel(depthMap, u_sampler, uv, 0.0).r;
+
+    // Displace vertex along Z axis
+    let zDisplacement = depthValue * u.displacementScale;
+
+    // Create a basic 3D perspective
+    let aspect = 1.0; // Assuming square canvas for simplicity, can be passed as uniform
+    let fov = 1.5; // Field of view
+    let near = 0.1;
+    let far = 10.0;
+
+    let projectedX = (uv.x * 2.0 - 1.0) * aspect;
+    let projectedY = (uv.y * 2.0 - 1.0);
+
+    // Simple rotation based on mouse position
+    let angleX = (u.mouse.y - 0.5) * 2.0;
+    let angleY = (u.mouse.x - 0.5) * 2.0;
+    let cosX = cos(angleX);
+    let sinX = sin(angleX);
+    let cosY = cos(angleY);
+    let sinY = sin(angleY);
+
+    var pos = vec3<f32>(projectedX, projectedY, zDisplacement - 0.5);
+
+    // Rotate Y
+    pos = vec3<f32>(
+        pos.x * cosY - pos.z * sinY,
+        pos.y,
+        pos.x * sinY + pos.z * cosY
+    );
+    // Rotate X
+    pos = vec3<f32>(
+        pos.x,
+        pos.y * cosX - pos.z * sinX,
+        pos.y * sinX + pos.z * cosX
+    );
+
     var output: VertexOutput;
-    let x = f32(in_vertex_index % 2u) * 2.0 - 1.0;
-    let y = f32(in_vertex_index / 2u) * -2.0 + 1.0;
-    output.position = vec4<f32>(x, y, 0.0, 1.0);
-    output.fragUV = vec2<f32>((x + 1.0) * 0.5, (y - 1.0) * -0.5);
+    output.position = vec4<f32>(pos.x, pos.y, pos.z, 1.0);
+    output.fragUV = uv;
+    output.depth = depthValue; // Pass depth to fragment shader for lighting
     return output;
 }
 
-fn sample_at_level_zero(tex: texture_2d<f32>, smp: sampler, uv: vec2<f32>) -> vec4<f32> {
-    return textureSampleLevel(tex, smp, clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0);
-}
-
 @fragment
-fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
-    let parallaxStrength = u.params.x;
-    let numSteps = u.params.y;
-    let occlusionStrength = u.params.z;
-    let ambientLight = u.params.w;
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    let textureColor = textureSample(sourceImage, u_sampler, in.fragUV).rgb;
     
-    // === 1. Parallax Occlusion Mapping (Find Surface Point) ===
-    let parallaxDirection = (vec2<f32>(0.5) - u.mouse_lightPos.xy) * parallaxStrength;
+    // Basic lighting based on depth
+    let lighting = in.depth * (1.0 - u.ambientLight) + u.ambientLight;
     
-    let maxSteps = i32(numSteps);
-    let stepSize = 1.0 / f32(maxSteps);
-    var currentRayDepth = 0.0;
-    var currentUV = fragUV;
+    let finalColor = textureColor * lighting;
     
-    var currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r;
-
-    for (var i: i32 = 0; i < maxSteps; i = i + 1) {
-        if (currentRayDepth >= currentDepthMapValue) { break; }
-        currentRayDepth += stepSize;
-        currentUV -= parallaxDirection * stepSize;
-        currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r * occlusionStrength;
-    }
-
-    // --- Refine Intersection ---
-    let prevUV = currentUV + parallaxDirection * stepSize;
-    let prevRayDepth = currentRayDepth - stepSize;
-    let prevDepthMapValue = sample_at_level_zero(depthMap, u_sampler, prevUV).r;
-    
-    let weight = (prevDepthMapValue - prevRayDepth) / ((prevDepthMapValue - prevRayDepth) - (currentDepthMapValue - currentRayDepth) + 0.0001);
-    let finalUV = mix(prevUV, currentUV, saturate(weight));
-    let surfaceDepth = mix(prevRayDepth, currentRayDepth, saturate(weight));
-
-    // === 2. Self-Shadowing Calculation ===
-    let lightPos = u.mouse_lightPos.zw;
-    let surfaceToLight = lightPos - finalUV;
-    let lightDist = length(surfaceToLight);
-    let lightDir = normalize(surfaceToLight);
-    
-    let shadowStepSize = lightDist / f32(maxSteps / 2);
-    var shadowRayDepth = surfaceDepth + 0.01; // Start just above the surface.
-    var shadowUV = finalUV + lightDir * shadowStepSize;
-    var shadow = 1.0; // 1.0 = lit, 0.0 = shadowed
-
-    for (var j: i32 = 0; j < maxSteps / 2; j = j + 1) {
-        let shadowDepthMapValue = sample_at_level_zero(depthMap, u_sampler, shadowUV).r;
-        // THE FIX IS HERE: Changed > to <
-        if (shadowDepthMapValue > shadowRayDepth) {
-            shadow = 0.0; // The surface is occluded, so it's in shadow.
-            break;
-        }
-        shadowUV += lightDir * shadowStepSize;
-        shadowRayDepth += shadowStepSize;
-    }
-    
-    // === 3. Combine Lighting and Final Color ===
-    let litColor = sample_at_level_zero(sourceImage, u_sampler, finalUV).rgb;
-    let lighting = ambientLight + (1.0 - ambientLight) * shadow;
-    let finalColor = litColor * lighting;
-
     return vec4<f32>(finalColor, 1.0);
 }
