@@ -10,6 +10,8 @@ interface ControlsProps {
     setDisplacementScale: (value: number) => void;
     ambientLight: number;
     setAmbientLight: (value: number) => void;
+    smoothness: number;
+    setSmoothness: (value: number) => void;
 }
 
 const Slider: React.FC<{label: string, value: number, onChange: (val: number) => void, min: string, max: string, step: string, id: string}> = ({ label, value, onChange, ...props }) => (
@@ -25,7 +27,8 @@ const Controls: React.FC<ControlsProps> = ({
     onLoadModel, onAnalyze,
     onLoadRandom,
     displacementScale, setDisplacementScale,
-    ambientLight, setAmbientLight
+    ambientLight, setAmbientLight,
+    smoothness, setSmoothness
 }) => {
     return (
         <div className="controls">
@@ -38,6 +41,7 @@ const Controls: React.FC<ControlsProps> = ({
                 <button onClick={() => onAnalyze(imageUrl)}>2. Analyze from URL</button>
             </div>
             <Slider label="Displacement Scale" id="d_scale" value={displacementScale} onChange={setDisplacementScale} min="0" max="1.0" step="0.01" />
+            <Slider label="Smoothness" id="d_smooth" value={smoothness} onChange={setSmoothness} min="0" max="5.0" step="0.1" />
             <Slider label="Ambient Light" id="p_amb" value={ambientLight} onChange={setAmbientLight} min="0" max="1.0" step="0.01" />
         </div>
     );
