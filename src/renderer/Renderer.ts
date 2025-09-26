@@ -8,6 +8,7 @@ export class Renderer {
     private pipelines = new Map<string, GPURenderPipeline | GPUComputePipeline>();
     private bindGroups = new Map<string, GPUBindGroup>();
     private sampler!: GPUSampler;
+    private nonFilteringSampler!: GPUSampler; // NEW: Add a non-filtering sampler
     private imageUrls: string[] = [];
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
     private MAX_RIPPLES = 50;
@@ -18,7 +19,7 @@ export class Renderer {
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
-    private depthTexture!: GPUTexture; // NEW: Texture for the depth map
+    private depthTexture!: GPUTexture;
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
@@ -73,7 +74,7 @@ export class Renderer {
       this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
         this.createBindGroups();
-      return imageUrl; // Return the loaded URL
+      return imageUrl;
     } catch (e) {
       console.error("Failed to load image:", e);
       return undefined;
@@ -88,14 +89,14 @@ export class Renderer {
     if (!this.depthTexture || this.depthTexture.width !== width || this.depthTexture.height !== height) {
         this.depthTexture = this.device.createTexture({
             size: [width, height],
-            format: 'r32float', // A single 32-bit float channel is perfect for depth data
+            format: 'r32float',
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         });
     }
     this.device.queue.writeTexture(
         { texture: this.depthTexture },
         data,
-        { bytesPerRow: width * 4, rowsPerImage: height }, // 4 bytes per float
+        { bytesPerRow: width * 4, rowsPerImage: height },
         [width, height]
     );
     this.createBindGroups();
@@ -104,24 +105,26 @@ export class Renderer {
     private async createResources(): Promise<void> {
         const { width, height } = this.canvas;
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+        // NEW: Create the non-filtering sampler. Defaults to 'nearest' which is what we want.
+        this.nonFilteringSampler = this.device.createSampler(); 
+
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    // NEW: Create a placeholder 1x1 depth texture on initialization
-    // This ensures that createBindGroups doesn't fail on the first run.
-    this.depthTexture = this.device.createTexture({
-        size: [1, 1],
-        format: 'r32float',
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-    });
+    
+        this.depthTexture = this.device.createTexture({
+            size: [1, 1],
+            format: 'r32float',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        });
         
         this.writeTexture = this.device.createTexture({
             size: [width, height],
             format: 'rgba16float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
-    this.device.queue.writeTexture({ texture: this.depthTexture }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
+        this.device.queue.writeTexture({ texture: this.depthTexture }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
 
         await this.loadRandomImage();
     }
@@ -150,7 +153,7 @@ export class Renderer {
     }
 
     private createBindGroups(): void {
-        if (!this.imageTexture) return;
+        if (!this.imageTexture || !this.nonFilteringSampler) return; // Guard against missing sampler
 
         if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.sampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
@@ -159,26 +162,27 @@ export class Renderer {
 
         this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
         this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
-   this.bindGroups.set('computeV1', this.device.createBindGroup({ 
+        this.bindGroups.set('computeV1', this.device.createBindGroup({ 
             layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), 
             entries: [
                 { binding: 0, resource: this.sampler }, 
                 { binding: 1, resource: this.imageTexture.createView() }, 
                 { binding: 2, resource: this.writeTexture.createView() },
-                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } } // This line was missing.
+                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }
             ] 
         }));
 
-          this.bindGroups.set('compute', this.device.createBindGroup({
-      layout: this.pipelines.get('compute')!.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: this.sampler },
-        { binding: 1, resource: this.imageTexture.createView() },
-        { binding: 2, resource: this.writeTexture.createView() },
-        { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
-        { binding: 4, resource: this.depthTexture.createView() }, // NEW: Bind the depth map
-      ]
-    }));
+        this.bindGroups.set('compute', this.device.createBindGroup({
+            layout: this.pipelines.get('compute')!.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: this.sampler },
+                { binding: 1, resource: this.imageTexture.createView() },
+                { binding: 2, resource: this.writeTexture.createView() },
+                { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
+                { binding: 4, resource: this.depthTexture.createView() },
+                { binding: 5, resource: this.nonFilteringSampler }, // NEW: Bind the non-filtering sampler
+            ]
+        }));
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
@@ -247,7 +251,6 @@ export class Renderer {
             case 'image':
             case 'ripple':
                 if (imageVideoPipeline && this.bindGroups.has('image')) {
-                    // --- FIX #2: Rewrote uniform buffer creation to be safer ---
                     const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
                     uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
                     uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0, 0.0], 4);
