@@ -3,8 +3,7 @@
 @group(0) @binding(2) var depthMap: texture_2d<f32>;
 
 struct Uniforms {
-    mouse_lightPos: vec4<f32>, // xy = mouse, zw = lightPos
-    params: vec4<f32>, // x: parallax, y: steps, z: occlusion, w: ambientLight
+    mouse: vec2<f32>,
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
@@ -16,76 +15,38 @@ struct VertexOutput {
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     var output: VertexOutput;
-    let x = f32(in_vertex_index % 2u) * 2.0 - 1.0;
-    let y = f32(in_vertex_index / 2u) * -2.0 + 1.0;
+    let x = f32(in_vertex_index / 2u) * 2.0 - 1.0;
+    let y = f32(in_vertex_index % 2u) * -2.0 + 1.0;
     output.position = vec4<f32>(x, y, 0.0, 1.0);
-    output.fragUV = vec2<f32>((x + 1.0) * 0.5, (y - 1.0) * -0.5);
+    output.fragUV = vec2<f32>(output.position.x * 0.5 + 0.5, output.position.y * -0.5 + 0.5);
     return output;
-}
-
-fn sample_at_level_zero(tex: texture_2d<f32>, smp: sampler, uv: vec2<f32>) -> vec4<f32> {
-    return textureSampleLevel(tex, smp, clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0);
 }
 
 @fragment
 fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
-    let parallaxStrength = u.params.x;
-    let numSteps = u.params.y;
-    let occlusionStrength = u.params.z;
-    let ambientLight = u.params.w;
-    
-    // === 1. Parallax Occlusion Mapping (Find Surface Point) ===
-    let parallaxDirection = (vec2<f32>(0.5) - u.mouse_lightPos.xy) * parallaxStrength;
-    
-    let maxSteps = i32(numSteps);
-    let stepSize = 1.0 / f32(maxSteps);
-    var currentRayDepth = 0.0;
-    var currentUV = fragUV;
-    
-    var currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r * occlusionStrength;
+    // 1. Sample the AI-generated depth map (normalized in JS)
+    let depth_from_model = textureSample(depthMap, u_sampler, fragUV).r;
 
-    for (var i: i32 = 0; i < maxSteps; i = i + 1) {
-        if (currentRayDepth >= currentDepthMapValue) { break; }
-        currentRayDepth += stepSize;
-        currentUV -= parallaxDirection * stepSize;
-        currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r * occlusionStrength;
-    }
+    // --- START: New Logic ---
+    // 2. Sample the original color image at the same position
+    let original_color = textureSample(sourceImage, u_sampler, fragUV);
 
-    // --- Refine Intersection ---
-    let prevUV = currentUV + parallaxDirection * stepSize;
-    let prevRayDepth = currentRayDepth - stepSize;
-    let prevDepthMapValue = sample_at_level_zero(depthMap, u_sampler, prevUV).r * occlusionStrength;
+    // 3. Calculate the luminance (brightness) of the pixel.
+    // These are standard values for converting RGB to grayscale.
+    let luminance = dot(original_color.rgb, vec3<f32>(0.299, 0.587, 0.114));
     
-    let weight = (prevDepthMapValue - prevRayDepth) / ((prevDepthMapValue - prevRayDepth) - (currentDepthMapValue - currentRayDepth) + 0.0001);
-    let finalUV = mix(prevUV, currentUV, saturate(weight));
-    let surfaceDepth = mix(prevRayDepth, currentRayDepth, saturate(weight));
+    // 4. Combine the AI depth with the luminance.
+    // We add a small fraction of the luminance to the model's depth.
+    // The '0.2' is a strength factor you can tweak to change the effect's intensity.
+    let luminance_strength = 0.2;
+    let combined_depth = depth_from_model + (luminance * luminance_strength);
+    // --- END: New Logic ---
 
-    // === 2. Self-Shadowing Calculation ===
-    let lightPos = u.mouse_lightPos.zw;
-    let surfaceToLight = lightPos - finalUV;
-    let lightDist = length(surfaceToLight);
-    let lightDir = normalize(surfaceToLight);
+    // 5. Calculate the final parallax offset using the new combined depth value
+    let mouse_offset = u.mouse - 0.5;
+    let parallax_strength = 0.05; // You can still adjust the overall strength here
+    let parallax_uv = fragUV - (mouse_offset * combined_depth * parallax_strength);
     
-    let shadowStepSize = lightDist / f32(maxSteps / 2);
-    var shadowRayDepth = surfaceDepth + 0.01; // Start just above the surface.
-    var shadowUV = finalUV + lightDir * shadowStepSize;
-    var shadow = 1.0; // 1.0 = lit, 0.0 = shadowed
-
-    for (var j: i32 = 0; j < maxSteps / 2; j = j + 1) {
-        let shadowDepthMapValue = sample_at_level_zero(depthMap, u_sampler, shadowUV).r * occlusionStrength;
-        // THE FIX IS HERE: Changed > to <
-        if (shadowDepthMapValue > shadowRayDepth) {
-            shadow = 0.0; // The surface is occluded, so it's in shadow.
-            break;
-        }
-        shadowUV += lightDir * shadowStepSize;
-        shadowRayDepth += shadowStepSize;
-    }
-    
-    // === 3. Combine Lighting and Final Color ===
-    let litColor = sample_at_level_zero(sourceImage, u_sampler, finalUV).rgb;
-    let lighting = ambientLight + (1.0 - ambientLight) * shadow;
-    let finalColor = litColor * lighting;
-
-    return vec4<f32>(finalColor, 1.0);
+    // Sample the source image using the final, calculated UV coordinates
+    return textureSample(sourceImage, u_sampler, parallax_uv);
 }
