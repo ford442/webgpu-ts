@@ -14,18 +14,19 @@ function App() {
     
     const [displacementScale, setDisplacementScale] = useState(0.3);
     const [ambientLight, setAmbientLight] = useState(0.2);
-    const [smoothness, setSmoothness] = useState(1.0); // New state for smoothness
+    const [smoothness, setSmoothness] = useState(1.0);
     
     useEffect(() => {
         rendererRef.current?.updateParams({
             displacementScale: displacementScale, 
             ambient: ambientLight,
-            smoothness: smoothness // Pass smoothness to renderer
+            smoothness: smoothness
         });
     }, [displacementScale, ambientLight, smoothness]);
 
     useEffect(() => {
         if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
+            // This debug canvas logic is already correct, as it normalizes for display.
             const { data, dims } = depthMapResult.predicted_depth;
             const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
             const canvas = debugCanvasRef.current;
@@ -73,8 +74,24 @@ function App() {
             const { data, dims } = result.predicted_depth;
             const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
 
+            // === FIX IS HERE: Normalize the depth data before sending to GPU ===
+            let min = Infinity, max = -Infinity;
+            data.forEach((v: number) => {
+                if (v < min) min = v;
+                if (v > max) max = v;
+            });
+            const range = max - min;
+
+            const normalizedData = new Float32Array(data.length);
+            for (let i = 0; i < data.length; ++i) {
+                // Invert the depth map so closer objects are "higher" (value 1)
+                normalizedData[i] = 1.0 - ((data[i] - min) / range);
+            }
+            // ===================================================================
+
             setStatus('Updating depth map on GPU...');
-            rendererRef.current.updateDepthMap(data, width, height);
+            // Send the NEW normalized data to the renderer
+            rendererRef.current.updateDepthMap(normalizedData, width, height);
             rendererRef.current.createBindGroups();
             
             if (!rendererRef.current.isReady) throw new Error("Bind group creation failed.");
