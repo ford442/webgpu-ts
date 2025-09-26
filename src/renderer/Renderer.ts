@@ -18,6 +18,7 @@ export class Renderer {
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
+    private depthTexture!: GPUTexture; // NEW: Texture for the depth map
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
@@ -56,28 +57,50 @@ export class Renderer {
         }
     }
 
-    public async loadRandomImage(): Promise<void> {
-        try {
-            if (this.imageUrls.length === 0) return;
-            const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
-            const response = await fetch(imageUrl);
-            const imageBitmap = await createImageBitmap(await response.blob());
+     public async loadRandomImage(): Promise<string | undefined> {
+    try {
+      if (this.imageUrls.length === 0) return;
+      const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
+      const response = await fetch(imageUrl);
+      const imageBitmap = await createImageBitmap(await response.blob());
 
-            if (this.imageTexture) this.imageTexture.destroy();
-            this.imageTexture = this.device.createTexture({
-                size: [imageBitmap.width, imageBitmap.height],
-                format: 'rgba16float',
-                // --- FIX #1: Added COPY_SRC usage flag ---
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-            });
-            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+      if (this.imageTexture) this.imageTexture.destroy();
+      this.imageTexture = this.device.createTexture({
+        size: [imageBitmap.width, imageBitmap.height],
+        format: 'rgba16float',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+      this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
-            if (this.pipelines.size > 0) {
-                this.createBindGroups();
-            }
-        } catch (e) { console.error("Failed to load image:", e); }
+      // No need to create bind groups here, it will be done after depth map is loaded
+      return imageUrl; // Return the loaded URL
+    } catch (e) {
+      console.error("Failed to load image:", e);
+      return undefined;
     }
+  }
 
+  public updateDepthMap(data: Float32Array, width: number, height: number): void {
+    if (!this.device) return;
+    if (this.depthTexture && (this.depthTexture.width !== width || this.depthTexture.height !== height)) {
+        this.depthTexture.destroy();
+    }
+    if (!this.depthTexture || this.depthTexture.width !== width || this.depthTexture.height !== height) {
+        this.depthTexture = this.device.createTexture({
+            size: [width, height],
+            format: 'r32float', // A single 32-bit float channel is perfect for depth data
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        });
+    }
+    this.device.queue.writeTexture(
+        { texture: this.depthTexture },
+        data,
+        { bytesPerRow: width * 4, rowsPerImage: height }, // 4 bytes per float
+        [width, height]
+    );
+    this.createBindGroups();
+  }
+    
     private async createResources(): Promise<void> {
         const { width, height } = this.canvas;
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
@@ -85,11 +108,21 @@ export class Renderer {
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    // NEW: Create a placeholder 1x1 depth texture on initialization
+    // This ensures that createBindGroups doesn't fail on the first run.
+    this.depthTexture = this.device.createTexture({
+        size: [1, 1],
+        format: 'r32float',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+        
         this.writeTexture = this.device.createTexture({
             size: [width, height],
             format: 'rgba16float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
+    this.device.queue.writeTexture({ texture: this.depthTexture }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
+
         await this.loadRandomImage();
     }
 
@@ -136,15 +169,16 @@ export class Renderer {
             ] 
         }));
 
-        this.bindGroups.set('compute', this.device.createBindGroup({ 
-            layout: this.pipelines.get('compute')!.getBindGroupLayout(0), 
-            entries: [
-                { binding: 0, resource: this.sampler }, 
-                { binding: 1, resource: this.imageTexture.createView() }, 
-                { binding: 2, resource: this.writeTexture.createView() }, 
-                { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }
-            ] 
-        }));
+          this.bindGroups.set('compute', this.device.createBindGroup({
+      layout: this.pipelines.get('compute')!.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: this.sampler },
+        { binding: 1, resource: this.imageTexture.createView() },
+        { binding: 2, resource: this.writeTexture.createView() },
+        { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
+        { binding: 4, resource: this.depthTexture.createView() }, // NEW: Bind the depth map
+      ]
+    }));
     }
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
