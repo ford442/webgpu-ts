@@ -7,6 +7,7 @@ interface WebGPUCanvasProps {
 
 const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const isDragging = useRef(false);
 
     useEffect(() => {
         if (!canvasRef.current || rendererRef.current) return;
@@ -33,18 +34,44 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
         };
     }, [rendererRef]); 
 
+    const handleMouseDown = () => {
+        isDragging.current = true;
+    };
+
+    const handleMouseUp = () => {
+        isDragging.current = false;
+        rendererRef.current?.stopMouseDrag();
+    };
+
     const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
         if (rendererRef.current && canvas) {
             const rect = canvas.getBoundingClientRect();
             rendererRef.current.updateMouse(
-                (event.clientX - rect.left) / rect.width,
-                (event.clientY - rect.top) / rect.height
+                event.clientX - rect.left,
+                event.clientY - rect.top,
+                isDragging.current
             );
         }
     };
+    
+    const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
+        event.preventDefault();
+        rendererRef.current?.updateZoom(event.deltaY);
+    };
 
-    return <canvas ref={canvasRef} width="800" height="600" onMouseMove={handleMouseMove} />;
+    return (
+        <canvas 
+            ref={canvasRef} 
+            width="800" 
+            height="600" 
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+            onMouseMove={handleMouseMove} 
+            onMouseLeave={handleMouseUp} // Stop dragging if mouse leaves
+            onWheel={handleWheel}
+        />
+    );
 };
 
 export default WebGPUCanvas;
