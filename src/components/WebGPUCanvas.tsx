@@ -56,6 +56,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
     };
     
     const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
+        // --- FIX IS HERE ---
+        // This prevents the browser from scrolling the page
         event.preventDefault();
         rendererRef.current?.updateZoom(event.deltaY);
     };
