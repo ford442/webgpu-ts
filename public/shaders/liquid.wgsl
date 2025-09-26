@@ -33,8 +33,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let ambient_freq = 15.0;
 // --- MODIFIED: Start of new logic ---
   // Motion directions are the same as you requested
-  let motion_background = vec2<f32>(0.0, cos(uv.x * ambient_freq + time));
-  let motion_foreground = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0);
+  let motion_background = vec2<f32>(0.0, cos(uv.x * ambient_freq + currentTime));
+  let motion_foreground = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + currentTime * 1.2), 0.0);
 
   // Get the real depth range from the uniforms
   let min_depth = u.depth_stats.y;
