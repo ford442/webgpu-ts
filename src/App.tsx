@@ -50,12 +50,30 @@ function App() {
       });
       const range = max - min;
       const normalizedData = new Float32Array(data.length);
+
+      // --- MODIFIED: Start of changes ---
+      let normalizedSum = 0.0;
+      // --- MODIFIED: End of changes ---
+
       for (let i = 0; i < data.length; ++i) {
-        normalizedData[i] = 1.0 - ((data[i] - min) / range);
+        const normalizedValue = 1.0 - ((data[i] - min) / range);
+        normalizedData[i] = normalizedValue;
+        // --- MODIFIED: Start of changes ---
+        normalizedSum += normalizedValue;
+        // --- MODIFIED: End of changes ---
       }
+
+      // --- MODIFIED: Start of changes ---
+      const averageDepth = normalizedSum / data.length;
+      // --- MODIFIED: End of changes ---
       
       setStatus('Updating depth map on GPU...');
       rendererRef.current.updateDepthMap(normalizedData, width, height);
+
+      // --- MODIFIED: Start of changes ---
+      // Pass the newly calculated average depth to the renderer
+      rendererRef.current.setDepthStats(averageDepth);
+      // --- MODIFIED: End of changes ---
       
       setDepthMapResult(result);
       setStatus('Ready.');
