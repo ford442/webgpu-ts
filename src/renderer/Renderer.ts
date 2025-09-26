@@ -162,7 +162,7 @@ export class Renderer {
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
             new Float32Array([
-                this.mouseState.x, this.mouseState.y, this.mouseState.x, this.mouseState.y,
+                this.mouseState.x, this.mouseState.y, 0.5, 0.5, // Decouple light from mouse
                 this.params.strength, this.params.layers, this.params.occlusion, this.params.ambient
             ])
         );
