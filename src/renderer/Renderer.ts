@@ -72,11 +72,10 @@ export class Renderer {
     }
 
     private async createResources(): Promise<void> {
-        // Use 'nearest' filtering to avoid artifacts with the float depth texture.
         this.sampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
         
         this.parallaxUniformBuffer = this.device.createBuffer({
-            size: 8, // vec2<f32> for mouse is 8 bytes
+            size: 8,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
     }
@@ -116,14 +115,20 @@ export class Renderer {
 
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = this.context.getCurrentTexture().createView();
+
+        // --- START: Type Assertion Fix ---
+        // We add `as GPULoadOp` and `as GPUStoreOp` to tell TypeScript the
+        // exact types for these strings, resolving the compiler error.
         const renderPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [{ 
                 view: textureView, 
-                loadOp: 'clear', 
-                storeOp: 'store', 
+                loadOp: 'clear' as GPULoadOp, 
+                storeOp: 'store' as GPUStoreOp, 
                 clearValue: { r: 0, g: 0, b: 0, a: 1 } 
             }]
         };
+        // --- END: Type Assertion Fix ---
+
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
         if (mode === 'depth' && this.bindGroups.has('depth')) {
