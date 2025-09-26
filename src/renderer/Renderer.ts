@@ -20,8 +20,10 @@ export class Renderer {
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
 
+    private minDepth = 0.0;
+    private maxDepth = 1.0;
     private averageDepth = 0.5;
-
+    
     // We now have two depth textures for our ping-pong system
     private depthTextureRead!: GPUTexture;
     private depthTextureWrite!: GPUTexture;
@@ -127,7 +129,9 @@ export class Renderer {
     this.createBindGroups();
   }
     
- public setDepthStats(average: number): void {
+    public setDepthStats(min: number, max: number, average: number): void {
+        this.minDepth = min;
+        this.maxDepth = max;
         this.averageDepth = average;
     }
     
@@ -269,7 +273,7 @@ export class Renderer {
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
                 const computeUniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
                 computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
-                computeUniformArray.set([this.averageDepth, 0.0, 0.0, 0.0], 4);
+                computeUniformArray.set([this.averageDepth, this.minDepth, this.maxDepth, 0.0], 4);
                 const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
                 for (let i = 0; i < this.ripplePoints.length; i++) {
                     const point = this.ripplePoints[i];
