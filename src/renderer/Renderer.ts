@@ -64,7 +64,7 @@ export class Renderer {
             if(this.depthTexture) this.depthTexture.destroy();
             this.depthTexture = this.device.createTexture({
                 size: [width, height],
-                format: 'r3float',
+                format: 'r32float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
             });
         }
