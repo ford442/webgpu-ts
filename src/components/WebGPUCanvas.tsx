@@ -7,11 +7,11 @@ interface WebGPUCanvasProps {
     panX: number;
     panY: number;
     imageVersion: number;
+    rendererRef: React.MutableRefObject<Renderer | null>; // Accept the ref from props
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const rendererRef = useRef<Renderer | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
     const lastMouseAddTime = useRef(0);
@@ -37,13 +37,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
             }
         })();
         return () => cancelAnimationFrame(animationFrameId.current);
-    }, []);
-
-    useEffect(() => {
-        if (rendererRef.current && imageVersion > 0) {
-            rendererRef.current.loadRandomImage();
-        }
-    }, [imageVersion]);
+    }, [rendererRef]); // The effect now depends on the ref object itself
 
     useEffect(() => {
         let active = true;
