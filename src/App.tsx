@@ -1,153 +1,77 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import WebGPUCanvas from './components/WebGPUCanvas';
-import Controls from './components/Controls';
-import './style.css';
-import { pipeline } from '@xenova/transformers';
+import React from 'react';
+import { RenderMode } from '../renderer/Renderer';
 
-function App() {
-    const [status, setStatus] = useState('Click "Load Model" to start.');
-    const [imageUrl, setImageUrl] = useState('https://i.imgur.com/vCNL2sT.jpeg');
-    const [depthEstimator, setDepthEstimator] = useState<any>(null);
-    const [depthMapResult, setDepthMapResult] = useState<any>(null);
-    const debugCanvasRef = useRef<HTMLCanvasElement>(null);
-    const rendererRef = useRef<any>(null);
-    
-    const [parallaxStrength, setParallaxStrength] = useState(0.05);
-    const [numSteps, setNumSteps] = useState(32);
-    const [occlusionStrength, setOcclusionStrength] = useState(0.3);
-    const [ambientLight, setAmbientLight] = useState(0.3);
-    
-    useEffect(() => {
-        rendererRef.current?.updateParams({
-            strength: parallaxStrength, 
-            layers: numSteps,
-            occlusion: occlusionStrength, 
-            ambient: ambientLight
-        });
-    }, [parallaxStrength, numSteps, occlusionStrength, ambientLight]);
-
-    useEffect(() => {
-        if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
-            const { data, dims } = depthMapResult.predicted_depth;
-            const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
-            const canvas = debugCanvasRef.current;
-            const context = canvas.getContext('2d');
-            if (!width || !height || !context) return;
-            
-            const imageData = context.createImageData(width, height);
-            let min = Infinity, max = -Infinity;
-            data.forEach((v: number) => {
-                if (v < min) min = v;
-                if (v > max) max = v;
-            });
-            const range = max - min;
-            for (let i = 0; i < data.length; ++i) {
-                const value = Math.round(((data[i] - min) / range) * 255);
-                imageData.data[i * 4 + 0] = value; 
-                imageData.data[i * 4 + 1] = value;
-                imageData.data[i * 4 + 2] = value; 
-                imageData.data[i * 4 + 3] = 255;
-            }
-            canvas.width = width; 
-            canvas.height = height;
-            context.putImageData(imageData, 0, 0);
-        }
-    }, [depthMapResult]);
-
-    const loadModel = async () => {
-        if (depthEstimator) { setStatus('Model already loaded.'); return; }
-        try {
-            setStatus('Loading model...');
-            const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
-            setDepthEstimator(() => estimator);
-            setStatus('Model Loaded. Processing initial image...');
-        } catch (e: any) {
-            console.error(e);
-            setStatus(`Failed to load model: ${e.message}`);
-        }
-    };
-
-    const runDepthAnalysis = useCallback(async (url: string) => {
-        if (!depthEstimator || !rendererRef.current) return;
-        setStatus('Analyzing Image with AI model...');
-        try {
-            const result = await depthEstimator(url);
-            const { data, dims } = result.predicted_depth;
-            const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
-
-            setStatus('Updating depth map on GPU...');
-            rendererRef.current.updateDepthMap(data, width, height);
-            rendererRef.current.createBindGroups();
-            
-            if (!rendererRef.current.isReady) throw new Error("Bind group creation failed.");
-
-            setDepthMapResult(result);
-            setStatus('Ready. Move mouse over the image.');
-        } catch (e: any) {
-            console.error("Error during analysis:", e);
-            setStatus(`Failed to analyze image: ${e.message}`);
-        }
-    }, [depthEstimator]);
-
-    const handleAnalyzeUrl = useCallback(async (url: string) => {
-        if (!rendererRef.current || !url || !depthEstimator) {
-            setStatus("Please load the model first and enter a URL.");
-            return;
-        }
-        setStatus('Loading image from URL...');
-        await rendererRef.current.loadImage(url);
-        await runDepthAnalysis(url);
-    }, [runDepthAnalysis, depthEstimator]);
-
-    const handleLoadRandom = useCallback(async () => {
-        if (!rendererRef.current || !depthEstimator) {
-            setStatus("Please load the model first.");
-            return;
-        }
-        setStatus('Loading random image...');
-        const newImageUrl = await rendererRef.current.loadRandomImage();
-        if (newImageUrl) {
-            setImageUrl(newImageUrl);
-            await runDepthAnalysis(newImageUrl);
-        } else {
-            setStatus('Failed to load a random image.');
-        }
-    }, [runDepthAnalysis, depthEstimator]);
-
-    useEffect(() => {
-        if (depthEstimator) {
-            handleAnalyzeUrl(imageUrl);
-        }
-    }, [depthEstimator, handleAnalyzeUrl]);
-
-    return (
-        <div id="app-container">
-            <h1>WebGPU Viewer: Self-Shadowing Parallax</h1>
-            <p><strong>Status:</strong> {status}</p>
-            <Controls
-                imageUrl={imageUrl}
-                setImageUrl={setImageUrl}
-                onLoadModel={loadModel}
-                onAnalyze={() => handleAnalyzeUrl(imageUrl)}
-                onLoadRandom={handleLoadRandom}
-                parallaxStrength={parallaxStrength}
-                setParallaxStrength={setParallaxStrength}
-                occlusionStrength={occlusionStrength}
-                setOcclusionStrength={setOcclusionStrength}
-                numSteps={numSteps}
-                setNumSteps={setNumSteps}
-                ambientLight={ambientLight}
-                setAmbientLight={setAmbientLight}
-            />
-            <WebGPUCanvas rendererRef={rendererRef} />
-            {depthMapResult && (
-                <div style={{ marginTop: '20px' }}>
-                    <h2>AI Model Output (Debug Depth Map)</h2>
-                    <canvas ref={debugCanvasRef} style={{ border: '1px solid grey', maxWidth: '100%', height: 'auto' }} />
-                </div>
-            )}
-        </div>
-    );
+interface ControlsProps {
+    mode: RenderMode;
+    setMode: (mode: RenderMode) => void;
+    zoom: number;
+    setZoom: (zoom: number) => void;
+    panX: number;
+    setPanX: (panX: number) => void;
+    panY: number;
+    setPanY: (panY: number) => void;
+    onNewImage: () => void;
+    autoChangeEnabled: boolean;
+    setAutoChangeEnabled: (enabled: boolean) => void;
+    autoChangeDelay: number;
+    setAutoChangeDelay: (delay: number) => void;
 }
 
-export default App;
+const Controls: React.FC<ControlsProps> = ({ 
+    mode, setMode, 
+    zoom, setZoom, 
+    panX, setPanX, 
+    panY, setPanY, 
+    onNewImage,
+    autoChangeEnabled, setAutoChangeEnabled,
+    autoChangeDelay, setAutoChangeDelay
+}) => {
+    const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple' || mode === 'depth';
+
+    return (
+        <div className="controls">
+            <div className="control-group">
+                <label htmlFor="mode-select">Render Mode:</label>
+                <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
+                    <option value="shader">Galaxy Shader</option>
+                    <option value="image">Static Image</option>
+                    <option value="ripple">Ripple Effect</option>
+                    <option value="video">Video Texture</option>
+                    <option value="liquid">Liquid (Interactive)</option>
+                    <option value="depth">Depth Parallax</option>
+                </select>
+            </div>
+             {isImageMode && (
+                <>
+                    <div className="control-group">
+                        <button onClick={onNewImage}>New Image & Depth Map</button>
+                    </div>
+                    <div className="control-group">
+                        <label htmlFor="auto-change-toggle">Auto Change:</label>
+                        <input type="checkbox" id="auto-change-toggle" checked={autoChangeEnabled} onChange={(e) => setAutoChangeEnabled(e.target.checked)} />
+                    </div>
+                    {autoChangeEnabled && (
+                        <div className="control-group">
+                            <label htmlFor="delay-slider">Delay ({autoChangeDelay}s):</label>
+                            <input type="range" id="delay-slider" min="1" max="10" step="1" value={autoChangeDelay} onChange={(e) => setAutoChangeDelay(Number(e.target.value))} />
+                        </div>
+                    )}
+                </>
+            )}
+            <div className="control-group">
+                <label htmlFor="zoom-slider">Zoom:</label>
+                <input type="range" id="zoom-slider" min="50" max="200" value={zoom * 100} onChange={(e) => setZoom(parseFloat(e.target.value) / 100)} />
+            </div>
+            <div className="control-group">
+                <label htmlFor="pan-x-slider">Pan X:</label>
+                <input type="range" id="pan-x-slider" min="0" max="200" value={panX * 100} onChange={(e) => setPanX(parseFloat(e.target.value) / 100)} />
+            </div>
+            <div className="control-group">
+                <label htmlFor="pan-y-slider">Pan Y:</label>
+                <input type="range" id="pan-y-slider" min="0" max="200" value={panY * 100} onChange={(e) => setPanY(parseFloat(e.target.value) / 100)} />
+            </div>
+        </div>
+    );
+};
+
+export default Controls;
