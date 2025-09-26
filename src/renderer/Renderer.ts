@@ -197,8 +197,8 @@ export class Renderer {
             const passEncoder = commandEncoder.beginRenderPass({
                 colorAttachments: [{
                     view: dstView,
-                    loadOp: 'clear',
-                    storeOp: 'store',
+                    loadOp: 'clear' as GPULoadOp,
+                    storeOp: 'store' as GPUStoreOp,
                     clearValue: [0, 0, 0, 0],
                 }],
             });
@@ -261,7 +261,7 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = this.context.getCurrentTexture().createView();
         const passEncoder = commandEncoder.beginRenderPass({
-            colorAttachments: [{ view: textureView, loadOp: 'clear', storeOp: 'store', clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1 } }]
+            colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1 } }]
         });
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
