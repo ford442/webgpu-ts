@@ -62,12 +62,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   ambientDisplacement = mixed_motion * base_ambient_strength * (mid_quiet_factor * 0.5 + 0.5);
   // --- MODIFIED: End of new logic ---
 
-  let foreground_influence = 
-      max(0.0, depth_up - center_depth) +
-      max(0.0, depth_down - center_depth) +
-      max(0.0, depth_left - center_depth) +
-      max(0.0, depth_right - center_depth);
-
   if (foreground_influence > 0.05) {
       let grad_x = (depth_right - depth_left);
       let grad_y = (depth_up - depth_down);
