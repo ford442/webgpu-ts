@@ -164,7 +164,7 @@ function App() {
       {depthMapResult && (
         <div className="debug-container">
           <h2>AI Model Output (Debug Depth Map)</h2>
-          <canvas ref={} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
+          <canvas ref={() => {}} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
         </div>
       )}
     </div>
