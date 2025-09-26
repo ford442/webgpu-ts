@@ -35,20 +35,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let ambient_strength = 0.02 * depthFactor;
   let ambient_freq = 15.0;
 
-  // Motion patterns remain the same
-  let motion_far = vec2<f32>(sin(uv.y * ambient_freq * 0.8 + time * 0.8), 0.0);
-  let motion_close = vec2<f32>(0.0, cos(uv.x * ambient_freq * 1.2 + time * 1.2));
+  // 1. Swap Directions & Fix Speeds
+  // Background motion is now vertical (up/down) and runs at the normal speed.
+  let motion_far = vec2<f32>(0.0, cos(uv.x * ambient_freq + time));
+  // Foreground motion is now horizontal (left/right) and is 20% faster/higher frequency.
+  let motion_close = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0);
 
-  // 1. Sharpen the transition band
-  // The blend now happens over a much narrower depth range (0.4 to 0.6 instead of 0.25 to 0.75).
   let transition_factor = smoothstep(0.4, 0.6, center_depth);
   let mixed_motion = mix(motion_far, motion_close, transition_factor);
-
-  // 2. Add a strength boost to the foreground
-  // This increases the motion strength by up to 50% for the very closest objects.
+  
   let strength_boost = mix(1.0, 1.5, transition_factor);
   
-  // Calculate the final potential displacement with the boost applied
   ambientDisplacement = mixed_motion * ambient_strength * strength_boost;
   // --- MODIFIED: End of Directional Breathing Logic ---
 
