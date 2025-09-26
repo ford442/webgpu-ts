@@ -5,7 +5,6 @@
 @group(0) @binding(5) var non_filtering_sampler: sampler;
 @group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
 
-// Revert the Uniforms struct to its simpler form
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
   ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
@@ -25,32 +24,28 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let base_ambient_strength = 0.02; 
   let ambient_freq = 15.0;
   
-  // Define the motion types as you requested
+  // Define the three distinct motion types
   let motion_background = vec2<f32>(0.0, cos(uv.x * ambient_freq + time)); // Up/Down
   let motion_foreground = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0); // Left/Right
+  let motion_mid = vec2<f32>(cos(time * 0.4), sin(time * 0.4)); // Slow, circular motion for mid-ground
 
-  // --- Zone Definition ---
-  // Zone 1 (Background): From depth 0.0 to 0.33
-  // Zone 2 (Mid-ground):  From depth 0.33 to 0.66 (the quiet zone)
-  // Zone 3 (Foreground): From depth 0.66 to 1.0
-  
-  // First, blend from pure background motion to pure foreground motion across the entire range
-  let overall_mix_factor = smoothstep(0.0, 1.0, center_depth);
-  var mixed_motion = mix(motion_background, motion_foreground, overall_mix_factor);
+  // Define the zone boundaries with a small overlap for smooth blending
+  let background_end = 0.33;
+  let foreground_start = 0.66;
+  let blend_width = 0.1;
 
-  // --- Quiet Zone Calculation ---
-  // Next, calculate a strength multiplier that dips in the middle.
-  let mid_zone_center = 0.5;
-  let mid_zone_radius = 0.165; // (0.66 - 0.33) / 2
-  
-  // This calculates how close the pixel's depth is to the center of the quiet zone.
-  // It will be 1.0 at the very center (0.5 depth) and 0.0 outside the zone.
-  let mid_influence = 1.0 - smoothstep(0.0, mid_zone_radius, abs(center_depth - mid_zone_center));
-  
-  // The strength factor is 1.0 outside the quiet zone, and dips down to 0.25 inside it.
-  let strength_factor = 1.0 - mid_influence * 0.75;
+  // Calculate the influence (from 0.0 to 1.0) for each zone
+  let background_influence = 1.0 - smoothstep(background_end - blend_width, background_end + blend_width, center_depth);
+  let foreground_influence = smoothstep(foreground_start - blend_width, foreground_start + blend_width, center_depth);
+  // Mid-ground is active when neither background nor foreground are
+  let mid_influence = (1.0 - background_influence) * (1.0 - foreground_influence);
 
-  var ambientDisplacement = mixed_motion * base_ambient_strength * strength_factor;
+  // Combine the motions based on their influence
+  var mixed_motion = (motion_background * background_influence) + 
+                     (motion_foreground * foreground_influence) +
+                     (motion_mid * mid_influence * 0.4); // Mid-ground motion is at 40% strength
+
+  var ambientDisplacement = mixed_motion * base_ambient_strength;
   // --- MODIFIED: End of new Three-Zone Logic ---
 
 
@@ -61,13 +56,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let depth_left = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(pixel_size.x, 0.0), 0.0).r;
   let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(pixel_size.x, 0.0), 0.0).r;
 
-  let foreground_influence = 
+  let fg_influence_occlusion = 
       max(0.0, depth_up - center_depth) +
       max(0.0, depth_down - center_depth) +
       max(0.0, depth_left - center_depth) +
       max(0.0, depth_right - center_depth);
 
-  if (foreground_influence > 0.05) {
+  if (fg_influence_occlusion > 0.05) {
       let grad_x = (depth_right - depth_left);
       let grad_y = (depth_up - depth_down);
       let gradient_vec = vec2<f32>(grad_x, grad_y);
@@ -84,12 +79,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   }
   
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
-  let rippleCount = u32(u.config.x); // NOTE: This was u.config.y, correcting to x as per struct
+  let rippleCount = u32(u.config.y); // Corrected: rippleCount is the second uniform value
   for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
     let rippleData = u.ripples[i];
     let rippleCenter = rippleData.xy;
     let rippleStartTime = rippleData.z;
-    let timeSinceClick = u.config.x - rippleStartTime; // Corrected to use time from uniform
+    let timeSinceClick = u.config.x - rippleStartTime;
 
     if (timeSinceClick > 0.0 && timeSinceClick < 3.0) {
       let direction_vec = uv - rippleCenter;
@@ -118,5 +113,5 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
   let depthDisplacedUV = uv + mouseDisplacement;
   let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthDisplacedUV, 0.0).r;
-  textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
+  textureStore(writeTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
 }
