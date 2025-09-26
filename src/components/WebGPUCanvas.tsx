@@ -9,6 +9,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const isDragging = useRef(false);
 
+    // This useEffect handles the main renderer setup
     useEffect(() => {
         if (!canvasRef.current || rendererRef.current) return;
         const renderer = new Renderer(canvasRef.current);
@@ -18,7 +19,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
             }
         });
     }, [rendererRef]);
-
+    
+    // This useEffect handles the animation loop
     useEffect(() => {
         let active = true;
         let animationFrameId = 0;
@@ -33,6 +35,24 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
             cancelAnimationFrame(animationFrameId); 
         };
     }, [rendererRef]); 
+
+    // --- FIX IS HERE: Manually add wheel listener with passive: false ---
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const handleWheel = (event: WheelEvent) => {
+            event.preventDefault();
+            rendererRef.current?.updateZoom(event.deltaY);
+        };
+
+        canvas.addEventListener('wheel', handleWheel, { passive: false });
+
+        return () => {
+            canvas.removeEventListener('wheel', handleWheel);
+        };
+    }, [rendererRef]);
+    // -----------------------------------------------------------------
 
     const handleMouseDown = () => {
         isDragging.current = true;
@@ -55,13 +75,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
         }
     };
     
-    const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
-        // --- FIX IS HERE ---
-        // This prevents the browser from scrolling the page
-        event.preventDefault();
-        rendererRef.current?.updateZoom(event.deltaY);
-    };
-
     return (
         <canvas 
             ref={canvasRef} 
@@ -70,8 +83,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onMouseMove={handleMouseMove} 
-            onMouseLeave={handleMouseUp} // Stop dragging if mouse leaves
-            onWheel={handleWheel}
+            onMouseLeave={handleMouseUp}
+            // onWheel is now handled by the useEffect hook
         />
     );
 };
