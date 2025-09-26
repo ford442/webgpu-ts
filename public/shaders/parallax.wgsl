@@ -6,6 +6,7 @@ struct Uniforms {
     mouse: vec2<f32>,
     displacementScale: f32,
     ambientLight: f32,
+    smoothness: f32, // New uniform
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
@@ -15,8 +16,8 @@ struct VertexOutput {
     @location(1) depth: f32,
 };
 
-// We create a grid of vertices instead of a simple quad
-const GRID_SIZE = 128u;
+// Increased grid size for more detail
+const GRID_SIZE = 256u;
 
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
@@ -25,14 +26,27 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
 
     let uv = vec2<f32>(f32(x) / f32(GRID_SIZE - 1u), f32(y) / f32(GRID_SIZE - 1u));
 
-    let depthValue = textureSampleLevel(depthMap, u_sampler, uv, 0.0).r;
+    // === Depth Smoothing Logic ===
+    var smoothedDepth = 0.0;
+    let texelSize = 1.0 / vec2<f32>(textureDimensions(depthMap));
+    let sampleRadius = texelSize * u.smoothness;
+
+    // Sample a 3x3 grid and average the results
+    for (var i = -1; i <= 1; i = i + 1) {
+        for (var j = -1; j <= 1; j = j + 1) {
+            let offset = vec2<f32>(f32(i), f32(j)) * sampleRadius;
+            smoothedDepth += textureSampleLevel(depthMap, u_sampler, uv + offset, 0.0).r;
+        }
+    }
+    let depthValue = smoothedDepth / 9.0;
+    // =============================
 
     // Displace vertex along Z axis
     let zDisplacement = depthValue * u.displacementScale;
 
     // Create a basic 3D perspective
-    let aspect = 1.0; // Assuming square canvas for simplicity, can be passed as uniform
-    let fov = 1.5; // Field of view
+    let aspect = 1.0; 
+    let fov = 1.5; 
     let near = 0.1;
     let far = 10.0;
 
@@ -65,7 +79,7 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     var output: VertexOutput;
     output.position = vec4<f32>(pos.x, pos.y, pos.z, 1.0);
     output.fragUV = uv;
-    output.depth = depthValue; // Pass depth to fragment shader for lighting
+    output.depth = depthValue; 
     return output;
 }
 
