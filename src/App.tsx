@@ -153,7 +153,7 @@ function App() {
         isModelLoaded={!!depthEstimator}
       />
       <WebGPUCanvas
-        rendererRef={() => {}}
+    rendererRef={rendererRef} // This is the correct way to pass the ref
         mode={mode}
         zoom={zoom}
         panX={panX}
