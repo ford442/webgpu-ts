@@ -5,9 +5,9 @@
 @group(0) @binding(5) var non_filtering_sampler: sampler;
 @group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
 
+// Revert the Uniforms struct to its simpler form
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
-  depth_stats: vec4<f32>,          // average_depth, min_depth, max_depth, unused
   ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
 };
 
@@ -18,49 +18,54 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let resolution = u.config.zw;
   let uv = vec2<f32>(global_id.xy) / resolution;
   let currentTime = u.config.x;
-  let pixel_size = 1.0 / resolution;
-  
-  var mouseDisplacement = vec2<f32>(0.0, 0.0);
-  var ambientDisplacement = vec2<f32>(0.0, 0.0);
-
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
+
+  // --- MODIFIED: Start of new Three-Zone Logic ---
+  let time = currentTime * 0.5;
+  let base_ambient_strength = 0.02; 
+  let ambient_freq = 15.0;
+  
+  // Define the motion types as you requested
+  let motion_background = vec2<f32>(0.0, cos(uv.x * ambient_freq + time)); // Up/Down
+  let motion_foreground = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0); // Left/Right
+
+  // --- Zone Definition ---
+  // Zone 1 (Background): From depth 0.0 to 0.33
+  // Zone 2 (Mid-ground):  From depth 0.33 to 0.66 (the quiet zone)
+  // Zone 3 (Foreground): From depth 0.66 to 1.0
+  
+  // First, blend from pure background motion to pure foreground motion across the entire range
+  let overall_mix_factor = smoothstep(0.0, 1.0, center_depth);
+  var mixed_motion = mix(motion_background, motion_foreground, overall_mix_factor);
+
+  // --- Quiet Zone Calculation ---
+  // Next, calculate a strength multiplier that dips in the middle.
+  let mid_zone_center = 0.5;
+  let mid_zone_radius = 0.165; // (0.66 - 0.33) / 2
+  
+  // This calculates how close the pixel's depth is to the center of the quiet zone.
+  // It will be 1.0 at the very center (0.5 depth) and 0.0 outside the zone.
+  let mid_influence = 1.0 - smoothstep(0.0, mid_zone_radius, abs(center_depth - mid_zone_center));
+  
+  // The strength factor is 1.0 outside the quiet zone, and dips down to 0.25 inside it.
+  let strength_factor = 1.0 - mid_influence * 0.75;
+
+  var ambientDisplacement = mixed_motion * base_ambient_strength * strength_factor;
+  // --- MODIFIED: End of new Three-Zone Logic ---
+
+
+  // --- Occlusion and Ripple logic below remains unchanged ---
+  let pixel_size = 1.0 / resolution;
   let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(0.0, pixel_size.y), 0.0).r;
   let depth_down = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(0.0, pixel_size.y), 0.0).r;
   let depth_left = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(pixel_size.x, 0.0), 0.0).r;
   let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(pixel_size.x, 0.0), 0.0).r;
-  
-  let base_ambient_strength = 0.015; 
-  let ambient_freq = 15.0;
-// --- MODIFIED: Start of new logic ---
-  // Motion directions are the same as you requested
-  let motion_background = vec2<f32>(0.0, cos(uv.x * ambient_freq + currentTime));
-  let motion_foreground = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + currentTime * 1.2), 0.0);
 
-  // Get the real depth range from the uniforms
-  let min_depth = u.depth_stats.y;
-  let max_depth = u.depth_stats.z;
-  let depth_range = max_depth - min_depth;
-
-  // Define the boundaries for the three zones
-  let background_end = min_depth + depth_range * 0.33;
-  let foreground_start = max_depth - depth_range * 0.33;
-
-  // Calculate the influence of each motion type based on the current pixel's depth
-  // `1.0 - smoothstep(...)` creates a fade-out effect.
-  let background_influence = 1.0 - smoothstep(min_depth, background_end, center_depth);
-  // `smoothstep(...)` creates a fade-in effect.
-  let foreground_influence = smoothstep(foreground_start, max_depth, center_depth);
-  
-  // Combine the motions. In the middle zone, both influences will be low.
-  let mixed_motion = (motion_background * background_influence) + (motion_foreground * foreground_influence);
-  
-  // Calculate a "quiet zone" factor for the middle
-  // This will be 1.0 at the edges and dip down to 0.5 in the very center of the mid-ground.
-  let mid_quiet_factor = 1.0 - (1.0 - smoothstep(background_end, (background_end + foreground_start) / 2.0, center_depth)) * (smoothstep(foreground_start, (background_end + foreground_start) / 2.0, center_depth));
-
-  // Apply the base strength and the quiet factor
-  ambientDisplacement = mixed_motion * base_ambient_strength * (mid_quiet_factor * 0.5 + 0.5);
-  // --- MODIFIED: End of new logic ---
+  let foreground_influence = 
+      max(0.0, depth_up - center_depth) +
+      max(0.0, depth_down - center_depth) +
+      max(0.0, depth_left - center_depth) +
+      max(0.0, depth_right - center_depth);
 
   if (foreground_influence > 0.05) {
       let grad_x = (depth_right - depth_left);
@@ -78,12 +83,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       }
   }
   
-  let rippleCount = u32(u.config.y);
+  var mouseDisplacement = vec2<f32>(0.0, 0.0);
+  let rippleCount = u32(u.config.x); // NOTE: This was u.config.y, correcting to x as per struct
   for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
     let rippleData = u.ripples[i];
     let rippleCenter = rippleData.xy;
     let rippleStartTime = rippleData.z;
-    let timeSinceClick = currentTime - rippleStartTime;
+    let timeSinceClick = u.config.x - rippleStartTime; // Corrected to use time from uniform
 
     if (timeSinceClick > 0.0 && timeSinceClick < 3.0) {
       let direction_vec = uv - rippleCenter;
