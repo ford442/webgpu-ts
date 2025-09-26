@@ -1,29 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
-import { RenderMode, Renderer } from './renderer/Renderer'; // Import Renderer type
+import { RenderMode, Renderer } from './renderer/Renderer';
 import { pipeline } from '@huggingface/transformers';
 import './style.css';
 
 function App() {
-  // === State from Original App ===
-  const [mode, setMode] = useState<RenderMode>('liquid'); // Start in liquid mode
+  const [mode, setMode] = useState<RenderMode>('liquid');
   const [zoom, setZoom] = useState(1.0);
   const [panX, setPanX] = useState(0.5);
   const [panY, setPanY] = useState(0.5);
   const [autoChangeEnabled, setAutoChangeEnabled] = useState(false);
-  const [autoChangeDelay, setAutoChangeDelay] = useState(10); // Default to 10 seconds
-
-  // === State from Depth Analysis App ===
+  const [autoChangeDelay, setAutoChangeDelay] = useState(10);
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
 
-  // === Refs for direct component/instance access ===
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
-  
-  // === AI and Depth Analysis Logic ===
   
   const loadModel = async () => {
     if (depthEstimator) {
@@ -49,7 +43,6 @@ function App() {
       const { data, dims } = result.predicted_depth;
       const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
 
-      // Normalize the depth data (1.0 = close, 0.0 = far)
       let min = Infinity, max = -Infinity;
       data.forEach((v: number) => {
         if (v < min) min = v;
@@ -64,15 +57,13 @@ function App() {
       setStatus('Updating depth map on GPU...');
       rendererRef.current.updateDepthMap(normalizedData, width, height);
       
-      setDepthMapResult(result); // For debug canvas
+      setDepthMapResult(result);
       setStatus('Ready.');
     } catch (e: any) {
       console.error("Error during analysis:", e);
       setStatus(`Failed to analyze image: ${e.message}`);
     }
   }, [depthEstimator]);
-
-  // === Combined Image Handling Logic ===
 
   const handleNewImage = useCallback(async () => {
     if (!rendererRef.current) {
@@ -83,7 +74,6 @@ function App() {
     const newImageUrl = await rendererRef.current.loadRandomImage();
     
     if (newImageUrl) {
-        // If the AI model is loaded, run the analysis on the new image.
         if (depthEstimator) {
             await runDepthAnalysis(newImageUrl);
         } else {
@@ -94,9 +84,6 @@ function App() {
     }
   }, [depthEstimator, runDepthAnalysis]);
 
-  // === useEffect Hooks ===
-
-  // Auto-change timer
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
     if (autoChangeEnabled && (mode.startsWith('liquid') || mode === 'image' || mode === 'ripple')) {
@@ -105,7 +92,6 @@ function App() {
     return () => { if (intervalId) clearInterval(intervalId); };
   }, [autoChangeEnabled, autoChangeDelay, mode, handleNewImage]);
 
-  // Debug canvas drawing
   useEffect(() => {
     if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
       const { data, dims } = depthMapResult.predicted_depth;
@@ -138,7 +124,7 @@ function App() {
   return (
     <div id="app-container">
       <h1>WebGPU Liquid + Depth Effect</h1>
-      <p><strong>Status:</strong> {}</p>
+      <p><strong>Status:</strong> {status}</p>
       <Controls
         mode={mode} setMode={setMode}
         zoom={zoom} setZoom={setZoom}
@@ -149,11 +135,11 @@ function App() {
         setAutoChangeEnabled={setAutoChangeEnabled}
         autoChangeDelay={autoChangeDelay}
         setAutoChangeDelay={setAutoChangeDelay}
-        onLoadModel={() => {}}
+        onLoadModel={loadModel}
         isModelLoaded={!!depthEstimator}
       />
       <WebGPUCanvas
-    rendererRef={rendererRef} // This is the correct way to pass the ref
+        rendererRef={rendererRef}
         mode={mode}
         zoom={zoom}
         panX={panX}
