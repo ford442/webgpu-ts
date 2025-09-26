@@ -8,7 +8,7 @@ export class Renderer {
     private pipelines = new Map<string, GPURenderPipeline | GPUComputePipeline>();
     private bindGroups = new Map<string, GPUBindGroup>();
     private sampler!: GPUSampler;
-    private nonFilteringSampler!: GPUSampler; // NEW: Add a non-filtering sampler
+    private nonFilteringSampler!: GPUSampler; 
     private imageUrls: string[] = [];
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
     private MAX_RIPPLES = 50;
@@ -19,7 +19,14 @@ export class Renderer {
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
-    private depthTexture!: GPUTexture;
+
+    // --- MODIFIED: Start of changes ---
+
+    // We now have two depth textures for our ping-pong system
+    private depthTextureRead!: GPUTexture;
+    private depthTextureWrite!: GPUTexture;
+
+    // --- MODIFIED: End of changes ---
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
@@ -47,7 +54,7 @@ export class Renderer {
         await this.fetchImageUrls();
         await this.createResources();
         await this.createPipelines();
-        this.createBindGroups();
+        // createBindGroups is now called inside the render loop to handle swapping
         
         return true;
     }
@@ -81,7 +88,8 @@ export class Renderer {
       });
       this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
-        this.createBindGroups();
+      // Recreate bind groups when a new image is loaded
+      this.createBindGroups();
       return imageUrl;
     } catch (e) {
       console.error("Failed to load image:", e);
@@ -89,31 +97,40 @@ export class Renderer {
     }
   }
 
+  // --- MODIFIED: Start of changes ---
   public updateDepthMap(data: Float32Array, width: number, height: number): void {
     if (!this.device) return;
-    if (this.depthTexture && (this.depthTexture.width !== width || this.depthTexture.height !== height)) {
-        this.depthTexture.destroy();
+
+    // If textures exist but the size is wrong, destroy them
+    if (this.depthTextureRead && (this.depthTextureRead.width !== width || this.depthTextureRead.height !== height)) {
+        this.depthTextureRead.destroy();
+        this.depthTextureWrite.destroy();
     }
-    if (!this.depthTexture || this.depthTexture.width !== width || this.depthTexture.height !== height) {
-        this.depthTexture = this.device.createTexture({
+
+    // Create the textures if they don't exist
+    if (!this.depthTextureRead || this.depthTextureRead.width !== width || this.depthTextureRead.height !== height) {
+        const depthTextureDescriptor: GPUTextureDescriptor = {
             size: [width, height],
             format: 'r32float',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-        });
+            // Add STORAGE_BINDING to allow the compute shader to write to them
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
+        };
+        this.depthTextureRead = this.device.createTexture(depthTextureDescriptor);
+        this.depthTextureWrite = this.device.createTexture(depthTextureDescriptor);
     }
-    this.device.queue.writeTexture(
-        { texture: this.depthTexture },
-        data,
-        { bytesPerRow: width * 4, rowsPerImage: height },
-        [width, height]
-    );
+
+    // Write the initial AI-generated depth data to *both* textures
+    this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
+    this.device.queue.writeTexture({ texture: this.depthTextureWrite }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
+
+    // Recreate bind groups with the new textures
     this.createBindGroups();
   }
+  // --- MODIFIED: End of changes ---
     
     private async createResources(): Promise<void> {
         const { width, height } = this.canvas;
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
-        // NEW: Create the non-filtering sampler. Defaults to 'nearest' which is what we want.
         this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
 
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -121,18 +138,24 @@ export class Renderer {
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     
-        this.depthTexture = this.device.createTexture({
+        // --- MODIFIED: Start of changes ---
+        // Create placeholder 1x1 depth textures. They will be replaced by the AI model's output.
+        const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
             format: 'r32float',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-        });
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
+        };
+        this.depthTextureRead = this.device.createTexture(placeholderDepthDescriptor);
+        this.depthTextureWrite = this.device.createTexture(placeholderDepthDescriptor);
+        this.device.queue.writeTexture({ texture: this.depthTextureRead }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
+        this.device.queue.writeTexture({ texture: this.depthTextureWrite }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
+        // --- MODIFIED: End of changes ---
         
         this.writeTexture = this.device.createTexture({
             size: [width, height],
             format: 'rgba16float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
-        this.device.queue.writeTexture({ texture: this.depthTexture }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
 
         await this.loadRandomImage();
     }
@@ -161,7 +184,10 @@ export class Renderer {
     }
 
     private createBindGroups(): void {
-        if (!this.imageTexture || !this.nonFilteringSampler) return; // Guard against missing sampler
+        // --- MODIFIED: Start of changes ---
+        // Guard against missing textures, especially during initialization
+        if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite) return;
+        // --- MODIFIED: End of changes ---
 
         if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.sampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
@@ -180,6 +206,8 @@ export class Renderer {
             ] 
         }));
 
+        // --- MODIFIED: Start of changes ---
+        // The 'compute' bind group now needs access to both read and write depth textures
         this.bindGroups.set('compute', this.device.createBindGroup({
             layout: this.pipelines.get('compute')!.getBindGroupLayout(0),
             entries: [
@@ -187,11 +215,21 @@ export class Renderer {
                 { binding: 1, resource: this.imageTexture.createView() },
                 { binding: 2, resource: this.writeTexture.createView() },
                 { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
-                { binding: 4, resource: this.depthTexture.createView() },
-                { binding: 5, resource: this.nonFilteringSampler }, // NEW: Bind the non-filtering sampler
+                { binding: 4, resource: this.depthTextureRead.createView() },      // READ depth
+                { binding: 5, resource: this.nonFilteringSampler },
+                { binding: 6, resource: this.depthTextureWrite.createView() },     // WRITE depth (the new binding)
             ]
         }));
+        // --- MODIFIED: End of changes ---
     }
+    
+    // --- MODIFIED: Start of changes ---
+    private swapDepthTextures() {
+        const temp = this.depthTextureRead;
+        this.depthTextureRead = this.depthTextureWrite;
+        this.depthTextureWrite = temp;
+    }
+    // --- MODIFIED: End of changes ---
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
         if (!this.device || !this.imageTexture) return;
@@ -209,7 +247,10 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-
+            // --- MODIFIED: Start of changes ---
+            // Recreate the bind group every frame to point to the correct swapped textures
+            this.createBindGroups();
+            // --- MODIFIED: End of changes ---
 
             const computePass = commandEncoder.beginComputePass();
             const computeV1BG = this.bindGroups.get('computeV1');
@@ -237,6 +278,13 @@ export class Renderer {
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
             }
             computePass.end();
+            
+            // --- MODIFIED: Start of changes ---
+            // Swap the textures for the next frame
+            if (mode === 'liquid') {
+                this.swapDepthTextures();
+            }
+            // --- MODIFIED: End of changes ---
         }
 
         const textureView = this.context.getCurrentTexture().createView();
