@@ -15,6 +15,8 @@ interface ControlsProps {
     setAutoChangeEnabled: (enabled: boolean) => void;
     autoChangeDelay: number;
     setAutoChangeDelay: (delay: number) => void;
+    onLoadModel: () => void; // NEW
+    isModelLoaded: boolean;   // NEW
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
@@ -24,7 +26,8 @@ const Controls: React.FC<ControlsProps> = ({
     panY, setPanY, 
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
-    autoChangeDelay, setAutoChangeDelay
+    autoChangeDelay, setAutoChangeDelay,
+    onLoadModel, isModelLoaded // NEW
 }) => {
     const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple';
 
@@ -41,6 +44,12 @@ const Controls: React.FC<ControlsProps> = ({
                     <option value="liquid-v1">Liquid (Ambient)</option>
                 </select>
             </div>
+ <div className="control-group">
+        <button onClick={onLoadModel} disabled={isModelLoaded}>
+          {isModelLoaded ? 'AI Model Loaded' : 'Load AI Model'}
+        </button>
+        <button onClick={onNewImage}>Load New Random Image</button>
+      </div>
              {isImageMode && (
                 <>
                     <div className="control-group">
