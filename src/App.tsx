@@ -151,9 +151,7 @@ function App() {
         setAutoChangeEnabled={setAutoChangeEnabled}
         autoChangeDelay={autoChangeDelay}
         setAutoChangeDelay={setAutoChangeDelay}
-        // --- THIS IS THE FIX ---
-        onLoadModel={} 
-        // -----------------------
+        onLoadModel={() => {}}
         isModelLoaded={!!depthEstimator}
       />
       <WebGPUCanvas
