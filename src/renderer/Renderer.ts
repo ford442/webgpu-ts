@@ -106,7 +106,7 @@ export class Renderer {
         const { width, height } = this.canvas;
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         // NEW: Create the non-filtering sampler. Defaults to 'nearest' which is what we want.
-        this.nonFilteringSampler = this.device.createSampler(); 
+        this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
 
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
