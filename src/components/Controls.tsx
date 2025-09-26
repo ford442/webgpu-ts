@@ -12,6 +12,8 @@ interface ControlsProps {
     setAmbientLight: (value: number) => void;
     smoothness: number;
     setSmoothness: (value: number) => void;
+    pointSize: number; // New prop
+    setPointSize: (value: number) => void; // New prop
 }
 
 const Slider: React.FC<{label: string, value: number, onChange: (val: number) => void, min: string, max: string, step: string, id: string}> = ({ label, value, onChange, ...props }) => (
@@ -28,7 +30,8 @@ const Controls: React.FC<ControlsProps> = ({
     onLoadRandom,
     displacementScale, setDisplacementScale,
     ambientLight, setAmbientLight,
-    smoothness, setSmoothness
+    smoothness, setSmoothness,
+    pointSize, setPointSize // Destructure new props
 }) => {
     return (
         <div className="controls">
@@ -42,6 +45,7 @@ const Controls: React.FC<ControlsProps> = ({
             </div>
             <Slider label="Displacement Scale" id="d_scale" value={displacementScale} onChange={setDisplacementScale} min="0" max="1.0" step="0.01" />
             <Slider label="Smoothness" id="d_smooth" value={smoothness} onChange={setSmoothness} min="0" max="5.0" step="0.1" />
+            <Slider label="Point Size" id="p_size" value={pointSize} onChange={setPointSize} min="1.0" max="10.0" step="0.1" />
             <Slider label="Ambient Light" id="p_amb" value={ambientLight} onChange={setAmbientLight} min="0" max="1.0" step="0.01" />
         </div>
     );
