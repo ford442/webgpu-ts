@@ -114,7 +114,7 @@ export class Renderer {
     }
 
     private async createResources(): Promise<void> {
-        this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+        this.sampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
         this.uniformBuffer = this.device.createBuffer({
             size: 32,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
