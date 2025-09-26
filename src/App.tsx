@@ -29,23 +29,18 @@ function App() {
     const [status, setStatus] = useState('Loading Model...');
 
     // Load the AI model
-    useEffect(() => {
-        const loadModel = async () => {
-            try {
-                const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas', {
-                    progress_callback: (progress: any) => {
-                        setStatus(`Loading Model: ${progress.file} (${Math.round(progress.progress)}%)`);
-                    }
-                });
-                setDepthEstimator(estimator);
-                setStatus('Model Loaded. Click "New Random Image" to start.');
-            } catch (e) {
-                console.error(e);
-                setStatus('Failed to load AI model.');
-            }
-        };
-        loadModel();
-    }, []);
+    const loadModel = async () => {
+        if (depthEstimator) { setStatus('Model already loaded.'); return; }
+        try {
+            setStatus('Loading model...');
+            const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
+            setDepthEstimator(() => estimator);
+            setStatus('Model Loaded. Processing initial image...');
+        } catch (e: any) {
+            console.error(e);
+            setStatus(`Failed to load model: ${e.message}`);
+        }
+    };
 
     // Function to run depth estimation with robust error handling.
     const runDepthEstimation = useCallback(async (url: string) => {
