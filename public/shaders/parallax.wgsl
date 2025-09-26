@@ -42,7 +42,7 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     var currentRayDepth = 0.0;
     var currentUV = fragUV;
     
-        currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r;
+    var currentDepthMapValue = sample_at_level_zero(depthMap, u_sampler, currentUV).r;
 
     for (var i: i32 = 0; i < maxSteps; i = i + 1) {
         if (currentRayDepth >= currentDepthMapValue) { break; }
