@@ -7,6 +7,7 @@
 
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
+  depth_stats: vec4<f32>,          // average_depth, unused, unused, unused
   ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
 };
 
@@ -37,7 +38,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let motion_far = vec2<f32>(0.0, cos(uv.x * ambient_freq + time));
   let motion_close = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0);
 
-  let transition_factor = smoothstep(0.4, 0.6, center_depth);
+  let avg_depth = u.depth_stats.x;
+  let transition_width = 0.2; // How wide the blend zone is
+  let transition_start = avg_depth - (transition_width / 2.0);
+  let transition_end = avg_depth + (transition_width / 2.0);
+  let transition_factor = smoothstep(transition_start, transition_end, center_depth);
   let mixed_motion = mix(motion_far, motion_close, transition_factor);
   
   // The strength modifier now boosts from the constant base strength.
