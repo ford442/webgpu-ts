@@ -35,42 +35,29 @@ function App() {
     }
   };
 
- const runDepthAnalysis = useCallback(async (imageUrl: string) => {
+  const runDepthAnalysis = useCallback(async (imageUrl: string) => {
     if (!depthEstimator || !rendererRef.current) return;
     setStatus('Analyzing image with AI model...');
     try {
       const result = await depthEstimator(imageUrl);
-      //...
+      const { data, dims } = result.predicted_depth;
+      const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
+
+      let min = Infinity, max = -Infinity;
+      data.forEach((v: number) => {
+        if (v < min) min = v;
+        if (v > max) max = v;
+      });
+      const range = max - min;
       const normalizedData = new Float32Array(data.length);
-      let normalizedSum = 0.0;
-
-      // --- MODIFIED: Start of changes ---
-      // We need to find the min/max of the *normalized* data now
-      let normalizedMin = 1.0;
-      let normalizedMax = 0.0;
-      // --- MODIFIED: End of changes ---
-
+      
       for (let i = 0; i < data.length; ++i) {
-        const normalizedValue = 1.0 - ((data[i] - min) / range);
-        normalizedData[i] = normalizedValue;
-        normalizedSum += normalizedValue;
-
-        // --- MODIFIED: Start of changes ---
-        if (normalizedValue < normalizedMin) normalizedMin = normalizedValue;
-        if (normalizedValue > normalizedMax) normalizedMax = normalizedValue;
-        // --- MODIFIED: End of changes ---
+        normalizedData[i] = 1.0 - ((data[i] - min) / range);
       }
-
-      const averageDepth = normalizedSum / data.length;
       
       setStatus('Updating depth map on GPU...');
       rendererRef.current.updateDepthMap(normalizedData, width, height);
       
-      // --- MODIFIED: Start of changes ---
-      // Pass all three stats to the renderer now
-      rendererRef.current.setDepthStats(normalizedMin, normalizedMax, averageDepth);
-      // --- MODIFIED: End of changes ---
-
       setDepthMapResult(result);
       setStatus('Ready.');
     } catch (e: any) {
