@@ -1,5 +1,7 @@
 export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid' | 'depth';
 
+const GRID_SIZE = 128; // Must match GRID_SIZE in the shader
+
 export class Renderer {
     private canvas: HTMLCanvasElement;
     private device!: GPUDevice;
@@ -13,7 +15,7 @@ export class Renderer {
     private uniformBuffer!: GPUBuffer;
 
     private mouseState = { x: 0.5, y: 0.5 };
-    private params = { strength: 0.05, layers: 24, occlusion: 0.2, ambient: 0.3 };
+    private params = { displacementScale: 0.3, ambient: 0.3 };
     public isReady = false;
     private imageUrls: string[] = [];
 
@@ -116,15 +118,15 @@ export class Renderer {
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.uniformBuffer = this.device.createBuffer({
-            size: 32,
+            size: 16, // 2 floats for mouse, 1 for scale, 1 for light = 4 * 4 bytes
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
     }
 
     private async createPipelines(): Promise<void> {
         try {
-            const parallaxCode = await fetch('shaders/parallax.wgsl').then(res => res.text());
-            const module = this.device.createShaderModule({ code: parallaxCode });
+            const displacementCode = await fetch('shaders/parallax.wgsl').then(res => res.text());
+            const module = this.device.createShaderModule({ code: displacementCode });
             this.pipelines.set('depth', await this.device.createRenderPipelineAsync({
                 layout: 'auto',
                 vertex: { module, entryPoint: 'vs_main' },
@@ -147,7 +149,7 @@ export class Renderer {
                 { binding: 3, resource: { buffer: this.uniformBuffer } },
             ]
         }));
-        this.isReady = true; // Restart rendering only when everything is ready
+        this.isReady = true;
     }
 
     public render(): void {
@@ -162,13 +164,15 @@ export class Renderer {
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
             new Float32Array([
-                this.mouseState.x, this.mouseState.y, 0.5, 0.5, // Decouple light from mouse
-                this.params.strength, this.params.layers, this.params.occlusion, this.params.ambient
+                this.mouseState.x, this.mouseState.y,
+                this.params.displacementScale,
+                this.params.ambient
             ])
         );
+
         passEncoder.setPipeline(this.pipelines.get('depth')!);
         passEncoder.setBindGroup(0, this.bindGroups.get('depth')!);
-        passEncoder.draw(4);
+        passEncoder.draw(GRID_SIZE * GRID_SIZE); // Draw all vertices in the grid
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
     }
