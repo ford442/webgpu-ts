@@ -1,5 +1,5 @@
 @group(0) @binding(0) var u_sampler: sampler;
-@group(0) @binding(1) var readTexture: texture_2d<f32>;
+@group( toning(1) var readTexture: texture_2d<f32>;
 @group(0) @binding(2) var writeTexture: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(4) var readDepthTexture: texture_2d<f32>;
 @group(0) @binding(5) var non_filtering_sampler: sampler;
@@ -28,30 +28,34 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let depth_down = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(0.0, pixel_size.y), 0.0).r;
   let depth_left = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(pixel_size.x, 0.0), 0.0).r;
   let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(pixel_size.x, 0.0), 0.0).r;
-
-  // --- MODIFIED: Start of Strength Fix ---
-  let time = currentTime * 0.5;
-  // Use a constant base strength instead of one tied to depth, ensuring all parts of the image can move.
+  
   let base_ambient_strength = 0.015; 
   let ambient_freq = 15.0;
 
   let motion_far = vec2<f32>(0.0, cos(uv.x * ambient_freq + time));
   let motion_close = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0);
 
-  let avg_depth = u.depth_stats.x;
-  let transition_width = 0.2; // How wide the blend zone is
-  let transition_start = avg_depth - (transition_width / 2.0);
-  let transition_end = avg_depth + (transition_width / 2.0);
+  // --- MODIFIED: Start of new logic ---
+  let raw_avg_depth = u.depth_stats.x;
+
+  // Stabilize the split point by blending the image's true average with a fixed midpoint of 0.5.
+  // This pulls the split point towards the center and prevents extreme depth distributions
+  // from making one motion type dominate the entire image. We trust the image's average for 75% of the decision.
+  let split_point = mix(0.5, raw_avg_depth, 0.75);
+
+  // Widen the transition slightly for a smoother, more pleasing blend
+  let transition_width = 0.3; 
+  let transition_start = split_point - (transition_width / 2.0);
+  let transition_end = split_point + (transition_width / 2.0);
   let transition_factor = smoothstep(transition_start, transition_end, center_depth);
+  // --- MODIFIED: End of new logic ---
+
   let mixed_motion = mix(motion_far, motion_close, transition_factor);
   
-  // The strength modifier now boosts from the constant base strength.
   let strength_modifier = mix(1.0, 1.5, transition_factor);
   
   ambientDisplacement = mixed_motion * base_ambient_strength * strength_modifier;
-  // --- MODIFIED: End of Strength Fix ---
 
-  // --- MODIFIED: Start of Occlusion NaN Fix ---
   let foreground_influence = 
       max(0.0, depth_up - center_depth) +
       max(0.0, depth_down - center_depth) +
@@ -62,11 +66,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let grad_x = (depth_right - depth_left);
       let grad_y = (depth_up - depth_down);
       let gradient_vec = vec2<f32>(grad_x, grad_y);
-      // Use squared length to avoid an expensive sqrt()
       let grad_len_sq = dot(gradient_vec, gradient_vec);
 
-      // SAFETY CHECK: Only perform redirection if the gradient is strong enough to be valid.
-      // This prevents normalizing a zero vector and generating NaN values.
       if (grad_len_sq > 0.00001) {
         let gradient = normalize(gradient_vec);
         let projection = dot(ambientDisplacement, gradient);
@@ -76,9 +77,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
       }
   }
-  // --- MODIFIED: End of Occlusion NaN Fix ---
   
-  // --- Click Ripples (remains unchanged) ---
   let rippleCount = u32(u.config.y);
   for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
     let rippleData = u.ripples[i];
@@ -106,7 +105,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
   }
   
-  // --- Advection (remains unchanged) ---
   let totalDisplacement = mouseDisplacement + ambientDisplacement;
   let colorDisplacedUV = uv + totalDisplacement;
   let color = textureSampleLevel(readTexture, u_sampler, colorDisplacedUV, 0.0);
