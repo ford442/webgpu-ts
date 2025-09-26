@@ -27,11 +27,19 @@ export class Renderer {
         this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
     }
 
-    public async init(): Promise<boolean> {
-        if (!navigator.gpu) return false;
-        const adapter = await navigator.gpu.requestAdapter();
-        if (!adapter) return false;
-        this.device = await adapter.requestDevice();
+   public async init(): Promise<boolean> {
+    if (!navigator.gpu) return false;
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) return false;
+    const requiredFeatures: GPUFeatureName[] = [];
+    if (adapter.features.has('float32-filterable')) {
+        requiredFeatures.push('float32-filterable');
+    } else {
+        console.log("Device does not support 'float32-filterable', using two-sampler workaround.");
+    }
+    this.device = await adapter.requestDevice({
+        requiredFeatures,
+    });
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
