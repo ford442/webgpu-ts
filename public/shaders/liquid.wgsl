@@ -1,16 +1,9 @@
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(1) var readTexture: texture_2d<f32>;
 @group(0) @binding(2) var writeTexture: texture_storage_2d<rgba16float, write>;
-
-// --- MODIFIED: Start of changes ---
-
-// @binding(4) now reads from the "current" depth map
 @group(0) @binding(4) var readDepthTexture: texture_2d<f32>;
 @group(0) @binding(5) var non_filtering_sampler: sampler;
-// Add a new binding for the "next" depth map, which we will write to
 @group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
-
-// --- MODIFIED: End of changes ---
 
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
@@ -23,11 +16,15 @@ struct Uniforms {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let resolution = u.config.zw;
   let uv = vec2<f32>(global_id.xy) / resolution;
-  var totalDisplacement = vec2<f32>(0.0, 0.0);
   let currentTime = u.config.x;
   
-  // --- Depth Integration ---
-  // Sample from the READ depth texture
+  // --- MODIFIED: Start of changes ---
+  // Create separate vectors for each type of displacement
+  var mouseDisplacement = vec2<f32>(0.0, 0.0);
+  var ambientDisplacement = vec2<f32>(0.0, 0.0);
+  // --- MODIFIED: End of changes ---
+
+  // Sample the current depth to influence BOTH effects
   let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
   let depthFactor = 1.0 - depth; 
 
@@ -37,7 +34,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let ambient_freq = 15.0;
   let d1 = sin(uv.x * ambient_freq + time) * ambient_strength;
   let d2 = cos(uv.y * ambient_freq * 0.7 + time) * ambient_strength;
-  totalDisplacement += vec2<f32>(d1, d2);
+  // --- MODIFIED: Start of changes ---
+  // Store this displacement in its own dedicated vector
+  ambientDisplacement += vec2<f32>(d1, d2);
+  // --- MODIFIED: End of changes ---
 
   // --- Click Ripples (modified by depth) ---
   let rippleCount = u32(u.config.y);
@@ -52,36 +52,36 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let dist = length(direction_vec);
 
       if (dist > 0.0001) {
-        // Sample the ripple origin depth from the READ texture
         let rippleOriginDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, rippleCenter, 0.0).r;
         let rippleOriginDepthFactor = 1.0 - rippleOriginDepth;
-
         let ripple_speed = mix(1.0, 2.0, rippleOriginDepthFactor);
         let ripple_amplitude = mix(0.005, 0.015, rippleOriginDepthFactor);
         let ripple_frequency = 25.0;
-
         let wave = sin(dist * ripple_frequency - timeSinceClick * ripple_speed);
-        
         let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / (3.0 * mix(0.5, 1.0, rippleOriginDepthFactor)));
         let falloff = 1.0 / (dist * 20.0 + 1.0);
-        
         let displacement = wave * ripple_amplitude * attenuation * falloff;
         let direction = direction_vec / dist;
-        totalDisplacement += direction * displacement;
+        // --- MODIFIED: Start of changes ---
+        // Store this displacement in its own dedicated vector
+        mouseDisplacement += direction * displacement;
+        // --- MODIFIED: End of changes ---
       }
     }
   }
 
-  let displacedUV = uv + totalDisplacement;
-
-  // 1. Advect the COLOR (same as before)
-  let color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
+  // --- MODIFIED: Start of changes ---
+  
+  // 1. Advect the COLOR using the TOTAL displacement (Ambient + Mouse)
+  let totalDisplacement = mouseDisplacement + ambientDisplacement;
+  let colorDisplacedUV = uv + totalDisplacement;
+  let color = textureSampleLevel(readTexture, u_sampler, colorDisplacedUV, 0.0);
   textureStore(writeTexture, global_id.xy, color);
 
-  // --- MODIFIED: Start of changes ---
-  // 2. Advect the DEPTH
-  // Sample the depth from the upstream position and write it to the new depth texture
-  let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV, 0.0).r;
+  // 2. Advect the DEPTH using ONLY the MOUSE displacement
+  let depthDisplacedUV = uv + mouseDisplacement;
+  let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthDisplacedUV, 0.0).r;
   textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
+
   // --- MODIFIED: End of changes ---
 }
