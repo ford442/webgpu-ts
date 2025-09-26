@@ -1,8 +1,9 @@
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(1) var readTexture: texture_2d<f32>;
 @group(0) @binding(2) var writeTexture: texture_storage_2d<rgba16float, write>;
-// NEW: Bind the depth texture. It's r32float, so we read it as a single-channel f32.
 @group(0) @binding(4) var depthTexture: texture_2d<f32>;
+// NEW: Add a binding for the non-filtering sampler
+@group(0) @binding(5) var non_filtering_sampler: sampler;
 
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
@@ -18,15 +19,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   var totalDisplacement = vec2<f32>(0.0, 0.0);
   let currentTime = u.config.x;
   
-  // --- NEW: Depth Integration ---
-  // Sample the depth map. In your TS code, 1.0 = close, 0.0 = far.
-  // We'll create a 'depthFactor' where 0.0 = close and 1.0 = far.
-  let depth = textureSampleLevel(depthTexture, u_sampler, uv, 0.0).r;
-  let depthFactor = 1.0 - depth; // Now 0.0 for closest objects, 1.0 for farthest.
+  // --- Depth Integration ---
+  // NEW: Sample the depth map using the non_filtering_sampler
+  let depth = textureSampleLevel(depthTexture, non_filtering_sampler, uv, 0.0).r;
+  let depthFactor = 1.0 - depth; 
 
   // --- Ambient Wobble (modified by depth) ---
   let time = currentTime * 0.5;
-  let ambient_strength = 0.02 * depthFactor; // Wobble is weaker on closer objects
+  let ambient_strength = 0.02 * depthFactor;
   let ambient_freq = 15.0;
   let d1 = sin(uv.x * ambient_freq + time) * ambient_strength;
   let d2 = cos(uv.y * ambient_freq * 0.7 + time) * ambient_strength;
@@ -45,20 +45,16 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let dist = length(direction_vec);
 
       if (dist > 0.0001) {
-        // Modify ripple parameters based on the depth at the point of the ripple's origin,
-        // not the current pixel. This makes the whole ripple behave consistently.
-        let rippleOriginDepth = textureSampleLevel(depthTexture, u_sampler, rippleCenter, 0.0).r;
+        // NEW: Sample the ripple origin depth using the non_filtering_sampler
+        let rippleOriginDepth = textureSampleLevel(depthTexture, non_filtering_sampler, rippleCenter, 0.0).r;
         let rippleOriginDepthFactor = 1.0 - rippleOriginDepth;
 
-        // Slower speed and smaller amplitude in "shallow" areas (closer objects)
         let ripple_speed = mix(1.0, 2.0, rippleOriginDepthFactor);
         let ripple_amplitude = mix(0.005, 0.015, rippleOriginDepthFactor);
         let ripple_frequency = 25.0;
 
         let wave = sin(dist * ripple_frequency - timeSinceClick * ripple_speed);
         
-        // Attenuation and falloff are also affected by depth to make them fade faster
-        // in shallow water.
         let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / (3.0 * mix(0.5, 1.0, rippleOriginDepthFactor)));
         let falloff = 1.0 / (dist * 20.0 + 1.0);
         
@@ -70,6 +66,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   }
 
   let displacedUV = uv + totalDisplacement;
+  // The main image texture still uses the original filtering sampler
   let color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
   textureStore(writeTexture, global_id.xy, color);
 }
