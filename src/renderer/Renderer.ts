@@ -14,15 +14,55 @@ export class Renderer {
     private depthTexture!: GPUTexture;
     private uniformBuffer!: GPUBuffer;
 
-    private mouseState = { x: 0.5, y: 0.5 };
-    private params = { displacementScale: 0.3, ambient: 0.3, smoothness: 1.0 }; // Add smoothness
+    // New state for orbit controls
+    private cameraState = {
+        rotationX: 0.5,
+        rotationY: 0,
+        zoom: 1.0,
+        isDragging: false,
+        lastMouseX: 0,
+        lastMouseY: 0,
+    };
+    private params = { displacementScale: 0.3, ambient: 0.3, smoothness: 1.0 };
     public isReady = false;
     private imageUrls: string[] = [];
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
-    public updateMouse(x: number, y: number) { this.mouseState = { x, y }; }
     public updateParams(params: any) { this.params = params; }
+
+    public updateMouse(x: number, y: number, isDragging: boolean) {
+        if (isDragging) {
+            if (!this.cameraState.isDragging) {
+                // Start of a new drag
+                this.cameraState.isDragging = true;
+                this.cameraState.lastMouseX = x;
+                this.cameraState.lastMouseY = y;
+            } else {
+                // Continuing a drag
+                const dx = x - this.cameraState.lastMouseX;
+                const dy = y - this.cameraState.lastMouseY;
+
+                this.cameraState.rotationY += dx * 0.01;
+                this.cameraState.rotationX += dy * 0.01;
+                
+                // Clamp rotationX to prevent flipping
+                this.cameraState.rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.cameraState.rotationX));
+
+                this.cameraState.lastMouseX = x;
+                this.cameraState.lastMouseY = y;
+            }
+        }
+    }
+
+    public stopMouseDrag() {
+        this.cameraState.isDragging = false;
+    }
+
+    public updateZoom(deltaY: number) {
+        this.cameraState.zoom += deltaY * 0.001;
+        this.cameraState.zoom = Math.max(0.2, Math.min(5.0, this.cameraState.zoom)); // Clamp zoom
+    }
 
     public updateDepthMap(data: Float32Array, width: number, height: number) {
         if (!this.device || !width || !height) return;
@@ -118,7 +158,7 @@ export class Renderer {
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.uniformBuffer = this.device.createBuffer({
-            size: 32, // Increased size for new float: 2+1+1+1 + padding = 5 floats -> 8 floats with padding
+            size: 32, // 2 for rotation, 1 for zoom, 1 for displace, 1 for ambient, 1 for smooth
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
     }
@@ -164,7 +204,7 @@ export class Renderer {
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
             new Float32Array([
-                this.mouseState.x, this.mouseState.y,
+                this.cameraState.rotationX, this.cameraState.rotationY, this.cameraState.zoom,
                 this.params.displacementScale,
                 this.params.ambient,
                 this.params.smoothness
