@@ -15,15 +15,18 @@ function App() {
     const [displacementScale, setDisplacementScale] = useState(0.3);
     const [ambientLight, setAmbientLight] = useState(0.2);
     const [smoothness, setSmoothness] = useState(1.0);
+    const [pointSize, setPointSize] = useState(3.0); // New state
     
     useEffect(() => {
         rendererRef.current?.updateParams({
             displacementScale: displacementScale, 
             ambient: ambientLight,
-            smoothness: smoothness
+            smoothness: smoothness,
+            pointSize: pointSize // Pass new param
         });
-    }, [displacementScale, ambientLight, smoothness]);
+    }, [displacementScale, ambientLight, smoothness, pointSize]);
 
+    // ... (rest of the App.tsx file remains the same, no other changes needed) ...
     useEffect(() => {
         if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
             // This debug canvas logic is already correct, as it normalizes for display.
@@ -151,6 +154,8 @@ function App() {
                 setAmbientLight={setAmbientLight}
                 smoothness={smoothness}
                 setSmoothness={setSmoothness}
+                pointSize={pointSize}
+                setPointSize={setPointSize}
             />
             <WebGPUCanvas rendererRef={rendererRef} />
             {depthMapResult && (
