@@ -146,13 +146,14 @@ function App() {
         zoom={zoom} setZoom={setZoom}
         panX={panX} setPanX={setPanX}
         panY={panY} setPanY={setPanY}
-        onNewImage={handleNewImage} // This now triggers depth analysis
+        onNewImage={handleNewImage}
         autoChangeEnabled={autoChangeEnabled}
         setAutoChangeEnabled={setAutoChangeEnabled}
         autoChangeDelay={autoChangeDelay}
         setAutoChangeDelay={setAutoChangeDelay}
-        // Add new controls for AI
-        onLoadModel={}
+        // --- THIS IS THE FIX ---
+        onLoadModel={} 
+        // -----------------------
         isModelLoaded={!!depthEstimator}
       />
       <WebGPUCanvas
@@ -165,7 +166,7 @@ function App() {
       {depthMapResult && (
         <div className="debug-container">
           <h2>AI Model Output (Debug Depth Map)</h2>
-          <canvas ref={} />
+          <canvas ref={} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
         </div>
       )}
     </div>
