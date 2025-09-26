@@ -72,7 +72,7 @@ export class Renderer {
       });
       this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
-      // No need to create bind groups here, it will be done after depth map is loaded
+        this.createBindGroups();
       return imageUrl; // Return the loaded URL
     } catch (e) {
       console.error("Failed to load image:", e);
