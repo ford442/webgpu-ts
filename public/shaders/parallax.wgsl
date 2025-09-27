@@ -95,7 +95,8 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     output.particleUV = particle_uv; // UV for the circle
     
     final_pos.z += 2.0;
-    final_pos.xy *= u.zoom; // Only apply zoom to x and y, not z
+    final_pos.x *= u.zoom; // Only apply zoom to x and y, not z
+    final_pos.y *= u.zoom; // Only apply zoom to x and y, not z
     output.position = vec4<f32>(final_pos.x, -final_pos.y, final_pos.z, 2.0);
     return output;
 }
