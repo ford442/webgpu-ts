@@ -21,7 +21,7 @@ struct VertexOutput {
     @location(3) particleUV: vec2<f32>, // UV for the particle quad
 };
 
-const GRID_SIZE = 256u;
+const GRID_SIZE = 1024u;
 
 fn sample_depth(uv: vec2<f32>) -> f32 {
     // ... (This helper function is unchanged)
