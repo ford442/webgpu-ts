@@ -71,8 +71,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // This satisfies the "overall still liquid wash around" requirement.
   let time = currentTime * 0.7;
   let ambient_freq = 10.0;
-  let d1 = sin(uv.x * ambient_freq + time) * AMBIENT_WASH_STRENGTH;
-  let d2 = cos(uv.y * ambient_freq * 0.7 - time) * AMBIENT_WASH_STRENGTH;
+    let d1 = sin(uv.x * ambient_freq + time) * ambient_strength;
+    let d2 = cos(uv.y * ambient_freq * 0.7 + time) * ambient_strength;
   totalDisplacement += vec2<f32>(d1, d2);
 
   // B. Audio-driven displacement, MODULATED BY BRIGHTNESS
