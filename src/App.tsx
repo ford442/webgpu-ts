@@ -15,6 +15,9 @@ function App() {
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
+  // --- MODIFIED: Start of changes ---
+  const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 }); // Default to center
+  // --- MODIFIED: End of changes ---
 
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -43,11 +46,23 @@ function App() {
       const { data, dims } = result.predicted_depth;
       const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
 
+      // --- MODIFIED: Start of changes ---
       let min = Infinity, max = -Infinity;
-      data.forEach((v: number) => {
-        if (v < min) min = v;
+      let minIndex = 0; // Keep track of the index of the minimum depth value
+      data.forEach((v: number, i: number) => {
+        if (v < min) {
+          min = v;
+          minIndex = i; // Found a new minimum, store its index
+        }
         if (v > max) max = v;
       });
+
+      // Calculate the UV coordinates of the farthest point
+      const farthestY = Math.floor(minIndex / width);
+      const farthestX = minIndex % width;
+      setFarthestPoint({ x: farthestX / width, y: farthestY / height });
+      // --- MODIFIED: End of changes ---
+      
       const range = max - min;
       const normalizedData = new Float32Array(data.length);
       
@@ -78,6 +93,10 @@ function App() {
         if (depthEstimator) {
             await runDepthAnalysis(newImageUrl);
         } else {
+            // --- MODIFIED: Start of changes ---
+            // Reset farthest point if not using AI model
+            setFarthestPoint({ x: 0.5, y: 0.5 });
+            // --- MODIFIED: End of changes ---
             setStatus('Ready. Load AI model to add depth effects.');
         }
     } else {
@@ -145,6 +164,9 @@ function App() {
         zoom={zoom}
         panX={panX}
         panY={panY}
+        // --- MODIFIED: Start of changes ---
+        farthestPoint={farthestPoint}
+        // --- MODIFIED: End of changes ---
       />
       {depthMapResult && (
         <div className="debug-container">
