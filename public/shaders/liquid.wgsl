@@ -96,4 +96,25 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       if (dist > 0.0001) {
         let rippleOriginDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, rippleCenter, 0.0).r;
         let rippleOriginDepthFactor = 1.0 - rippleOriginDepth;
-        let ripple
+        let ripple_speed = mix(1.0, 2.0, rippleOriginDepthFactor);
+        let ripple_amplitude = mix(0.005, 0.015, rippleOriginDepthFactor);
+        let ripple_frequency = 25.0;
+        let wave = sin(dist * ripple_frequency - timeSinceClick * ripple_speed);
+        let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / (3.0 * mix(0.5, 1.0, rippleOriginDepthFactor)));
+        let falloff = 1.0 / (dist * 20.0 + 1.0);
+        let displacement = wave * ripple_amplitude * attenuation * falloff;
+        let direction = direction_vec / dist;
+        mouseDisplacement += direction * displacement;
+      }
+    }
+  }
+  
+  let totalDisplacement = mouseDisplacement + ambientDisplacement;
+  let colorDisplacedUV = uv + totalDisplacement;
+  let color = textureSampleLevel(readTexture, u_sampler, colorDisplacedUV, 0.0);
+  textureStore(writeTexture, global_id.xy, color);
+
+  let depthDisplacedUV = uv + mouseDisplacement;
+  let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthDisplacedUV, 0.0).r;
+  textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
+}
