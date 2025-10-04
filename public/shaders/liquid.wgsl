@@ -23,11 +23,11 @@ fn fbm(st: vec2<f32>) -> f32 {
     var value = 0.0;
     var amplitude = 0.5;
     var frequency = 0.0;
-    
+    var stt = st;
     // 4 octaves are a good balance between detail and performance.
     for (var i = 0; i < 4; i = i + 1) {
-        value += amplitude * noise(st);
-        st *= 2.0;
+        value += amplitude * noise(stt);
+        stt *= 2.0;
         amplitude *= 0.5;
     }
     return value;
