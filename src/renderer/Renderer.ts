@@ -23,8 +23,6 @@ export class Renderer {
     private depthTextureRead!: GPUTexture;
     private depthTextureWrite!: GPUTexture;
 
-    // --- MODIFIED: End of changes ---
-
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
     public addRipplePoint(x: number, y: number) {
@@ -94,33 +92,27 @@ export class Renderer {
     }
   }
 
-  // --- MODIFIED: Start of changes ---
   public updateDepthMap(data: Float32Array, width: number, height: number): void {
     if (!this.device) return;
 
-    // If textures exist but the size is wrong, destroy them
     if (this.depthTextureRead && (this.depthTextureRead.width !== width || this.depthTextureRead.height !== height)) {
         this.depthTextureRead.destroy();
         this.depthTextureWrite.destroy();
     }
 
-    // Create the textures if they don't exist
     if (!this.depthTextureRead || this.depthTextureRead.width !== width || this.depthTextureRead.height !== height) {
         const depthTextureDescriptor: GPUTextureDescriptor = {
             size: [width, height],
             format: 'r32float',
-            // Add STORAGE_BINDING to allow the compute shader to write to them
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
         };
         this.depthTextureRead = this.device.createTexture(depthTextureDescriptor);
         this.depthTextureWrite = this.device.createTexture(depthTextureDescriptor);
     }
 
-    // Write the initial AI-generated depth data to *both* textures
     this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
     this.device.queue.writeTexture({ texture: this.depthTextureWrite }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
 
-    // Recreate bind groups with the new textures
     this.createBindGroups();
   }
     
@@ -132,10 +124,12 @@ export class Renderer {
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        
+        // --- MODIFIED: Start of change ---
+        // Increased buffer size from 16 to 32 to accommodate the extra vec4 for zoom_config
+        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        // --- MODIFIED: End of change ---
     
-        // --- MODIFIED: Start of changes ---
-        // Create placeholder 1x1 depth textures. They will be replaced by the AI model's output.
         const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
             format: 'r32float',
@@ -145,7 +139,6 @@ export class Renderer {
         this.depthTextureWrite = this.device.createTexture(placeholderDepthDescriptor);
         this.device.queue.writeTexture({ texture: this.depthTextureRead }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
         this.device.queue.writeTexture({ texture: this.depthTextureWrite }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
-        // --- MODIFIED: End of changes ---
         
         this.writeTexture = this.device.createTexture({
             size: [width, height],
@@ -183,10 +176,7 @@ export class Renderer {
     }
 
     private createBindGroups(): void {
-        // --- MODIFIED: Start of changes ---
-        // Guard against missing textures, especially during initialization
         if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite) return;
-        // --- MODIFIED: End of changes ---
 
         if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.sampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
@@ -205,7 +195,6 @@ export class Renderer {
             ] 
         }));
 
-        // --- MODIFIED: Start of changes ---
         const computeLayout = this.pipelines.get('compute')!.getBindGroupLayout(0);
         const computeEntries = [
             { binding: 0, resource: this.sampler },
@@ -225,16 +214,13 @@ export class Renderer {
                 entries: computeEntries
             }));
         }
-        // --- MODIFIED: End of changes ---
     }
     
-    // --- MODIFIED: Start of changes ---
     private swapDepthTextures() {
         const temp = this.depthTextureRead;
         this.depthTextureRead = this.depthTextureWrite;
         this.depthTextureWrite = temp;
     }
-    // --- MODIFIED: End of changes ---
 
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
         if (!this.device || !this.imageTexture) return;
@@ -252,10 +238,7 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-            // --- MODIFIED: Start of changes ---
-            // Recreate the bind group every frame to point to the correct swapped textures
             this.createBindGroups();
-            // --- MODIFIED: End of changes ---
 
             const computePass = commandEncoder.beginComputePass();
             const computeV1BG = this.bindGroups.get('computeV1');
@@ -270,9 +253,9 @@ export class Renderer {
             } else if ((mode === 'liquid' || mode === 'liquid-zoom') && computeBG) {
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
-                const computeUniformArray = new Float32Array(4 + 4 + this.MAX_RIPPLES * 4); // Added 4 floats for zoom_config
+                const computeUniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4); // 8 floats for config + zoom_config
                 computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
-                computeUniformArray.set([currentTime], 4); // zoomTime
+                computeUniformArray.set([currentTime, 0, 0, 0], 4); // zoomTime + padding
                 const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
                 for (let i = 0; i < this.ripplePoints.length; i++) {
                     const point = this.ripplePoints[i];
@@ -292,12 +275,9 @@ export class Renderer {
             }
             computePass.end();
             
-            // --- MODIFIED: Start of changes ---
-            // Swap the textures for the next frame
             if (mode === 'liquid' || mode === 'liquid-zoom') {
                 this.swapDepthTextures();
             }
-            // --- MODIFIED: End of changes ---
         }
 
         const textureView = this.context.getCurrentTexture().createView();
