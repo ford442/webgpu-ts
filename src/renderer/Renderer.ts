@@ -15,7 +15,8 @@ export class Renderer {
     private v1ComputeUniformBuffer!: GPUBuffer;
     private imageVideoUniformBuffer!: GPUBuffer;
     private galaxyUniformBuffer!: GPUBuffer;
-    private audioUniformBuffer!: GPUBuffer; // New uniform buffer for audio
+    private audioUniformBuffer!: GPUBuffer;
+    private audioDataArray = new Float32Array(128); // --- FIX: Create a reusable Float32Array ---
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
@@ -86,7 +87,7 @@ export class Renderer {
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.audioUniformBuffer = this.device.createBuffer({ size: 128 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }); // 128 floats for audio data
+        this.audioUniformBuffer = this.device.createBuffer({ size: 128 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
         this.writeTexture = this.device.createTexture({
             size: [width, height],
@@ -190,7 +191,8 @@ export class Renderer {
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
 
                 if (audioData) {
-                    this.device.queue.writeBuffer(this.audioUniformBuffer, 0, audioData);
+                    this.audioDataArray.set(audioData);
+                    this.device.queue.writeBuffer(this.audioUniformBuffer, 0, this.audioDataArray);
                 }
 
                 computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
