@@ -262,7 +262,6 @@ export class Renderer {
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
                 const computeUniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
                 computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
-                computeUniformArray.set([this.averageDepth, this.minDepth, this.maxDepth, 0.0], 4);
                 const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
                 for (let i = 0; i < this.ripplePoints.length; i++) {
                     const point = this.ripplePoints[i];
