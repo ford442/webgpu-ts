@@ -49,7 +49,6 @@ export class Renderer {
         await this.fetchImageUrls();
         await this.createResources();
         await this.createPipelines();
-        // createBindGroups is now called inside the render loop to handle swapping
         
         return true;
     }
@@ -83,7 +82,6 @@ export class Renderer {
       });
       this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
-      // Recreate bind groups when a new image is loaded
       this.createBindGroups();
       return imageUrl;
     } catch (e) {
@@ -125,10 +123,7 @@ export class Renderer {
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         
-        // --- MODIFIED: Start of change ---
-        // Increased buffer size from 16 to 32 to accommodate the extra vec4 for zoom_config
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        // --- MODIFIED: End of change ---
     
         const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
@@ -222,7 +217,9 @@ export class Renderer {
         this.depthTextureWrite = temp;
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
+    // --- MODIFIED: Start of changes ---
+    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }): void {
+    // --- MODIFIED: End of changes ---
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
 
@@ -253,9 +250,12 @@ export class Renderer {
             } else if ((mode === 'liquid' || mode === 'liquid-zoom') && computeBG) {
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
-                const computeUniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4); // 8 floats for config + zoom_config
+                const computeUniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
                 computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
-                computeUniformArray.set([currentTime, 0, 0, 0], 4); // zoomTime + padding
+                // --- MODIFIED: Start of changes ---
+                // Write zoomTime and the farthest point coordinates
+                computeUniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
+                // --- MODIFIED: End of changes ---
                 const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
                 for (let i = 0; i < this.ripplePoints.length; i++) {
                     const point = this.ripplePoints[i];
