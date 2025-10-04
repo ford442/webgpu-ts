@@ -1,5 +1,8 @@
+// src/components/WebGPUCanvas.tsx
+
 import React, { useRef, useEffect, useState } from 'react';
-import { Renderer, RenderMode } from '../renderer/Renderer';
+import { Renderer } from '../renderer/Renderer';
+import { RenderMode } from '../renderer/types'; // Corrected import path
 
 interface WebGPUCanvasProps {
     mode: RenderMode;
@@ -41,6 +44,15 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
                 video.loop = true;
                 video.playsInline = true;
 
+                // --- FIX START: HIDE AND APPEND VIDEO TO DOM ---
+                video.style.position = 'absolute';
+                video.style.left = '-9999px';
+                video.style.top = '-9999px';
+                video.style.width = '1px';
+                video.style.height = '1px';
+                document.body.appendChild(video);
+                // --- FIX END ---
+
                 video.addEventListener('canplay', handleCanPlay);
                 video.addEventListener('error', handleError);
             }
@@ -52,6 +64,10 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
             if (video) {
                 video.removeEventListener('canplay', handleCanPlay);
                 video.removeEventListener('error', handleError);
+                // --- FIX: CLEANUP VIDEO FROM DOM ---
+                if (video.parentNode) {
+                    video.parentNode.removeChild(video);
+                }
             }
         };
     }, [onVideoReady]);
