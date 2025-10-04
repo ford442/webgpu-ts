@@ -1,6 +1,6 @@
 // src/renderer/Renderer.ts
 
-export type RenderMode = 'liquid' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'shader';
+import { RenderMode } from './types';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
