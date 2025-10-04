@@ -7,9 +7,10 @@ interface WebGPUCanvasProps {
     panX: number;
     panY: number;
     imageVersion: number;
+    audioData: Uint8Array | null;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, imageVersion, audioData }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<Renderer | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -21,7 +22,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const renderer = new Renderer(canvas);
-        
+
         (async () => {
             const success = await renderer.init();
             if (success) {
@@ -50,13 +51,13 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ima
         const animate = () => {
             if (!active) return;
             if (rendererRef.current && videoRef.current) {
-                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY);
+                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY, audioData);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY]);
+    }, [mode, zoom, panX, panY, audioData]);
 
     const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!rendererRef.current) return;
