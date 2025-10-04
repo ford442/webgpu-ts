@@ -21,8 +21,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let zoom_time = u.zoom_config.x;
     let zoom_center = u.zoom_config.yz;
 
-    // --- Liquid/ripple logic (remains the same) ---
-    // It calculates 'displaced_uv' which includes ambient and mouse-driven motion.
+    // --- Liquid/ripple logic (calculates 'displaced_uv') ---
     let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
     var ambientDisplacement = vec2<f32>(0.0, 0.0);
     if (center_depth >= 0.5) {
@@ -57,36 +56,46 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let totalDisplacement = mouseDisplacement + ambientDisplacement;
     let displaced_uv = uv + totalDisplacement;
 
-    // --- MODIFIED: Start of new static background logic ---
-
-    // 1. Sample the background. It uses the liquid-displaced UVs but is NOT zoomed.
-    // This makes the background feel static while still being fluid.
+    // 1. Sample the static background color.
     let background_color = textureSampleLevel(readTexture, u_sampler, fract(displaced_uv), 0.0);
 
-    // 2. Calculate the zooming, repeating UVs for the FOREGROUND ONLY.
+    // 2. Calculate the zooming UVs for the foreground.
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed);
     let scale = 1.0 - (zoom_progress * 0.5);
     let repeating_uv = fract((displaced_uv - zoom_center) * scale + zoom_center);
 
-    // 3. Sample the foreground color using the zooming and parallax-affected UVs.
+    // 3. Sample the foreground color.
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
     let parallax_offset = (repeating_uv - 0.5) * depth * 0.4;
     let parallax_uv = repeating_uv + parallax_offset;
     let foreground_color = textureSampleLevel(readTexture, u_sampler, parallax_uv, 0.0);
 
-    // 4. Calculate an alpha mask based on depth to blend the foreground over the background.
+    // 4. Calculate depth-based alpha mask.
     let dissolve_threshold = 1.0 - zoom_progress;
     let alpha = smoothstep(dissolve_threshold - 0.15, dissolve_threshold, depth);
 
-    // 5. Mix the static background and the zooming foreground.
-    let final_color = mix(background_color, foreground_color, alpha);
+    // --- MODIFIED: Start of new fade-in/fade-out logic ---
+    // This block creates a smooth blend at the start and end of the zoom cycle.
+    let fade_duration = 0.2; // Use 20% of the cycle for fading
+    var cycle_fade = 1.0;
+    if (zoom_progress < fade_duration) {
+      // Fade in at the beginning of the cycle
+      cycle_fade = zoom_progress / fade_duration;
+    } else if (zoom_progress > (1.0 - fade_duration)) {
+      // Fade out at the end of the cycle
+      cycle_fade = (1.0 - zoom_progress) / fade_duration;
+    }
+    // Use smoothstep for a more gradual fade curve
+    let final_alpha = alpha * smoothstep(0.0, 1.0, cycle_fade);
+    // --- MODIFIED: End of new fade-in/fade-out logic ---
 
-    // --- MODIFIED: End of new static background logic ---
+    // 5. Mix the static background and the fading, zooming foreground.
+    let final_color = mix(background_color, foreground_color, final_alpha);
 
     textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
     
-    // The depth texture must still be updated with the zoomed coordinates for the next frame's effect.
+    // Update the depth texture for the next frame.
     let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
     textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
 }
