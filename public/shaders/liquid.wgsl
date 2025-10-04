@@ -19,37 +19,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let currentTime = u.config.x;
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
-  // --- MODIFIED: Start of new Three-Zone Logic ---
+  // --- MODIFIED: Start of new simplified logic ---
   let time = currentTime * 0.5;
   let base_ambient_strength = 0.02; 
   let ambient_freq = 15.0;
-  
-  // Define the three distinct motion types
-  // --- MODIFIED: Start of change ---
-  let motion_background = vec2<f32>(0.0, 0.0); // This is now completely still
-  // --- MODIFIED: End of change ---
-  let motion_foreground = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0); // Left/Right
-  let motion_mid = vec2<f32>(cos(time * 0.4), sin(time * 0.4)); // Slow, circular motion
 
-  // Define the zone boundaries with a small overlap for smooth blending
-  let background_end = 0.33;
-  let foreground_start = 0.66;
-  let blend_width = 0.1;
+  // A single, more dynamic motion for any moving pixels
+  let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
 
-  // Calculate the influence (from 0.0 to 1.0) for each zone
-  let background_influence = 1.0 - smoothstep(background_end - blend_width, background_end + blend_width, center_depth);
-  let foreground_influence = smoothstep(foreground_start - blend_width, foreground_start + blend_width, center_depth);
-  // The mid-ground is active only when the other two are not
-  let mid_influence = (1.0 - background_influence) * (1.0 - foreground_influence);
+  // Create an influence factor that is 0.0 for depth < 0.5 and 1.0 for depth > 0.5,
+  // with a small blend zone between 0.45 and 0.55.
+  let motion_influence = smoothstep(0.45, 0.55, center_depth);
 
-  // Combine the motions based on their influence factors
-  var mixed_motion = (motion_background * background_influence) + 
-                     (motion_foreground * foreground_influence) +
-                     (motion_mid * mid_influence * 0.4); // Mid-ground motion is at 40% strength
-
-  // --- MODIFIED: Reverted to the original calculation
-  var ambientDisplacement = mixed_motion * base_ambient_strength;
-  // --- MODIFIED: End of new Three-Zone Logic ---
+  // The final displacement is the motion multiplied by its influence
+  var ambientDisplacement = motion * base_ambient_strength * motion_influence;
+  // --- MODIFIED: End of new simplified logic ---
 
 
   // --- Occlusion and Ripple logic below remains unchanged ---
