@@ -1,4 +1,4 @@
-export type RenderMode = 'liquid' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'shader';
+export type RenderMode = 'liquid' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'shader' | 'liquid-zoom';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -157,11 +157,12 @@ export class Renderer {
     }
 
     private async createPipelines(): Promise<void> {
-        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, textureCode] = await Promise.all([
+        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidZoomCode, textureCode] = await Promise.all([
             fetch('shaders/galaxy.wgsl').then(res => res.text()),
             fetch('shaders/imageVideo.wgsl').then(res => res.text()),
             fetch('shaders/liquid-v1.wgsl').then(res => res.text()),
             fetch('shaders/liquid.wgsl').then(res => res.text()),
+            fetch('shaders/liquid-zoom.wgsl').then(res => res.text()),
             fetch('shaders/texture.wgsl').then(res => res.text()),
         ]);
 
@@ -169,6 +170,7 @@ export class Renderer {
         const imageVideoModule = this.device.createShaderModule({ code: imageVideoCode });
         const liquidV1Module = this.device.createShaderModule({ code: liquidV1Code });
         const liquidModule = this.device.createShaderModule({ code: liquidCode });
+        const liquidZoomModule = this.device.createShaderModule({ code: liquidZoomCode });
         const textureModule = this.device.createShaderModule({ code: textureCode });
 
         const commonConfig = { vertex: { module: imageVideoModule, entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }] }, primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology } };
@@ -177,6 +179,7 @@ export class Renderer {
         this.pipelines.set('liquid', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } }));
         this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }));
         this.pipelines.set('compute', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }));
+        this.pipelines.set('computeZoom', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidZoomModule, entryPoint: 'main' } }));
     }
 
     private createBindGroups(): void {
@@ -203,19 +206,25 @@ export class Renderer {
         }));
 
         // --- MODIFIED: Start of changes ---
-        // The 'compute' bind group now needs access to both read and write depth textures
-        this.bindGroups.set('compute', this.device.createBindGroup({
-            layout: this.pipelines.get('compute')!.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: this.sampler },
-                { binding: 1, resource: this.imageTexture.createView() },
-                { binding: 2, resource: this.writeTexture.createView() },
-                { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
-                { binding: 4, resource: this.depthTextureRead.createView() },      // READ depth
-                { binding: 5, resource: this.nonFilteringSampler },
-                { binding: 6, resource: this.depthTextureWrite.createView() },     // WRITE depth (the new binding)
-            ]
-        }));
+        const computeLayout = this.pipelines.get('compute')!.getBindGroupLayout(0);
+        const computeEntries = [
+            { binding: 0, resource: this.sampler },
+            { binding: 1, resource: this.imageTexture.createView() },
+            { binding: 2, resource: this.writeTexture.createView() },
+            { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
+            { binding: 4, resource: this.depthTextureRead.createView() },
+            { binding: 5, resource: this.nonFilteringSampler },
+            { binding: 6, resource: this.depthTextureWrite.createView() },
+        ];
+        this.bindGroups.set('compute', this.device.createBindGroup({ layout: computeLayout, entries: computeEntries }));
+
+        const computeZoomPipeline = this.pipelines.get('computeZoom');
+        if (computeZoomPipeline) {
+            this.bindGroups.set('computeZoom', this.device.createBindGroup({
+                layout: computeZoomPipeline.getBindGroupLayout(0),
+                entries: computeEntries
+            }));
+        }
         // --- MODIFIED: End of changes ---
     }
     
@@ -251,33 +260,41 @@ export class Renderer {
             const computePass = commandEncoder.beginComputePass();
             const computeV1BG = this.bindGroups.get('computeV1');
             const computeBG = this.bindGroups.get('compute');
+            const computeZoomBG = this.bindGroups.get('computeZoom');
 
             if (mode === 'liquid-v1' && computeV1BG) {
                 this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
                 computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeV1BG);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-            } else if (mode === 'liquid' && computeBG) {
+            } else if ((mode === 'liquid' || mode === 'liquid-zoom') && computeBG) {
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
-                const computeUniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
+                const computeUniformArray = new Float32Array(4 + 4 + this.MAX_RIPPLES * 4); // Added 4 floats for zoom_config
                 computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
+                computeUniformArray.set([currentTime], 4); // zoomTime
                 const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
                 for (let i = 0; i < this.ripplePoints.length; i++) {
                     const point = this.ripplePoints[i];
                     rippleData.set([point.x, point.y, point.startTime], i * 4);
                 }
-                computeUniformArray.set(rippleData, 4);
+                computeUniformArray.set(rippleData, 8);
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
-                computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
-                computePass.setBindGroup(0, computeBG);
+                
+                if (mode === 'liquid-zoom' && computeZoomBG) {
+                    computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
+                    computePass.setBindGroup(0, computeZoomBG);
+                } else {
+                    computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
+                    computePass.setBindGroup(0, computeBG);
+                }
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
             }
             computePass.end();
             
             // --- MODIFIED: Start of changes ---
             // Swap the textures for the next frame
-            if (mode === 'liquid') {
+            if (mode === 'liquid' || mode === 'liquid-zoom') {
                 this.swapDepthTextures();
             }
             // --- MODIFIED: End of changes ---
@@ -329,6 +346,7 @@ export class Renderer {
                 break;
             case 'liquid-v1':
             case 'liquid':
+            case 'liquid-zoom':
                 if (liquidPipeline && this.bindGroups.has('liquid')) {
                     passEncoder.setPipeline(liquidPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('liquid')!);
