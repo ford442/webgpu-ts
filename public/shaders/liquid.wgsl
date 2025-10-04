@@ -34,10 +34,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
   // --- Tweaking Knobs ---
   // Adjust these values to change the feel of the effect!
+  let AMBIENT_WASH_STRENGTH = 0.01;
   let BASS_WARP_INTENSITY = 0.08;   // How much bass distorts bright areas
   let MIDS_SHIMMER_INTENSITY = 0.03;  // How much mids make bright areas shimmer
   let TREBLE_JITTER_INTENSITY = 0.01; // High-frequency noise based on treble
-  let ambient_strength = 0.0177;
 
   // --- Step 1: Get Local Pixel Brightness ---
   // Sample the *original* texture to find out how bright this pixel is.
@@ -71,8 +71,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // This satisfies the "overall still liquid wash around" requirement.
   let time = currentTime * 0.7;
   let ambient_freq = 10.0;
-    let d1 = sin(uv.x * ambient_freq + time) * ambient_strength;
-    let d2 = cos(uv.y * ambient_freq * 0.7 + time) * ambient_strength;
+  let d1 = sin(uv.x * ambient_freq + time) * AMBIENT_WASH_STRENGTH;
+  let d2 = cos(uv.y * ambient_freq * 0.7 - time) * AMBIENT_WASH_STRENGTH;
   totalDisplacement += vec2<f32>(d1, d2);
 
   // B. Audio-driven displacement, MODULATED BY BRIGHTNESS
