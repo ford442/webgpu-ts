@@ -34,10 +34,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
   // --- Tweaking Knobs ---
   // Adjust these values to change the feel of the effect!
-  let AMBIENT_WASH_STRENGTH = 0.01;
   let BASS_WARP_INTENSITY = 0.08;   // How much bass distorts bright areas
   let MIDS_SHIMMER_INTENSITY = 0.03;  // How much mids make bright areas shimmer
   let TREBLE_JITTER_INTENSITY = 0.01; // High-frequency noise based on treble
+  let ambient_strength = 0.0177;
 
   // --- Step 1: Get Local Pixel Brightness ---
   // Sample the *original* texture to find out how bright this pixel is.
