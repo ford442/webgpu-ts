@@ -1,3 +1,5 @@
+// src/renderer/Renderer.ts
+
 export type RenderMode = 'liquid' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'shader';
 
 export class Renderer {
@@ -170,7 +172,7 @@ export class Renderer {
         }));
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
+    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, liquidSource: 'image' | 'video'): void {
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
 
@@ -186,13 +188,12 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-            const isVideoReady = videoElement.readyState >= 2 && videoElement.videoWidth > 0;
             const computePass = commandEncoder.beginComputePass();
 
             let computeV1BG: GPUBindGroup | undefined;
             let computeBG: GPUBindGroup | undefined;
 
-            if (isVideoReady) {
+            if (liquidSource === 'video') {
                 computeV1BG = this.bindGroups.get('compute_v1_video');
                 computeBG = this.bindGroups.get('compute_video');
             } else {
@@ -281,5 +282,18 @@ export class Renderer {
 
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
+    }
+
+    public destroy(): void {
+        this.imageTexture?.destroy();
+        if (this.videoTexture) {
+            this.videoTexture.destroy();
+        }
+        this.writeTexture?.destroy();
+        this.galaxyUniformBuffer?.destroy();
+        this.imageVideoUniformBuffer?.destroy();
+        this.v1ComputeUniformBuffer?.destroy();
+        this.v2ComputeUniformBuffer?.destroy();
+        this.device?.destroy();
     }
 }
