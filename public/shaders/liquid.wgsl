@@ -8,6 +8,7 @@ struct Uniforms {
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
+@group(0) @binding(4) var<uniform> audio: array<f32, 128>;
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -15,12 +16,29 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let uv = vec2<f32>(global_id.xy) / resolution;
     var totalDisplacement = vec2<f32>(0.0, 0.0);
     let currentTime = u.config.x;
-    let time = currentTime * 0.5;
-    let ambient_strength = 0.02;
+
+    // --- Audio Visualization ---
+    // Average the low frequencies (bass)
+    var bass: f32 = 0.0;
+    for (var i: i32 = 0; i < 8; i = i + 1) {
+        bass = bass + audio[i];
+    }
+    bass = bass / 8.0 / 255.0; // Normalize
+
+    // Average the high frequencies (treble)
+    var treble: f32 = 0.0;
+    for (var i: i32 = 64; i < 128; i = i + 1) {
+        treble = treble + audio[i];
+    }
+    treble = treble / 64.0 / 255.0; // Normalize
+
+    let time = currentTime * (0.5 + bass * 2.0); // Speed up with bass
+    let ambient_strength = 0.02 + treble * 0.05; // More displacement with treble
     let ambient_freq = 15.0;
     let d1 = sin(uv.x * ambient_freq + time) * ambient_strength;
     let d2 = cos(uv.y * ambient_freq * 0.7 + time) * ambient_strength;
     totalDisplacement += vec2<f32>(d1, d2);
+    
     let rippleCount = u32(u.config.y);
     for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
         let rippleData = u.ripples[i];
