@@ -46,7 +46,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                      (motion_foreground * foreground_influence) +
                      (motion_mid * mid_influence * 0.4); // Mid-ground motion is at 40% strength
 
-  var ambientDisplacement = mixed_motion * base_ambient_strength;
+  // Apply displacement only to the foreground, making it "dance"
+  var ambientDisplacement = mixed_motion * base_ambient_strength * foreground_influence;
   // --- MODIFIED: End of new Three-Zone Logic ---
 
 
