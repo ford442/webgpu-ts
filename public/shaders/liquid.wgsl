@@ -8,11 +8,18 @@ struct Uniforms {
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
-// --- FIX: Use an array of vec4<f32> for 16-byte alignment ---
+
 struct AudioData {
-    values: array<vec4<f32>, 32> // 32 * vec4<f32> = 128 floats total
+    values: array<vec4<f32>, 32>
 };
 @group(0) @binding(4) var<uniform> audio: AudioData;
+
+// --- FIX: Moved helper function to the top level ---
+fn getAudioValue(index: u32) -> f32 {
+    let vecIndex = index / 4u;
+    let compIndex = index % 4u;
+    return audio.values[vecIndex][compIndex];
+}
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -22,13 +29,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let currentTime = u.config.x;
 
     // --- Audio Visualization ---
-    // Helper function to get audio value by original index
-    fn getAudioValue(index: u32) -> f32 {
-        let vecIndex = index / 4u;
-        let compIndex = index % 4u;
-        return audio.values[vecIndex][compIndex];
-    }
-
     // Average the low frequencies (bass)
     var bass: f32 = 0.0;
     for (var i: u32 = 0u; i < 8u; i = i + 1u) {
@@ -43,8 +43,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     treble = treble / 64.0 / 255.0; // Normalize
 
-    let time = currentTime * (0.5 + bass * 2.0); // Speed up with bass
-    let ambient_strength = 0.02 + treble * 0.05; // More displacement with treble
+    let time = currentTime * (0.5 + bass * 2.0);
+    let ambient_strength = 0.02 + treble * 0.05;
     let ambient_freq = 15.0;
     let d1 = sin(uv.x * ambient_freq + time) * ambient_strength;
     let d2 = cos(uv.y * ambient_freq * 0.7 + time) * ambient_strength;
