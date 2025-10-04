@@ -17,41 +17,41 @@ struct Uniforms {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = u.config.zw;
     let uv = vec2<f32>(global_id.xy) / resolution;
-    let currentTime = u.config.x;
-    
-    // --- MODIFIED: Start of changes ---
     let zoom_time = u.zoom_config.x;
-    let zoom_center = u.zoom_config.yz; // Use the new uniform for the zoom center
-    // --- MODIFIED: End of changes ---
+    let zoom_center = u.zoom_config.yz;
 
-    let zoom_speed = 0.2;
-    let zoom = fract(zoom_time * zoom_speed);
+    // --- MODIFIED: Start of new infinite zoom logic ---
+    let zoom_speed = 0.15;
+    let zoom_progress = fract(zoom_time * zoom_speed); // Loops from 0.0 to 1.0
+    let scale = 1.0 + zoom_progress; // Scale from 1.0 to 2.0
 
-    let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
+    // Scale UVs from the zoom center and use fract() to make the texture repeat
+    let repeating_uv = fract((uv - zoom_center) * scale + zoom_center);
 
-    // --- MODIFIED: Start of changes ---
-    // Parallax effect for the foreground, now centered on the farthest point
-    let parallax_uv = uv + (uv - zoom_center) * zoom * (1.0 - center_depth) * 0.5;
-    // --- MODIFIED: End of changes ---
+    // Sample the depth at this new repeating coordinate
+    let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
 
-    // Liquid effect for the background
-    let time = currentTime * 0.5;
-    let base_ambient_strength = 0.02;
-    let ambient_freq = 15.0;
-    let motion_background = vec2<f32>(0.0, cos(uv.x * ambient_freq + time));
-    var ambientDisplacement = motion_background * base_ambient_strength;
-    let displaced_liquid_uv = uv + ambientDisplacement;
-    let background_color = textureSampleLevel(readTexture, u_sampler, displaced_liquid_uv, 0.0);
+    // Create a parallax effect: pixels with higher depth are pushed farther from the center
+    let parallax_offset = (repeating_uv - 0.5) * depth * 0.4;
+    let parallax_uv = repeating_uv + parallax_offset;
 
-    // Foreground color
+    // As the zoom progresses, "dissolve" the foreground objects to reveal the next layer
+    let dissolve_threshold = 1.0 - zoom_progress;
+    // Calculate an alpha based on depth. If depth > threshold, alpha is 1.0 (visible).
+    let alpha = smoothstep(dissolve_threshold - 0.15, dissolve_threshold, depth);
+
+    // The foreground is the parallax-affected color
     let foreground_color = textureSampleLevel(readTexture, u_sampler, parallax_uv, 0.0);
+    // The background is the simple repeating texture
+    let background_color = textureSampleLevel(readTexture, u_sampler, repeating_uv, 0.0);
 
-    // Combine based on depth and zoom
-    let threshold = 1.0 - zoom;
-    var final_color = mix(background_color, foreground_color, smoothstep(threshold - 0.1, threshold, center_depth));
+    // Blend the foreground over the background using the calculated alpha
+    let final_color = mix(background_color, foreground_color, alpha);
 
-    textureStore(writeTexture, global_id.xy, final_color);
+    textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
+    // --- MODIFIED: End of new infinite zoom logic ---
 
-    let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
+    // Update the depth texture for the next frame
+    let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
     textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
 }
