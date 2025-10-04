@@ -68,7 +68,7 @@ export class Renderer {
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
-                format: 'rgba8unorm',
+                format: 'rgba16float',
                 // --- FIX #1: Added COPY_SRC usage flag ---
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
@@ -89,7 +89,7 @@ export class Renderer {
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.writeTexture = this.device.createTexture({
             size: [width, height],
-            format: 'rgba8unorm',
+            format: 'rgba16float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
         await this.loadRandomImage();
@@ -179,7 +179,7 @@ export class Renderer {
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
             if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
-                this.videoTexture = this.device.createTexture({ size: [videoElement.videoWidth, videoElement.videoHeight], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+                this.videoTexture = this.device.createTexture({ size: [videoElement.videoWidth, videoElement.videoHeight], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
                 this.createBindGroups();
             }
             this.device.queue.copyExternalImageToTexture({ source: videoElement }, { texture: this.videoTexture }, [videoElement.videoWidth, videoElement.videoHeight]);
