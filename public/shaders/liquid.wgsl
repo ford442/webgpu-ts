@@ -8,7 +8,11 @@ struct Uniforms {
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
-@group(0) @binding(4) var<uniform> audio: array<f32, 128>;
+// --- FIX: Use an array of vec4<f32> for 16-byte alignment ---
+struct AudioData {
+    values: array<vec4<f32>, 32> // 32 * vec4<f32> = 128 floats total
+};
+@group(0) @binding(4) var<uniform> audio: AudioData;
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -18,17 +22,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let currentTime = u.config.x;
 
     // --- Audio Visualization ---
+    // Helper function to get audio value by original index
+    fn getAudioValue(index: u32) -> f32 {
+        let vecIndex = index / 4u;
+        let compIndex = index % 4u;
+        return audio.values[vecIndex][compIndex];
+    }
+
     // Average the low frequencies (bass)
     var bass: f32 = 0.0;
-    for (var i: i32 = 0; i < 8; i = i + 1) {
-        bass = bass + audio[i];
+    for (var i: u32 = 0u; i < 8u; i = i + 1u) {
+        bass = bass + getAudioValue(i);
     }
     bass = bass / 8.0 / 255.0; // Normalize
 
     // Average the high frequencies (treble)
     var treble: f32 = 0.0;
-    for (var i: i32 = 64; i < 128; i = i + 1) {
-        treble = treble + audio[i];
+    for (var i: u32 = 64u; i < 128u; i = i + 1u) {
+        treble = treble + getAudioValue(i);
     }
     treble = treble / 64.0 / 255.0; // Normalize
 
@@ -38,7 +49,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let d1 = sin(uv.x * ambient_freq + time) * ambient_strength;
     let d2 = cos(uv.y * ambient_freq * 0.7 + time) * ambient_strength;
     totalDisplacement += vec2<f32>(d1, d2);
-    
+
     let rippleCount = u32(u.config.y);
     for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
         let rippleData = u.ripples[i];
