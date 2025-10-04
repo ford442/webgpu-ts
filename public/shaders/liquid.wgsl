@@ -155,7 +155,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let laplacian = (h_right + h_left + h_up + h_down) - 4.0 * h_center;
     let caustic_boost = clamp(-laplacian * 200.0, 0.0, 1.0) * u.params.z;
     
-    final_color.rgb += caustic_boost;
+    final_color.r += caustic_boost;
+    final_color.g += caustic_boost;
+    final_color.b += caustic_boost;
     
     textureStore(writeTexture, global_id.xy, final_color);
 }
