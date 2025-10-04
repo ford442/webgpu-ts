@@ -19,21 +19,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let currentTime = u.config.x;
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
-  // --- MODIFIED: Start of new simplified logic ---
-  let time = currentTime * 0.5;
-  let base_ambient_strength = 0.02; 
-  let ambient_freq = 15.0;
+  // --- MODIFIED: Start of new conditional logic ---
+  var ambientDisplacement = vec2<f32>(0.0, 0.0);
 
-  // A single, more dynamic motion for any moving pixels
-  let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
-
-  // Create an influence factor that is 0.0 for depth < 0.5 and 1.0 for depth > 0.5,
-  // with a small blend zone between 0.45 and 0.55.
-  let motion_influence = smoothstep(0.45, 0.55, center_depth);
-
-  // The final displacement is the motion multiplied by its influence
-  var ambientDisplacement = motion * base_ambient_strength * motion_influence;
-  // --- MODIFIED: End of new simplified logic ---
+  // Only apply ambient motion if the depth is 0.5 or greater
+  if (center_depth >= 0.5) {
+    let time = currentTime * 0.5;
+    let base_ambient_strength = 0.02; 
+    let ambient_freq = 15.0;
+    let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
+    ambientDisplacement = motion * base_ambient_strength;
+  }
+  // --- MODIFIED: End of new conditional logic ---
 
 
   // --- Occlusion and Ripple logic below remains unchanged ---
