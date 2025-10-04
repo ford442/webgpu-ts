@@ -6,10 +6,13 @@ interface WebGPUCanvasProps {
     zoom: number;
     panX: number;
     panY: number;
-    rendererRef: React.MutableRefObject<Renderer | null>; // Accept the ref from props
+    rendererRef: React.MutableRefObject<Renderer | null>;
+    // --- MODIFIED: Start of changes ---
+    farthestPoint: { x: number; y: number };
+    // --- MODIFIED: End of changes ---
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
@@ -38,20 +41,24 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
             }
         })();
         return () => cancelAnimationFrame(animationFrameId.current);
-    }, [rendererRef]); // The effect now depends on the ref object itself
+    }, [rendererRef]); 
 
     useEffect(() => {
         let active = true;
         const animate = () => {
             if (!active) return;
             if (rendererRef.current && videoRef.current) {
-                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY);
+                // --- MODIFIED: Start of changes ---
+                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY, farthestPoint);
+                // --- MODIFIED: End of changes ---
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY]);
+    // --- MODIFIED: Start of changes ---
+    }, [mode, zoom, panX, panY, farthestPoint]); // Add farthestPoint to dependency array
+    // --- MODIFIED: End of changes ---
 
     const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!rendererRef.current) return;
