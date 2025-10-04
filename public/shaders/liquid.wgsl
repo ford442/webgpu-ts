@@ -5,7 +5,6 @@
 @group(0) @binding(5) var non_filtering_sampler: sampler;
 @group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
 
-// Revert the Uniforms struct to its original simple form
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
   ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
@@ -26,7 +25,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let ambient_freq = 15.0;
   
   // Define the three distinct motion types
-  let motion_background = vec2<f32>(0.0, cos(uv.x * ambient_freq + time)); // Up/Down
+  // --- MODIFIED: Start of change ---
+  let motion_background = vec2<f32>(0.0, 0.0); // This is now completely still
+  // --- MODIFIED: End of change ---
   let motion_foreground = vec2<f32>(sin(uv.y * ambient_freq * 1.2 + time * 1.2), 0.0); // Left/Right
   let motion_mid = vec2<f32>(cos(time * 0.4), sin(time * 0.4)); // Slow, circular motion
 
@@ -46,8 +47,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                      (motion_foreground * foreground_influence) +
                      (motion_mid * mid_influence * 0.4); // Mid-ground motion is at 40% strength
 
-  // Apply displacement only to the foreground, making it "dance"
-  var ambientDisplacement = mixed_motion * base_ambient_strength * foreground_influence;
+  // --- MODIFIED: Reverted to the original calculation
+  var ambientDisplacement = mixed_motion * base_ambient_strength;
   // --- MODIFIED: End of new Three-Zone Logic ---
 
 
@@ -95,25 +96,4 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       if (dist > 0.0001) {
         let rippleOriginDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, rippleCenter, 0.0).r;
         let rippleOriginDepthFactor = 1.0 - rippleOriginDepth;
-        let ripple_speed = mix(1.0, 2.0, rippleOriginDepthFactor);
-        let ripple_amplitude = mix(0.005, 0.015, rippleOriginDepthFactor);
-        let ripple_frequency = 25.0;
-        let wave = sin(dist * ripple_frequency - timeSinceClick * ripple_speed);
-        let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / (3.0 * mix(0.5, 1.0, rippleOriginDepthFactor)));
-        let falloff = 1.0 / (dist * 20.0 + 1.0);
-        let displacement = wave * ripple_amplitude * attenuation * falloff;
-        let direction = direction_vec / dist;
-        mouseDisplacement += direction * displacement;
-      }
-    }
-  }
-  
-  let totalDisplacement = mouseDisplacement + ambientDisplacement;
-  let colorDisplacedUV = uv + totalDisplacement;
-  let color = textureSampleLevel(readTexture, u_sampler, colorDisplacedUV, 0.0);
-  textureStore(writeTexture, global_id.xy, color);
-
-  let depthDisplacedUV = uv + mouseDisplacement;
-  let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthDisplacedUV, 0.0).r;
-  textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
-}
+        let ripple
