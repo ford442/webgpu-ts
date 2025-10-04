@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
-import { RenderMode } from './renderer/Renderer';
+import { RenderMode } from './renderer/types'; // Corrected import
 import './style.css';
 
 function App() {
