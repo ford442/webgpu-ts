@@ -7,7 +7,7 @@
 
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
-  zoom_config: vec4<f32>,         // zoomTime, unused, unused, unused
+  zoom_config: vec4<f32>,         // zoomTime, farthestX, farthestY, unused
   ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
 };
 
@@ -18,15 +18,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = u.config.zw;
     let uv = vec2<f32>(global_id.xy) / resolution;
     let currentTime = u.config.x;
+    
+    // --- MODIFIED: Start of changes ---
     let zoom_time = u.zoom_config.x;
+    let zoom_center = u.zoom_config.yz; // Use the new uniform for the zoom center
+    // --- MODIFIED: End of changes ---
 
     let zoom_speed = 0.2;
     let zoom = fract(zoom_time * zoom_speed);
 
     let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
-    // Parallax effect for the foreground
-    let parallax_uv = uv + (uv - 0.5) * zoom * (1.0 - center_depth) * 0.5;
+    // --- MODIFIED: Start of changes ---
+    // Parallax effect for the foreground, now centered on the farthest point
+    let parallax_uv = uv + (uv - zoom_center) * zoom * (1.0 - center_depth) * 0.5;
+    // --- MODIFIED: End of changes ---
 
     // Liquid effect for the background
     let time = currentTime * 0.5;
