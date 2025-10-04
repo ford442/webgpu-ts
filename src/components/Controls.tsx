@@ -1,5 +1,5 @@
 import React from 'react';
-import { RenderMode } from '../renderer/Renderer';
+import { RenderMode } from '../renderer/types'; // Corrected import
 
 interface ControlsProps {
     mode: RenderMode;
