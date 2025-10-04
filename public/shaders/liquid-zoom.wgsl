@@ -26,7 +26,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var ambientDisplacement = vec2<f32>(0.0, 0.0);
     if (center_depth >= 0.5) {
         let time = currentTime * 0.5;
-        let base_ambient_strength = 0.02; 
+        let base_ambient_strength = 0.02;
         let ambient_freq = 15.0;
         let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
         ambientDisplacement = motion * base_ambient_strength;
@@ -56,14 +56,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let totalDisplacement = mouseDisplacement + ambientDisplacement;
     let displaced_uv = uv + totalDisplacement;
 
-    // 1. Sample the static background color.
-    let background_color = textureSampleLevel(readTexture, u_sampler, fract(displaced_uv), 0.0);
+    // --- MODIFIED: Background is now a slow, continuous zoom ---
+    // This creates a constant sense of forward motion.
+    let bg_scale = pow(0.95, zoom_time); // Exponential zoom for a smooth, continuous effect.
+    let bg_uv = (displaced_uv - zoom_center) * bg_scale + zoom_center;
+    let background_color = textureSampleLevel(readTexture, u_sampler, fract(bg_uv), 0.0);
 
-    // 2. Calculate the zooming UVs for the foreground.
+    // 2. Calculate the fast, cyclical, zooming UVs for the foreground.
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed);
-    let scale = 1.0 - (zoom_progress * 0.5);
-    let repeating_uv = fract((displaced_uv - zoom_center) * scale + zoom_center);
+    let fg_scale = 1.0 - (zoom_progress * 0.5);
+    let repeating_uv = fract((displaced_uv - zoom_center) * fg_scale + zoom_center);
 
     // 3. Sample the foreground color.
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
@@ -75,26 +78,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let dissolve_threshold = 1.0 - zoom_progress;
     let alpha = smoothstep(dissolve_threshold - 0.15, dissolve_threshold, depth);
 
-    // --- MODIFIED: Start of new fade-in/fade-out logic ---
-    // This block creates a smooth blend at the start and end of the zoom cycle.
-    let fade_duration = 0.2; // Use 20% of the cycle for fading
+    // 5. Apply the fade-in/fade-out for the foreground cycle.
+    let fade_duration = 0.2;
     var cycle_fade = 1.0;
     if (zoom_progress < fade_duration) {
-      // Fade in at the beginning of the cycle
       cycle_fade = zoom_progress / fade_duration;
     } else if (zoom_progress > (1.0 - fade_duration)) {
-      // Fade out at the end of the cycle
       cycle_fade = (1.0 - zoom_progress) / fade_duration;
     }
-    // Use smoothstep for a more gradual fade curve
     let final_alpha = alpha * smoothstep(0.0, 1.0, cycle_fade);
-    // --- MODIFIED: End of new fade-in/fade-out logic ---
 
-    // 5. Mix the static background and the fading, zooming foreground.
+    // 6. Mix the zooming background and the fading, zooming foreground.
     let final_color = mix(background_color, foreground_color, final_alpha);
 
     textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
-    
+
     // Update the depth texture for the next frame.
     let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
     textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
