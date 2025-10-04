@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { Renderer } from '../renderer/Renderer';
-import { RenderMode } from '../renderer/types'; // Corrected import path
+import { RenderMode } from '../renderer/types'; // Corrected import
 
 interface WebGPUCanvasProps {
     mode: RenderMode;
