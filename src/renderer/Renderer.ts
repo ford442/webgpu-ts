@@ -15,6 +15,7 @@ export class Renderer {
     private v1ComputeUniformBuffer!: GPUBuffer;
     private imageVideoUniformBuffer!: GPUBuffer;
     private galaxyUniformBuffer!: GPUBuffer;
+    private audioUniformBuffer!: GPUBuffer; // New uniform buffer for audio
     private videoTexture!: GPUTexture;
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
@@ -85,6 +86,8 @@ export class Renderer {
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 16 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.audioUniformBuffer = this.device.createBuffer({ size: 128 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }); // 128 floats for audio data
+
         this.writeTexture = this.device.createTexture({
             size: [width, height],
             format: 'rgba16float',
@@ -132,7 +135,7 @@ export class Renderer {
                 { binding: 0, resource: this.sampler }, 
                 { binding: 1, resource: this.imageTexture.createView() }, 
                 { binding: 2, resource: this.writeTexture.createView() },
-                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } } // This line was missing.
+                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }
             ] 
         }));
 
@@ -142,12 +145,13 @@ export class Renderer {
                 { binding: 0, resource: this.sampler }, 
                 { binding: 1, resource: this.imageTexture.createView() }, 
                 { binding: 2, resource: this.writeTexture.createView() }, 
-                { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } }
+                { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
+                { binding: 4, resource: { buffer: this.audioUniformBuffer } } // Add audio buffer
             ] 
         }));
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number): void {
+    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, audioData: Uint8Array | null): void {
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
 
@@ -163,8 +167,6 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-
-
             const computePass = commandEncoder.beginComputePass();
             const computeV1BG = this.bindGroups.get('computeV1');
             const computeBG = this.bindGroups.get('compute');
@@ -186,6 +188,11 @@ export class Renderer {
                 }
                 computeUniformArray.set(rippleData, 4);
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
+
+                if (audioData) {
+                    this.device.queue.writeBuffer(this.audioUniformBuffer, 0, audioData);
+                }
+
                 computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeBG);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
@@ -213,7 +220,6 @@ export class Renderer {
             case 'image':
             case 'ripple':
                 if (imageVideoPipeline && this.bindGroups.has('image')) {
-                    // --- FIX #2: Rewrote uniform buffer creation to be safer ---
                     const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
                     uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
                     uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0, 0.0], 4);
