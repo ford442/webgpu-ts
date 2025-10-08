@@ -144,7 +144,7 @@ export class Renderer {
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
-        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
         const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
@@ -199,32 +199,68 @@ export class Renderer {
         return this.imageDimensions;
     }
 
+That's a great piece of logic from Jules! It's a very clear and direct way to handle the specific aspect ratio difference between the main image and the AI-generated depth map. It calculates the exact scaling and offset needed to fit one inside the other.
+
+Let's integrate this new, more explicit correction logic into our project. We'll update the renderer to send the necessary data and then replace our old correction function in the shader with this new code block.
+
+The Fix
+Here are the updated files. We'll adjust the Renderer to send the depthDimensions in a dedicated uniform and then use that in the shader with the new logic.
+
+1. src/renderer/Renderer.ts (Modified)
+We'll reorganize the uniform data slightly for clarity to match the new shader code.
+
+TypeScript
+
+// In src/renderer/Renderer.ts
+
+// Update the render method
 public render(mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}): void {
+    if (!this.device || !this.imageTexture) return;
+    const currentTime = performance.now() / 1000.0;
+    const commandEncoder = this.device.createCommandEncoder();
 
-        if (!this.device || !this.imageTexture) return;
-        const currentTime = performance.now() / 1000.0;
-        const commandEncoder = this.device.createCommandEncoder();
-
-        if (mode === '3d-zoom') {
-            const computePass = commandEncoder.beginComputePass();
-            const computeZoomBG = this.bindGroups.get('computeZoom');
-            if (computeZoomBG) {
+    if (mode === '3d-zoom') {
+        const computePass = commandEncoder.beginComputePass();
+        const computeZoomBG = this.bindGroups.get('computeZoom');
+        if (computeZoomBG) {
             const uniformArray = new Float32Array(12);
 
-            // vec4 0: Resolutions
+            // vec4 0: Resolutions (canvas.xy, image.zw)
             uniformArray.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
-            // vec4 1: Time, Zoom Center, and Depth Width
-            uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, depthDimensions.width], 4);
-            // vec4 2: Config values and Depth Height
-            uniformArray.set([depthThreshold, edgeHardness, depthLevels, depthDimensions.height], 8);
-
-            this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
             
-                computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
-                computePass.setBindGroup(0, computeZoomBG);
-                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-            }
-            computePass.end();
+            // vec4 1: Time, Zoom Center, and a new slot for depth map resolution
+            uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
+            
+            // vec4 2: Config values and the new depth map resolution
+            uniformArray.set([depthThreshold, edgeHardness, depthLevels], 8);
+            
+            // Overwrite specific slots for the dedicated depth_map_res uniform
+            // This is a bit of a hack to fit it in the existing buffer structure
+            // Let's send depth_res in a cleaner way.
+            
+            // --- New, Cleaner Uniform Layout ---
+            const cleanUniforms = new Float32Array(16); // Use a 4x4 buffer for clarity
+            
+            // vec4 0: resolutions (canvas.xy, image.zw)
+            cleanUniforms.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
+            
+            // vec4 1: time_zoom (time.x, zoom_center.yz)
+            cleanUniforms.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
+
+            // vec4 2: config (depthThreshold.x, edgeHardness.y, depthLevels.z)
+            cleanUniforms.set([depthThreshold, edgeHardness, depthLevels], 8);
+            
+            // vec4 3: depth_map_res (depth_w.x, depth_h.y)
+            cleanUniforms.set([depthDimensions.width, depthDimensions.height], 12);
+            
+            this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, cleanUniforms);
+
+
+            computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
+            computePass.setBindGroup(0, computeZoomBG);
+            computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+        }
+        computePass.end();
         }
 
         const textureView = this.context.getCurrentTexture().createView();
