@@ -19,15 +19,16 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let currentTime = u.config.x;
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
-  // --- Ambient and Mouse displacement logic (mostly unchanged) ---
-  var ambientDisplacement = vec2<f32>(0.0, 0.0);
-  if (center_depth >= 0.5) {
+var ambientDisplacement = vec2<f32>(0.0, 0.0);
+let background_factor = smoothstep(0.5, 0.75, center_depth);
+
+if (background_factor > 0.0) {
     let time = currentTime * 0.5;
     let base_ambient_strength = 0.02; 
     let ambient_freq = 15.0;
     let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
-    ambientDisplacement = motion * base_ambient_strength;
-  }
+    ambientDisplacement = motion * base_ambient_strength * background_factor;
+}
   
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
   let rippleCount = u32(u.config.y);
