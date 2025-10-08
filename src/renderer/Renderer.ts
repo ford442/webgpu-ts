@@ -88,24 +88,36 @@ export class Renderer {
         }
     }
 
-    public handleResize(width: number, height: number): void {
+    public handleResize(containerWidth: number, containerHeight: number): void {
         if (!this.device) return;
 
-        // Re-configure the canvas context with the new size
-        this.canvas.width = width;
-        this.canvas.height = height;
-        this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
+        const imageAspect = this.imageDimensions.width / this.imageDimensions.height;
 
-        // Re-create textures that depend on the canvas size
-        if (this.writeTexture) this.writeTexture.destroy();
-        this.writeTexture = this.device.createTexture({
-            size: [width, height],
-            format: 'rgba16float',
-            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-        });
+        let newCanvasWidth = containerWidth;
+        let newCanvasHeight = Math.round(containerWidth / imageAspect);
 
-        // Re-create the bind groups because the writeTexture view has changed
-        this.createBindGroups();
+        if (newCanvasHeight > containerHeight) {
+            newCanvasHeight = containerHeight;
+            newCanvasWidth = Math.round(containerHeight * imageAspect);
+        }
+
+        // Set both the display size (CSS) and the drawing buffer size (attributes)
+        this.canvas.style.width = newCanvasWidth + 'px';
+        this.canvas.style.height = newCanvasHeight + 'px';
+        this.canvas.width = newCanvasWidth;
+        this.canvas.height = newCanvasHeight;
+
+        this.context.configure({device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied'});
+
+        if (this.writeTexture && (this.writeTexture.width !== newCanvasWidth || this.writeTexture.height !== newCanvasHeight)) {
+            this.writeTexture.destroy();
+            this.writeTexture = this.device.createTexture({
+                size: [newCanvasWidth, newCanvasHeight],
+                format: 'rgba16float',
+                usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            });
+            this.createBindGroups();
+        }
     }
 
     public updateDepthMap(data: Float32Array, width: number, height: number): void {

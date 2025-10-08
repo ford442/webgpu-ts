@@ -30,9 +30,10 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
     const animationFrameId = useRef<number>(0);
 
     useEffect(() => {
-        // This useEffect for initialization can remain the same as the ResizeObserver version
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
+        const container = canvas.parentElement; // Get the container
+        if (!container) return;
         const renderer = new Renderer(canvas);
 
         const initRenderer = async () => {
@@ -44,16 +45,15 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
                 const initialWidth = canvas.clientWidth;
                 const initialHeight = canvas.clientHeight;
                 renderer.handleResize(initialWidth, initialHeight);
-
                 const observer = new ResizeObserver(entries => {
                     for (const entry of entries) {
-                        const canvas = entry.target as HTMLCanvasElement;
                         const width = entry.contentBoxSize[0].inlineSize;
                         const height = entry.contentBoxSize[0].blockSize;
+                        // The renderer will now handle the aspect ratio logic
                         renderer.handleResize(width, height);
                     }
                 });
-                observer.observe(canvas);
+                observer.observe(container);
             }
         };
 
