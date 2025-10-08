@@ -153,14 +153,6 @@ function App() {
   }, [depthEstimator, runDepthAnalysis]);
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-    if (autoChangeEnabled) {
-      intervalId = setInterval(handleNewImage, autoChangeDelay * 1000);
-    }
-    return () => { if (intervalId) clearInterval(intervalId); };
-  }, [autoChangeEnabled, autoChangeDelay, handleNewImage]);
-
-  useEffect(() => {
     if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
       const { data, dims } = depthMapResult.predicted_depth;
       const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
