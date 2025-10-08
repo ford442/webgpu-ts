@@ -264,7 +264,7 @@ export class Renderer {
                 computeUniformArray.set(rippleData, 8);
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
                 
-                if (mode === 'liquid-zoom' && computeZoomBG) {
+if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) { // MODIFIED
                     computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
                     computePass.setBindGroup(0, computeZoomBG);
                 } else {
