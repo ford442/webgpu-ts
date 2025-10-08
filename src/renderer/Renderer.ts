@@ -189,7 +189,7 @@ export class Renderer {
             const computeZoomBG = this.bindGroups.get('computeZoom');
             if (computeZoomBG) {
                 const uniformArray = new Float32Array(8);
-                uniformArray.set([currentTime, 0, this.canvas.width, this.canvas.height], 0);
+                uniformArray.set([currentTime, edgeHardness, this.canvas.width, this.canvas.height], 0);
                 uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, depthThreshold], 4);
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
                 computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);

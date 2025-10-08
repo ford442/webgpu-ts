@@ -18,8 +18,10 @@ interface ControlsProps {
     setAutoChangeDelay: (delay: number) => void;
     onLoadModel: () => void;
     isModelLoaded: boolean;
-    depthThreshold: number; // Add this
-    setDepthThreshold: (value: number) => void; // Add this
+    depthThreshold: number;
+    setDepthThreshold: (value: number) => void;
+    edgeHardness: number; // Add this
+    setEdgeHardness: (value: number) => void; // Add this
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
@@ -31,7 +33,8 @@ const Controls: React.FC<ControlsProps> = ({
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
 onLoadModel, isModelLoaded,
-depthThreshold, setDepthThreshold
+depthThreshold, setDepthThreshold,
+edgeHardness, setEdgeHardness
 }) => {
     return (
         <div className="controls">
@@ -61,6 +64,14 @@ depthThreshold, setDepthThreshold
                         max="100"
                         value={depthThreshold * 100}
                         onChange={(e) => setDepthThreshold(parseFloat(e.target.value) / 100)}
+                    />
+                </div>
+                <div className="control-group">
+                    <label htmlFor="hardness-slider">Edge Hardness:</label>
+                    <input
+                        type="range" id="hardness-slider" min="1" max="100"
+                        value={edgeHardness * 100}
+                        onChange={(e) => setEdgeHardness(parseFloat(e.target.value) / 100)}
                     />
                 </div>
                 <div className="control-group">

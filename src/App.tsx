@@ -16,7 +16,8 @@ function App() {
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
-    const [depthThreshold, setDepthThreshold] = useState(0.5); // This will now be controlled by the slider
+    const [depthThreshold, setDepthThreshold] = useState(0.5);
+    const [edgeHardness, setEdgeHardness] = useState(0.5); // New state for edge hardness (0-1 range)
     const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
 
     const rendererRef = useRef<Renderer | null>(null);
@@ -205,8 +206,10 @@ function App() {
         autoChangeDelay={autoChangeDelay}
         setAutoChangeDelay={setAutoChangeDelay}
         onLoadModel={loadModel}
-        depthThreshold={depthThreshold} // Pass the state to the controls
-        setDepthThreshold={setDepthThreshold} // Pass the setter function
+        depthThreshold={depthThreshold}
+        setDepthThreshold={setDepthThreshold}
+        edgeHardness={edgeHardness} // Pass down the new state
+        setEdgeHardness={setEdgeHardness} // Pass down the setter
         isModelLoaded={!!depthEstimator}
       />
         <WebGPUCanvas
@@ -216,7 +219,8 @@ function App() {
             panX={panX}
             panY={panY}
             farthestPoint={farthestPoint}
-            depthThreshold={depthThreshold} // Pass the new prop
+            depthThreshold={depthThreshold}
+            edgeHardness={edgeHardness} // Pass down the new state
         />
       {depthMapResult && (
         <div className="debug-container">

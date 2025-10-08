@@ -21,6 +21,8 @@ fn create_zooming_layer(
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
+    let edge_softness = (1.0 - u.config.y) * 0.1; // Map hardness (0-1) to softness (0.1-0.0)
+
 
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
 
@@ -32,8 +34,12 @@ fn create_zooming_layer(
     let fade_in_duration = 0.25;
     var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
-    let cutout_alpha = smoothstep(background_depth_threshold - 0.02, background_depth_threshold + 0.02, parallax_depth);
-    final_alpha = final_alpha * cutout_alpha;
+    let cutout_alpha = smoothstep(
+        background_depth_threshold - edge_softness,
+        background_depth_threshold + edge_softness,
+        smoothed_depth
+    );
+        final_alpha = final_alpha * cutout_alpha;
 
     return vec4(foreground_color.rgb, final_alpha);
 }
