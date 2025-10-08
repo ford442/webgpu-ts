@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Renderer, RenderMode } from '../renderer/Renderer';
+import { Renderer } from '../renderer/Renderer';
+import { RenderMode } from '../renderer/types';
 
 interface WebGPUCanvasProps {
     mode: RenderMode;
