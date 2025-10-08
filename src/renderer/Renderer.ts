@@ -327,7 +327,8 @@ if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) { // 
             case 'liquid-v1':
             case 'liquid':
             case 'liquid-zoom':
-                if (liquidPipeline && this.bindGroups.has('liquid')) {
+            case 'liquid-vortex': // MODIFIED
+            if (liquidPipeline && this.bindGroups.has('liquid')) {
                     passEncoder.setPipeline(liquidPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('liquid')!);
                     passEncoder.draw(4);
