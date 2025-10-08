@@ -74,6 +74,20 @@ fn create_zooming_layer(
     return vec4(foreground_color.rgb, final_alpha);
 }
 
-// --- main function is unchanged ---
 @compute @workgroup_size(8, 8, 1)
-fn main(/*...*/) { /* ... */ }
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let canvas_res = u.resolutions.xy;
+    let uv = vec2<f32>(global_id.xy) / canvas_res;
+    let zoom_time = u.time_zoom.x;
+    let zoom_center = u.time_zoom.yz;
+
+    let background_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
+    
+    let foreground1 = create_zooming_layer(uv, zoom_time, zoom_center, 0.0);
+    let foreground2 = create_zooming_layer(uv, zoom_time, zoom_center, 0.5);
+    
+    let blended_foreground = mix(foreground1, foreground2, foreground2.a);
+    let final_color = mix(background_color, blended_foreground, blended_foreground.a);
+    
+    textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
+}
