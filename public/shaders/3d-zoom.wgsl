@@ -12,63 +12,50 @@ struct Uniforms {
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// --- REMOVED: The old get_corrected_uvs function is no longer needed. ---
-
 fn create_zooming_layer(
     uv: vec2<f32>,
     zoom_time: f32,
     zoom_center: vec2<f32>,
     cycle_offset: f32
 ) -> vec4<f32> {
+    let canvas_res = u.resolutions.xy;
+    let depth_res = u.depth_map_res.xy;
     let depth_threshold = u.config.x;
     let edge_hardness = u.config.y;
     let depth_levels = u.config.z;
     let edge_softness = (1.0 - edge_hardness) * 0.1;
 
-    let zoom_speed = 0.15;
-    let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
-    
-    // --- Depth-based Scaling from our previous step ---
-    let initial_depth_uv = fract((uv - zoom_center) * (1.5 - (zoom_progress*1.49)) + zoom_center);
-    var initial_parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, initial_depth_uv, 0.0).r;
-    let depth_based_scale_factor = 1.0 + initial_parallax_depth;
-    let fg_scale = (1.5 * depth_based_scale_factor) - (zoom_progress * (1.49 * depth_based_scale_factor));
-    let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
-    // --- End scaling logic ---
-
-    // --- INTEGRATED: Jules's Aspect Ratio Correction for Depth Map ---
-    let image_res = u.resolutions.zw;
-    let depth_res = u.depth_map_res.xy;
-    let image_aspect = image_res.x / image_res.y;
-    let depth_aspect = depth_res.x / depth_res.y;
-
-    var depth_uv = repeating_uv;
-    if (image_aspect > depth_aspect) {
-        // Image aspect is wider than depth map's aspect
-        let scale = depth_aspect / image_aspect;
-        let offset = (1.0 - scale) / 2.0;
-        depth_uv.y = depth_uv.y * scale + offset;
-    } else {
-        // Image aspect is taller than depth map's aspect
-        let scale = image_aspect / depth_aspect;
-        let offset = (1.0 - scale) / 2.0;
-        depth_uv.x = depth_uv.x * scale + offset;
-    }
-    // --- End Correction ---
-
-    var parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
+    // We first calculate a repeating UV with a baseline speed to find out what object is at this pixel
+    let base_repeating_uv = fract((uv - zoom_center) * (1.5 - (fract(zoom_time * 0.15 + cycle_offset) * 1.49)) + zoom_center);
+    let depth_uv = get_corrected_uvs(base_repeating_uv, canvas_res, depth_res);
+    let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
     let posterized_depth = floor(parallax_depth * depth_levels) / depth_levels;
+
+    // --- NEW: Calculate zoom_speed based on depth ---
+    // Objects with depth 0 (far) will have a speed of 0.1.
+    // Objects with depth 1.0 (near) will have a speed of 0.4.
+    let zoom_speed = 0.1 + posterized_depth * 0.3;
+
+    // --- CORRECTED LOGIC ---
+    // Now, we recalculate the zoom progress and scale using this new depth-based speed
+    let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
+    let fg_scale = 1.5 - (zoom_progress * 1.49);
+    let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
+
+    // All subsequent calculations proceed as before
+    let final_depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
+    let final_parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, final_depth_uv, 0.0).r;
+    let final_posterized_depth = floor(final_parallax_depth * depth_levels) / depth_levels;
     
-    let parallax_offset = (repeating_uv - 0.5) * posterized_depth * 0.4;
+    let parallax_offset = (repeating_uv - 0.5) * final_posterized_depth * 0.4;
     let final_uv = repeating_uv + parallax_offset;
     
-    // The color texture doesn't need correction because we forced the canvas to match its aspect ratio
     let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
 
     let fade_in_duration = 0.25;
     var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
-    let cutout_alpha = smoothstep(depth_threshold - edge_softness, depth_threshold + edge_softness, posterized_depth);
+    let cutout_alpha = smoothstep(depth_threshold - edge_softness, depth_threshold + edge_softness, final_posterized_depth);
     final_alpha = final_alpha * cutout_alpha;
 
     return vec4(foreground_color.rgb, final_alpha);
