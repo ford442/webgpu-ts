@@ -144,8 +144,10 @@ export class Renderer {
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
-    this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-
+  this.v2ComputeUniformBuffer = this.device.createBuffer({
+      size: 96, // 6 vec4s * 16 bytes/vec4 = 96 bytes
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST 
+  });
         const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
             format: 'r32float',
