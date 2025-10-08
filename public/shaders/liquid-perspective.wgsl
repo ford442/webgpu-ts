@@ -24,7 +24,7 @@ let background_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
 
 if (background_factor > 0.0) {
     let time = currentTime * 0.5;
-    let base_ambient_strength = 0.02; 
+let base_ambient_strength = 0.004; 
     let ambient_freq = 15.0;
     let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
     ambientDisplacement = motion * base_ambient_strength * background_factor;
