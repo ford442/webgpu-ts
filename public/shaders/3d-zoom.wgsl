@@ -36,24 +36,37 @@ fn create_zooming_layer(
 
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
-    let fg_scale = 1.5 - (zoom_progress * 1.49);
 
-    // All UVs are now in the same coordinate space!
-    let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
-
-    let depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
-    var parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
+    let repeating_uv = fract((uv - zoom_center) * (1.5 - (zoom_progress * 1.49)) + zoom_center);
+    
+    let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
     let posterized_depth = floor(parallax_depth * u.config.z) / u.config.z;
 
-    let parallax_offset = (repeating_uv - 0.5) * posterized_depth * 0.4;
-    let final_uv = repeating_uv + parallax_offset;
+    // --- NEW: Create a scale multiplier based on depth ---
+    // Objects with depth 0 (far away) have a scale of 1.0.
+    // Objects with depth 1.0 (very close) will have a scale of 2.0, making them appear much larger.
+    let depth_based_scale_factor = 1.0 + posterized_depth;
+    
+    // --- MODIFIED: Apply the new scale factor ---
+    // The scale now goes from (1.5 * factor) down to 0, creating the dynamic size change.
+    let fg_scale = (1.5 * depth_based_scale_factor) - (zoom_progress * (1.49 * depth_based_scale_factor));
+
+    // We now re-calculate the repeating_uv using this new, dynamic scale
+    let final_repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
+
+    // All subsequent calculations use the final UVs
+    let final_parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, final_repeating_uv, 0.0).r;
+    let final_posterized_depth = floor(final_parallax_depth * u.config.z) / u.config.z;
+
+    let parallax_offset = (final_repeating_uv - 0.5) * final_posterized_depth * 0.4;
+    let final_uv = final_repeating_uv + parallax_offset;
 
     let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
 
     let fade_in_duration = 0.25;
     var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
-    let cutout_alpha = smoothstep(depth_threshold - edge_softness, depth_threshold + edge_softness, posterized_depth);
+    let cutout_alpha = smoothstep(depth_threshold - edge_softness, depth_threshold + edge_softness, final_posterized_depth);
     final_alpha = final_alpha * cutout_alpha;
 
     return vec4(foreground_color.rgb, final_alpha);
