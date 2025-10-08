@@ -5,12 +5,24 @@
 @group(0) @binding(5) var staticDepthTexture: texture_2d<f32>;
 
 struct Uniforms {
-  resolutions: vec4<f32>,     // .xy = canvas, .zw = image
-  time_zoom: vec4<f32>,       // .x = time, .yz = zoom_center
-  config: vec4<f32>,          // .x = depthThreshold, .y = edgeHardness, .z = depthLevels
-  depth_map_res: vec4<f32>, // .xy = depth map dimensions
+  resolutions: vec4<f32>,   // .xy = canvas, .zw = image
+  time_zoom: vec4<f32>,     // .x = time, .yz = zoom_center, .w = depth_w
+  config: vec4<f32>,        // .x = depthThreshold, .y = edgeHardness, .z = depthLevels, .w = depth_h
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
+
+// --- ADDED: The missing helper function ---
+fn get_corrected_uvs(uv: vec2<f32>, canvas_res: vec2<f32>, texture_res: vec2<f32>) -> vec2<f32> {
+    let canvas_aspect = canvas_res.x / canvas_res.y;
+    let texture_aspect = texture_res.x / texture_res.y;
+    var scale = vec2(1.0, 1.0);
+    if (canvas_aspect > texture_aspect) {
+        scale.x = texture_aspect / canvas_aspect;
+    } else {
+        scale.y = canvas_aspect / texture_aspect;
+    }
+    return (uv - 0.5) * scale + 0.5;
+}
 
 fn create_zooming_layer(
     uv: vec2<f32>,
@@ -19,7 +31,7 @@ fn create_zooming_layer(
     cycle_offset: f32
 ) -> vec4<f32> {
     let canvas_res = u.resolutions.xy;
-    let depth_res = u.depth_map_res.xy;
+    let depth_res = vec2<f32>(u.time_zoom.w, u.config.w);
     let depth_threshold = u.config.x;
     let edge_hardness = u.config.y;
     let depth_levels = u.config.z;
@@ -31,13 +43,10 @@ fn create_zooming_layer(
     let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
     let posterized_depth = floor(parallax_depth * depth_levels) / depth_levels;
 
-    // --- NEW: Calculate zoom_speed based on depth ---
-    // Objects with depth 0 (far) will have a speed of 0.1.
-    // Objects with depth 1.0 (near) will have a speed of 0.4.
+    // Calculate zoom_speed based on depth
     let zoom_speed = 0.1 + posterized_depth * 0.3;
 
-    // --- CORRECTED LOGIC ---
-    // Now, we recalculate the zoom progress and scale using this new depth-based speed
+    // Recalculate the zoom progress and scale using this new depth-based speed
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
