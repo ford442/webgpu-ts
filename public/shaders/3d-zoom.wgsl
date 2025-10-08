@@ -7,7 +7,7 @@
 
 struct Uniforms {
   config: vec4<f32>,        // time, rippleCount, resolutionX, resolutionY
-  zoom_config: vec4<f32>,   // zoomTime, farthestX, farthestY, unused
+  zoom_config: vec4<f32>,   // zoomTime, farthestX, farthestY, depthThreshold
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
@@ -19,42 +19,50 @@ fn create_zooming_layer(
     zoom_center: vec2<f32>,
     cycle_offset: f32
 ) -> vec4<f32> {
+    let background_depth_threshold = u.zoom_config.w;
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
+    
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
+    
+    // We sample the *recalculated, moving* depth map here for parallax
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
     let parallax_offset = (repeating_uv - 0.5) * depth * 0.4;
     let parallax_uv = repeating_uv + parallax_offset;
     let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(parallax_uv), 0.0);
+
+    // --- MODIFIED: Alpha Calculation ---
+    // Start with the fade-in animation
     let fade_in_duration = 0.25;
-    let final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
+    var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
+
+    // Then, create the cutout alpha mask based on depth
+    let depth_for_alpha = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
+    let cutout_alpha = 1.0 - smoothstep(background_depth_threshold - 0.01, background_depth_threshold, depth_for_alpha);
+    
+    // Multiply them together to combine the effects
+    final_alpha = final_alpha * cutout_alpha;
+
     return vec4(foreground_color.rgb, final_alpha);
 }
 
 // --- Helper function to create a scrolling foreground DEPTH layer ---
-// This is the function that was moved to the top level to fix the error.
 fn create_zooming_depth_layer(
     uv: vec2<f32>,
     zoom_time: f32,
     zoom_center: vec2<f32>,
     cycle_offset: f32
-) -> vec4<f32> { // Return vec4 to include alpha for blending
-    let background_depth_threshold = u.zoom_config.w; // Use the value from the uniform
+) -> vec4<f32> {
+    let background_depth_threshold = u.zoom_config.w;
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
-    
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
-
-    // If the sampled depth is part of the background, make this layer transparent.
     var alpha = 1.0 - smoothstep(background_depth_threshold - 0.01, background_depth_threshold, depth);
-    
-    // Also fade in the layer at the start of its cycle.
     let fade_in_duration = 0.25;
     alpha = alpha * smoothstep(0.0, fade_in_duration, zoom_progress);
-
     return vec4(depth, 0.0, 0.0, alpha);
 }
 
@@ -66,18 +74,26 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let zoom_center = u.zoom_config.yz;
     let displaced_uv = uv;
 
-    // --- Continuous Zoom Logic for COLOR ---
-    let bg_scale = pow(0.95, zoom_time);
-    let bg_uv = (displaced_uv - zoom_center) * bg_scale + zoom_center;
-    let background_color = textureSampleLevel(readTexture, u_sampler, fract(bg_uv), 0.0);
+    // --- MODIFIED: Continuous Zoom Logic for COLOR ---
+    // 1. Get the STATIC background color by sampling with the original, un-zoomed uv.
+    let background_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
+
+    // 2. Calculate the two foreground layers. The function now creates transparent
+    //    cutouts for the background.
     let foreground1 = create_zooming_layer(displaced_uv, zoom_time, zoom_center, 0.0);
     let foreground2 = create_zooming_layer(displaced_uv, zoom_time, zoom_center, 0.5);
+
+    // 3. Blend the two foregrounds together.
     let blended_foreground = mix(foreground1, foreground2, foreground2.a);
+
+    // 4. Blend the resulting foreground (with cutouts) over the static background.
     let final_color = mix(background_color, blended_foreground, blended_foreground.a);
     textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
 
-    // --- Continuous Zoom Logic for DEPTH ---
-    let background_depth_threshold = 0.05;
+    // --- Continuous Zoom Logic for DEPTH (This part remains correct) ---
+    let background_depth_threshold = u.zoom_config.w;
+    let bg_scale = pow(0.95, zoom_time);
+    let bg_uv = (displaced_uv - zoom_center) * bg_scale + zoom_center;
 
     let base_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, fract(bg_uv), 0.0).r;
     var background_depth = 1.0;
@@ -85,14 +101,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         background_depth = base_depth;
     }
 
-    // Calculate the two scrolling foreground depth layers.
     let foreground_depth1 = create_zooming_depth_layer(displaced_uv, zoom_time, zoom_center, 0.0);
     let foreground_depth2 = create_zooming_depth_layer(displaced_uv, zoom_time, zoom_center, 0.5);
 
-    // Blend the depth layers together.
     let blended_foreground_depth = mix(foreground_depth1, foreground_depth2, foreground_depth2.a);
     let final_depth = mix(vec4(background_depth,0,0,1), blended_foreground_depth, blended_foreground_depth.a).r;
     
-    // Store the final, animated depth value for the next frame.
     textureStore(writeDepthTexture, global_id.xy, vec4<f32>(final_depth, 0.0, 0.0, 0.0));
 }
