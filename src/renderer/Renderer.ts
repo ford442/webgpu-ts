@@ -262,20 +262,21 @@ private async createPipelines(): Promise<void> {
             const computeBG = this.bindGroups.get('compute');
             const computeZoomBG = this.bindGroups.get('computeZoom');
             const computePerspectiveBG = this.bindGroups.get('computePerspective'); // MODIFIED: Added this line
+            const computeVortexBG = this.bindGroups.get('computeVortex'); // ADD THIS
 
             if (mode === 'liquid-v1' && computeV1BG) {
                 this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
                 computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeV1BG);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-            } else if ((mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective') && computeBG) { // MODIFIED
+            } else if ((mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex') && computeBG) { // MODIFIED
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
                 const computeUniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
                 computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
                 // --- MODIFIED: Start of changes ---
                 // Write zoomTime and the farthest point coordinates
-computeUniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
+                computeUniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
                 // --- MODIFIED: End of changes ---
                 const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
                 for (let i = 0; i < this.ripplePoints.length; i++) {
@@ -285,10 +286,13 @@ computeUniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
                 computeUniformArray.set(rippleData, 8);
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
                 
-                if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) {
+                 if (mode === 'vortex' && computeVortexBG) {
+                    computePass.setPipeline(this.pipelines.get('computeVortex') as GPUComputePipeline);
+                    computePass.setBindGroup(0, computeVortexBG);
+                } else if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) {
                     computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
                     computePass.setBindGroup(0, computeZoomBG);
-                } else if (mode === 'liquid-perspective' && computePerspectiveBG) { // MODIFIED: Added this else if block
+                } else if (mode === 'liquid-perspective' && computePerspectiveBG) {
                     computePass.setPipeline(this.pipelines.get('computePerspective') as GPUComputePipeline);
                     computePass.setBindGroup(0, computePerspectiveBG);
                 } else {
@@ -298,7 +302,7 @@ computeUniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
             }
             computePass.end();
-            if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective') { // MODIFIED
+            if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex') { // MODIFIED
                 this.swapDepthTextures();
             }
         }
