@@ -43,14 +43,11 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
                 const initialHeight = container.clientHeight;
                 renderer.handleResize(initialWidth, initialHeight);
 
-                const observer = new ResizeObserver(entries => {
-                    for (const entry of entries) {
-                        const width = entry.contentBoxSize[0].inlineSize;
-                        const height = entry.contentBoxSize[0].blockSize;
-                        renderer.handleResize(width, height);
-                    }
-                });
-                observer.observe(container);
+            const observer = new ResizeObserver(entries => {
+    // The renderer can now get the size itself
+    renderer.handleResize();
+});
+observer.observe(container);
             }
         };
 
