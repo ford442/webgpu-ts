@@ -67,6 +67,14 @@ edgeHardness, setEdgeHardness
                     />
                 </div>
                 <div className="control-group">
+                    <label htmlFor="levels-slider">Depth Levels:</label>
+                    <input
+                        type="range" id="levels-slider" min="2" max="16" step="1"
+                        value={depthLevels}
+                        onChange={(e) => setDepthLevels(Number(e.target.value))}
+                    />
+                </div>
+                <div className="control-group">
                     <label htmlFor="hardness-slider">Edge Hardness:</label>
                     <input
                         type="range" id="hardness-slider" min="1" max="100"

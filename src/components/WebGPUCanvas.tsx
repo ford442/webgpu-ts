@@ -41,6 +41,9 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
                 if (rendererRef && 'current' in rendererRef) {
                     (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
                 }
+                const initialWidth = canvas.clientWidth;
+                const initialHeight = canvas.clientHeight;
+                renderer.handleResize(initialWidth, initialHeight);
 
                 const observer = new ResizeObserver(entries => {
                     for (const entry of entries) {

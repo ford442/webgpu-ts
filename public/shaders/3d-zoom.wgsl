@@ -7,8 +7,9 @@
 struct Uniforms {
   resolutions: vec4<f32>,   // .xy = canvas, .zw = image
   time_zoom: vec4<f32>,     // .x = time, .yz = zoom_center
-  config: vec4<f32>,        // .x = depthThreshold, .y = edgeHardness
-};
+ config: vec4<f32>, // .x = depthThreshold, .y = edgeHardness, .z = depthLevels
+ };
+
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 fn get_corrected_uvs(uv: vec2<f32>, canvas_res: vec2<f32>, texture_res: vec2<f32>) -> vec2<f32> {
@@ -29,6 +30,8 @@ fn create_zooming_layer(
     zoom_center: vec2<f32>,
     cycle_offset: f32
 ) -> vec4<f32> {
+    let depth_levels = u.config.z;
+
     let canvas_res = u.resolutions.xy;
     let image_res = u.resolutions.zw;
     let depth_threshold = u.config.x;
@@ -42,7 +45,9 @@ fn create_zooming_layer(
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
     let texture_uv = get_corrected_uvs(repeating_uv, canvas_res, image_res);
 
-    let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, texture_uv, 0.0).r;
+    var parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, texture_uv, 0.0).r;
+    parallax_depth = floor(parallax_depth * depth_levels) / depth_levels;
+
     let parallax_offset = (repeating_uv - 0.5) * parallax_depth * 0.4;
     let final_uv_canvas_space = repeating_uv + parallax_offset;
 

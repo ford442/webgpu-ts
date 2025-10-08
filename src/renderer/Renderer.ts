@@ -185,7 +185,7 @@ export class Renderer {
         return this.imageDimensions;
     }
 
-    public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}): void {
+    public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number): void {
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
         const commandEncoder = this.device.createCommandEncoder();
@@ -202,7 +202,7 @@ export class Renderer {
                 // vec4 1: Time and Zoom Center
                 uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
                 // vec4 2: Config values
-                uniformArray.set([depthThreshold, edgeHardness], 8);
+                uniformArray.set([depthThreshold, edgeHardness, depthLevels], 8); // Add depthLevels
 
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
 

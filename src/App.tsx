@@ -20,6 +20,7 @@ function App() {
     const [edgeHardness, setEdgeHardness] = useState(0.5);
     const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 }); // New state
     const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
+    const [depthLevels, setDepthLevels] = useState(5); // Start with 5 levels
 
     const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
