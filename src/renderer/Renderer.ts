@@ -247,7 +247,7 @@ export class Renderer {
                 computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeV1BG);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-            } else if ((mode === 'liquid' || mode === 'liquid-zoom') && computeBG) {
+} else if ((mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeBG) { // MODIFIED
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
                 const computeUniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
