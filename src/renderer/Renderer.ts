@@ -170,9 +170,9 @@ private async createPipelines(): Promise<void> {
         this.depthTextureWrite = temp;
     }
 
- public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }): void {
-    if (!this.device || !this.imageTexture) return;
-    const currentTime = performance.now() / 1000.0;
+    public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, depthThreshold: number): void {
+        if (!this.device || !this.imageTexture) return;
+        const currentTime = performance.now() / 1000.0;
 
     const commandEncoder = this.device.createCommandEncoder();
 
@@ -183,7 +183,7 @@ private async createPipelines(): Promise<void> {
         if (computeZoomBG) {
             const uniformArray = new Float32Array(8);
             uniformArray.set([currentTime, 0, this.canvas.width, this.canvas.height], 0);
-            uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
+            uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, depthThreshold], 4);
             this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
 
             computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);

@@ -17,6 +17,7 @@ function App() {
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
   const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 }); // Default to center
+  const [depthThreshold, setDepthThreshold] = useState(0.05);
 
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,47 +38,88 @@ function App() {
     }
   };
 
-  const runDepthAnalysis = useCallback(async (imageUrl: string) => {
-    if (!depthEstimator || !rendererRef.current) return;
-    setStatus('Analyzing image with AI model...');
-    try {
-      const result = await depthEstimator(imageUrl);
-      const { data, dims } = result.predicted_depth;
-      const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
+    const findOptimalThreshold = (data: Float32Array): number => {
+        const binCount = 256; // Use 256 bins for the histogram
+        const histogram = new Array(binCount).fill(0);
 
-      let min = Infinity, max = -Infinity;
-      let minIndex = 0;
-      data.forEach((v: number, i: number) => {
-        if (v < min) {
-          min = v;
-          minIndex = i;
+        // 1. Create the histogram from the normalized depth data
+        for (let i = 0; i < data.length; ++i) {
+            const bin = Math.min(Math.floor(data[i] * binCount), binCount - 1);
+            histogram[bin]++;
         }
-        if (v > max) max = v;
-      });
 
-      const farthestY = Math.floor(minIndex / width);
-      const farthestX = minIndex % width;
-      setFarthestPoint({ x: farthestX / width, y: farthestY / height });
-      
-      const range = max - min;
-      const normalizedData = new Float32Array(data.length);
-      
-      for (let i = 0; i < data.length; ++i) {
-        normalizedData[i] = 1.0 - ((data[i] - min) / range);
-      }
-      
-      setStatus('Updating depth map on GPU...');
-      rendererRef.current.updateDepthMap(normalizedData, width, height);
-      
-      setDepthMapResult(result);
-      setStatus('Ready.');
-    } catch (e: any) {
-      console.error("Error during analysis:", e);
-      setStatus(`Failed to analyze image: ${e.message}`);
-    }
-  }, [depthEstimator]);
+        const totalPixels = data.length;
+        let bestThreshold = 0;
+        let maxVariance = 0;
 
-  const handleNewImage = useCallback(async () => {
+        let sum = 0;
+        for (let i = 0; i < binCount; i++) {
+            sum += i * histogram[i];
+        }
+
+        let sumB = 0;
+        let wB = 0; // weight background
+        let wF = 0; // weight foreground
+
+        // 2. Iterate through all possible thresholds to find the best one
+        for (let t = 0; t < binCount; t++) {
+            wB += histogram[t];
+            if (wB === 0) continue;
+
+            wF = totalPixels - wB;
+            if (wF === 0) break;
+
+            sumB += t * histogram[t];
+
+            const mB = sumB / wB; // mean background
+            const mF = (sum - sumB) / wF; // mean foreground
+
+            // Calculate between-class variance
+            const variance = wB * wF * (mB - mF) * (mB - mF);
+
+            if (variance > maxVariance) {
+                maxVariance = variance;
+                bestThreshold = t;
+            }
+        }
+
+        // 3. Return the best threshold, normalized back to the 0.0 - 1.0 range
+        return bestThreshold / binCount;
+    };
+
+    const runDepthAnalysis = useCallback(async (imageUrl: string) => {
+        if (!depthEstimator || !rendererRef.current) return;
+        setStatus('Analyzing image with AI model...');
+        try {
+            const result = await depthEstimator(imageUrl);
+            const { data, dims } = result.predicted_depth;
+            const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
+
+            // ... (min/max and farthest point calculation remains the same) ...
+
+            const range = max - min;
+            const normalizedData = new Float32Array(data.length);
+            for (let i = 0; i < data.length; ++i) {
+                normalizedData[i] = 1.0 - ((data[i] - min) / range);
+            }
+
+            // --- NEW: Calculate and set the optimal threshold ---
+            const newThreshold = findOptimalThreshold(normalizedData);
+            console.log(`Optimal depth threshold found: ${newThreshold.toFixed(3)}`);
+            setDepthThreshold(newThreshold); // Update our React state
+
+            setStatus('Updating depth map on GPU...');
+            rendererRef.current.updateDepthMap(normalizedData, width, height);
+
+            setDepthMapResult(result);
+            setStatus('Ready.');
+        } catch (e: any) {
+            console.error("Error during analysis:", e);
+            setStatus(`Failed to analyze image: ${e.message}`);
+        }
+    }, [depthEstimator]);
+
+    const handleNewImage = useCallback(async () => {
     if (!rendererRef.current) {
         console.warn("Renderer not ready yet.");
         return;
@@ -151,14 +193,15 @@ function App() {
         onLoadModel={loadModel}
         isModelLoaded={!!depthEstimator}
       />
-      <WebGPUCanvas
-        rendererRef={rendererRef}
-        mode={mode}
-        zoom={zoom}
-        panX={panX}
-        panY={panY}
-        farthestPoint={farthestPoint}
-      />
+        <WebGPUCanvas
+            rendererRef={rendererRef}
+            mode={mode}
+            zoom={zoom}
+            panX={panX}
+            panY={panY}
+            farthestPoint={farthestPoint}
+            depthThreshold={depthThreshold} // Pass the new prop
+        />
       {depthMapResult && (
         <div className="debug-container">
           <h2>AI Model Output (Debug Depth Map)</h2>

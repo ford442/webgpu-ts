@@ -9,9 +9,10 @@ interface WebGPUCanvasProps {
     panY: number;
     rendererRef: React.MutableRefObject<Renderer | null>;
     farthestPoint: { x: number; y: number };
+    depthThreshold: number; // Add this line
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, depthThreshold }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationFrameId = useRef<number>(0);
 
@@ -36,13 +37,13 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         const animate = () => {
             if (!active) return;
             if (rendererRef.current) {
-                rendererRef.current.render(mode, zoom, panX, panY, farthestPoint);
+                rendererRef.current.render(mode, zoom, panX, panY, farthestPoint, depthThreshold);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY, farthestPoint, rendererRef]);
+    }, [mode, zoom, panX, panY, farthestPoint, depthThreshold, rendererRef]); // Add depthThreshold to dependency array
 
     return (
         <canvas ref={canvasRef} width="2048" height="2048" />

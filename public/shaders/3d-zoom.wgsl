@@ -38,9 +38,9 @@ fn create_zooming_depth_layer(
     uv: vec2<f32>,
     zoom_time: f32,
     zoom_center: vec2<f32>,
-    cycle_offset: f32,
-    background_depth_threshold: f32
+    cycle_offset: f32
 ) -> vec4<f32> { // Return vec4 to include alpha for blending
+    let background_depth_threshold = u.zoom_config.w; // Use the value from the uniform
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
@@ -86,8 +86,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 
     // Calculate the two scrolling foreground depth layers.
-    let foreground_depth1 = create_zooming_depth_layer(displaced_uv, zoom_time, zoom_center, 0.0, background_depth_threshold);
-    let foreground_depth2 = create_zooming_depth_layer(displaced_uv, zoom_time, zoom_center, 0.5, background_depth_threshold);
+    let foreground_depth1 = create_zooming_depth_layer(displaced_uv, zoom_time, zoom_center, 0.0);
+    let foreground_depth2 = create_zooming_depth_layer(displaced_uv, zoom_time, zoom_center, 0.5);
 
     // Blend the depth layers together.
     let blended_foreground_depth = mix(foreground_depth1, foreground_depth2, foreground_depth2.a);
