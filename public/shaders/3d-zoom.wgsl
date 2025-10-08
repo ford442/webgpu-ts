@@ -11,7 +11,6 @@ struct Uniforms {
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// --- ADDED: The missing helper function ---
 fn get_corrected_uvs(uv: vec2<f32>, canvas_res: vec2<f32>, texture_res: vec2<f32>) -> vec2<f32> {
     let canvas_aspect = canvas_res.x / canvas_res.y;
     let texture_aspect = texture_res.x / texture_res.y;
@@ -37,26 +36,19 @@ fn create_zooming_layer(
     let depth_levels = u.config.z;
     let edge_softness = (1.0 - edge_hardness) * 0.1;
 
-    // We first calculate a repeating UV with a baseline speed to find out what object is at this pixel
-    let base_repeating_uv = fract((uv - zoom_center) * (1.5 - (fract(zoom_time * 0.15 + cycle_offset) * 1.49)) + zoom_center);
-    let depth_uv = get_corrected_uvs(base_repeating_uv, canvas_res, depth_res);
-    let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
-    let posterized_depth = floor(parallax_depth * depth_levels) / depth_levels;
-
-    // Calculate zoom_speed based on depth
-    let zoom_speed = 0.1 + posterized_depth * 0.3;
-
-    // Recalculate the zoom progress and scale using this new depth-based speed
+    // 1. Use a SINGLE, constant speed for the layer for stability
+    let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
 
-    // All subsequent calculations proceed as before
-    let final_depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
-    let final_parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, final_depth_uv, 0.0).r;
-    let final_posterized_depth = floor(final_parallax_depth * depth_levels) / depth_levels;
-    
-    let parallax_offset = (repeating_uv - 0.5) * final_posterized_depth * 0.4;
+    // 2. Sample the depth map ONCE using the definitive UV coordinate
+    let depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
+    let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
+    let posterized_depth = floor(parallax_depth * depth_levels) / depth_levels;
+
+    // 3. Use this single, stable depth value for all subsequent effects
+    let parallax_offset = (repeating_uv - 0.5) * posterized_depth * 0.4;
     let final_uv = repeating_uv + parallax_offset;
     
     let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
@@ -64,7 +56,7 @@ fn create_zooming_layer(
     let fade_in_duration = 0.25;
     var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
-    let cutout_alpha = smoothstep(depth_threshold - edge_softness, depth_threshold + edge_softness, final_posterized_depth);
+    let cutout_alpha = smoothstep(depth_threshold - edge_softness, depth_threshold + edge_softness, posterized_depth);
     final_alpha = final_alpha * cutout_alpha;
 
     return vec4(foreground_color.rgb, final_alpha);
