@@ -35,10 +35,11 @@ const Controls: React.FC<ControlsProps> = ({
         <div className="controls">
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
-                <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
-                    <option value="liquid">Liquid (Interactive)</option>
-                    <option value="liquid-zoom">Liquid Zoom</option>
-                    <option value="shader">Galaxy Shader</option>
+<select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
+    <option value="liquid-vortex">Liquid Vortex</option> {/* ADD THIS LINE */}
+    <option value="liquid">Liquid (Interactive)</option>
+    <option value="liquid-zoom">Liquid Zoom</option>
+    <option value="shader">Galaxy Shader</option>
                     <option value="image">Static Image</option>
                     <option value="ripple">Ripple Effect</option>
                     <option value="video">Video Texture</option>
