@@ -14,7 +14,6 @@ export class Renderer {
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
 
-    // --- REMOVED: depthTextureRead and depthTextureWrite ---
     private staticDepthTexture!: GPUTexture;
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
@@ -35,8 +34,42 @@ export class Renderer {
         return true;
     }
 
-    private async fetchImageUrls(): Promise<void> { /* ... (no change) ... */ }
-    public async loadRandomImage(): Promise<string | undefined> { /* ... (no change) ... */ }
+    private async fetchImageUrls(): Promise<void> {
+        const bucketName = 'my-sd35-space-images-2025';
+        const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            const data = await response.json();
+            this.imageUrls = data.items ? data.items.map((item: { name: string }) => `https://storage.googleapis.com/${bucketName}/${item.name}`) : [];
+        } catch (e) {
+            console.error("Failed to fetch image list:", e);
+            this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
+        }
+    }
+
+    public async loadRandomImage(): Promise<string | undefined> {
+        try {
+            if (this.imageUrls.length === 0) return;
+            const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
+            const response = await fetch(imageUrl);
+            const imageBitmap = await createImageBitmap(await response.blob());
+
+            if (this.imageTexture) this.imageTexture.destroy();
+            this.imageTexture = this.device.createTexture({
+                size: [imageBitmap.width, imageBitmap.height],
+                format: 'rgba16float',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+            });
+            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+
+            this.createBindGroups();
+            return imageUrl;
+        } catch (e) {
+            console.error("Failed to load image:", e);
+            return undefined;
+        }
+    }
 
     public updateDepthMap(data: Float32Array, width: number, height: number): void {
         if (!this.device) return;
@@ -73,7 +106,17 @@ export class Renderer {
         await this.loadRandomImage();
     }
 
-    private async createPipelines(): Promise<void> { /* ... (no change) ... */ }
+    private async createPipelines(): Promise<void> {
+        const [zoomCode, textureCode] = await Promise.all([
+            fetch('shaders/3d-zoom.wgsl').then(res => res.text()),
+            fetch('shaders/texture.wgsl').then(res => res.text()),
+        ]);
+        const zoomModule = this.device.createShaderModule({ code: zoomCode });
+        const textureModule = this.device.createShaderModule({ code: textureCode });
+        const commonConfig = { vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }] }, primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology } };
+        this.pipelines.set('present', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } }));
+        this.pipelines.set('computeZoom', this.device.createComputePipeline({ layout: 'auto', compute: { module: zoomModule, entryPoint: 'main' } }));
+    }
 
     private createBindGroups(): void {
         if (!this.imageTexture || !this.staticDepthTexture) return;
@@ -96,8 +139,6 @@ export class Renderer {
         }
     }
 
-    // --- REMOVED: swapDepthTextures() function ---
-
     public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, depthThreshold: number): void {
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
@@ -116,7 +157,6 @@ export class Renderer {
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
             }
             computePass.end();
-            // --- REMOVED: swapDepthTextures() call ---
         }
 
         const textureView = this.context.getCurrentTexture().createView();
