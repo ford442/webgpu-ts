@@ -70,10 +70,54 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
 
-    // Update the depth texture for the next frame (using the primary foreground UVs)
-    let main_zoom_progress = fract(zoom_time * 0.15);
-    let main_fg_scale = 1.0 - (main_zoom_progress * 0.5);
-    let main_repeating_uv = fract((displaced_uv - zoom_center) * main_fg_scale + zoom_center);
-    let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, main_repeating_uv, 0.0).r;
-    textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
+    // --- MODIFIED: Continuous Zoom Logic for DEPTH ---
+
+    // 1. Define the threshold for what we consider the "stationary background".
+    //    Anything with a normalized depth value below this will not scroll.
+    let background_depth_threshold = 0.05;
+
+    // 2. Calculate the depth of the static background layer.
+    let base_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, fract(bg_uv), 0.0).r;
+    var background_depth = 1.0; // Default to farthest
+    if (base_depth < background_depth_threshold) {
+        background_depth = base_depth;
+    }
+
+    // 3. Helper function to create a scrolling foreground DEPTH layer.
+    //    This is very similar to the color version, but it returns a depth value (f32)
+    //    and handles the "false landscape" logic.
+    fn create_zooming_depth_layer(
+        uv: vec2<f32>,
+        zoom_time: f32,
+        zoom_center: vec2<f32>,
+        cycle_offset: f32
+    ) -> vec4<f32> { // Return vec4 to include alpha for blending
+        let zoom_speed = 0.15;
+        let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
+        let fg_scale = 1.5 - (zoom_progress * 1.49);
+        let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
+        
+        let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
+
+        // If the sampled depth is part of the background, make this layer transparent.
+        // Otherwise, it's a foreground object, so make it opaque.
+        var alpha = 1.0 - smoothstep(background_depth_threshold - 0.01, background_depth_threshold, depth);
+        
+        // Also fade in the layer at the start of its cycle
+        let fade_in_duration = 0.25;
+        alpha = alpha * smoothstep(0.0, fade_in_duration, zoom_progress);
+
+        return vec4(depth, 0.0, 0.0, alpha);
+    }
+
+    // 4. Calculate the two scrolling foreground depth layers.
+    let foreground_depth1 = create_zooming_depth_layer(displaced_uv, zoom_time, zoom_center, 0.0);
+    let foreground_depth2 = create_zooming_depth_layer(displaced_uv, zoom_time, zoom_center, 0.5);
+
+    // 5. Blend the depth layers together.
+    let blended_foreground_depth = mix(foreground_depth1, foreground_depth2, foreground_depth2.a);
+    let final_depth = mix(vec4(background_depth,0,0,1), blended_foreground_depth, blended_foreground_depth.a).r;
+    
+    // 6. Store the final, animated depth value for the next frame.
+    textureStore(writeDepthTexture, global_id.xy, vec4<f32>(final_depth, 0.0, 0.0, 0.0));
 }
