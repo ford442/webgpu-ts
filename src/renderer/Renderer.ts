@@ -173,46 +173,54 @@ private async createPipelines(): Promise<void> {
         this.pipelines.set('computePerspective', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidPerspectiveModule, entryPoint: 'main' } }));
 }
 
-    private createBindGroups(): void {
-        if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite) return;
+   private createBindGroups(): void {
+    if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite) return;
 
-        if (this.videoTexture) {
-            this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.sampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
-            this.bindGroups.set('video', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.videoTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        }
+    if (this.videoTexture) {
+        this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.sampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
+        this.bindGroups.set('video', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.videoTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
+    }
 
-        this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
-        this.bindGroups.set('computeV1', this.device.createBindGroup({ 
-            layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), 
-            entries: [
-                { binding: 0, resource: this.sampler }, 
-                { binding: 1, resource: this.imageTexture.createView() }, 
-                { binding: 2, resource: this.writeTexture.createView() },
-                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }
-            ] 
-        }));
-
-        const computeLayout = this.pipelines.get('compute')!.getBindGroupLayout(0);
-        const computeEntries = [
-            { binding: 0, resource: this.sampler },
-            { binding: 1, resource: this.imageTexture.createView() },
+    this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
+    this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
+    this.bindGroups.set('computeV1', this.device.createBindGroup({ 
+        layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), 
+        entries: [
+            { binding: 0, resource: this.sampler }, 
+            { binding: 1, resource: this.imageTexture.createView() }, 
             { binding: 2, resource: this.writeTexture.createView() },
-            { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
-            { binding: 4, resource: this.depthTextureRead.createView() },
-            { binding: 5, resource: this.nonFilteringSampler },
-            { binding: 6, resource: this.depthTextureWrite.createView() },
-        ];
-        this.bindGroups.set('compute', this.device.createBindGroup({ layout: computeLayout, entries: computeEntries }));
+            { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }
+        ] 
+    }));
 
-        const computeZoomPipeline = this.pipelines.get('computeZoom');
- if (computeZoomPipeline) {
+    const computeLayout = this.pipelines.get('compute')!.getBindGroupLayout(0);
+    const computeEntries = [
+        { binding: 0, resource: this.sampler },
+        { binding: 1, resource: this.imageTexture.createView() },
+        { binding: 2, resource: this.writeTexture.createView() },
+        { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
+        { binding: 4, resource: this.depthTextureRead.createView() },
+        { binding: 5, resource: this.nonFilteringSampler },
+        { binding: 6, resource: this.depthTextureWrite.createView() },
+    ];
+    this.bindGroups.set('compute', this.device.createBindGroup({ layout: computeLayout, entries: computeEntries }));
+
+    const computeZoomPipeline = this.pipelines.get('computeZoom');
+    if (computeZoomPipeline) {
         this.bindGroups.set('computeZoom', this.device.createBindGroup({
             layout: computeZoomPipeline.getBindGroupLayout(0),
             entries: computeEntries
         }));
     }
+
+    const computePerspectivePipeline = this.pipelines.get('computePerspective');
+    if (computePerspectivePipeline) {
+        this.bindGroups.set('computePerspective', this.device.createBindGroup({
+            layout: computePerspectivePipeline.getBindGroupLayout(0),
+            entries: computeEntries
+        }));
     }
+}
     
     private swapDepthTextures() {
         const temp = this.depthTextureRead;
