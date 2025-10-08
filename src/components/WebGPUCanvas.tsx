@@ -9,14 +9,28 @@ interface WebGPUCanvasProps {
     panY: number;
     rendererRef: React.MutableRefObject<Renderer | null>;
     farthestPoint: { x: number; y: number };
-    depthThreshold: number; // Add this line
+    // --- ADD THE MISSING PROPS ---
+    depthThreshold: number;
+    edgeHardness: number;
+    imageDimensions: { width: number; height: number }; // Added from previous step
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, depthThreshold }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
+                                                       mode,
+                                                       zoom,
+                                                       panX,
+                                                       panY,
+                                                       rendererRef,
+                                                       farthestPoint,
+                                                       depthThreshold,
+                                                       edgeHardness,
+                                                       imageDimensions
+                                                   }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationFrameId = useRef<number>(0);
 
     useEffect(() => {
+        // This useEffect for initialization can remain the same as the ResizeObserver version
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const renderer = new Renderer(canvas);
@@ -28,13 +42,11 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
                     (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
                 }
 
-                // --- NEW: Set up the ResizeObserver after initialization ---
                 const observer = new ResizeObserver(entries => {
                     for (const entry of entries) {
                         const canvas = entry.target as HTMLCanvasElement;
                         const width = entry.contentBoxSize[0].inlineSize;
                         const height = entry.contentBoxSize[0].blockSize;
-                        // Call our new resize handler
                         renderer.handleResize(width, height);
                     }
                 });
@@ -46,8 +58,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
 
         return () => {
             cancelAnimationFrame(animationFrameId.current);
-            // If you want to disconnect the observer when the component unmounts:
-            // observer.disconnect();
         };
     }, [rendererRef]);
 
@@ -56,13 +66,15 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         const animate = () => {
             if (!active) return;
             if (rendererRef.current) {
-                rendererRef.current.render(mode, zoom, panX, panY, farthestPoint, depthThreshold);
+                // --- UPDATE THE RENDER CALL TO INCLUDE THE NEW PROPS ---
+                rendererRef.current.render(mode, zoom, panX, panY, farthestPoint, depthThreshold, edgeHardness, imageDimensions);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY, farthestPoint, depthThreshold, rendererRef]); // Add depthThreshold to dependency array
+        // --- UPDATE THE DEPENDENCY ARRAY ---
+    }, [mode, zoom, panX, panY, farthestPoint, depthThreshold, edgeHardness, imageDimensions, rendererRef]);
 
     return (
         <canvas ref={canvasRef} />
