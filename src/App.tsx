@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
-import { RenderMode, Renderer } from './renderer/Renderer';
+import { Renderer } from './renderer/Renderer';
+import { RenderMode } from './renderer/types';
 import { pipeline } from '@huggingface/transformers';
 import './style.css';
 
