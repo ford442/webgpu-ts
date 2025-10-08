@@ -173,7 +173,7 @@ private async createPipelines(): Promise<void> {
         this.pipelines.set('computePerspective', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidPerspectiveModule, entryPoint: 'main' } }));
 }
 
-   private createBindGroups(): void {
+ private createBindGroups(): void {
     if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite) return;
 
     if (this.videoTexture) {
@@ -212,7 +212,15 @@ private async createPipelines(): Promise<void> {
             entries: computeEntries
         }));
     }
-   }
+
+    const computePerspectivePipeline = this.pipelines.get('computePerspective');
+    if (computePerspectivePipeline) {
+        this.bindGroups.set('computePerspective', this.device.createBindGroup({
+            layout: computePerspectivePipeline.getBindGroupLayout(0),
+            entries: computeEntries
+        }));
+    }
+}
     
     private swapDepthTextures() {
         const temp = this.depthTextureRead;
@@ -291,14 +299,6 @@ computeUniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
         const imageVideoPipeline = this.pipelines.get('imageVideo') as GPURenderPipeline;
         const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
 
-        const computePerspectivePipeline = this.pipelines.get('computePerspective');
-        if (computePerspectivePipeline) {
-            this.bindGroups.set('computePerspective', this.device.createBindGroup({
-            layout: computePerspectivePipeline.getBindGroupLayout(0),
-            entries: computeEntries
-            }));
-        }
-        
         switch (mode) {
             case 'shader':
                 if (galaxyPipeline && this.bindGroups.has('galaxy')) {
