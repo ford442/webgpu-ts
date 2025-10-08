@@ -170,7 +170,7 @@ private async createPipelines(): Promise<void> {
         this.depthTextureWrite = temp;
     }
 
- public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }): void {
+ public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }): void {
     if (!this.device || !this.imageTexture) return;
     const currentTime = performance.now() / 1000.0;
 
