@@ -7,8 +7,11 @@
 struct Uniforms {
   resolutions: vec4<f32>,
   time_zoom: vec4<f32>,
-  config: vec4<f32>, // Use config.xyz for fog color, config.w for fog density
+  config: vec4<f32>,
   depth_map_res: vec4<f32>,
+  // NEW: Add resolution for the main color texture
+  color_map_res: vec4<f32>, 
+  effect_params: vec4<f32>,
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
@@ -38,45 +41,48 @@ fn create_layer(
 ) -> vec4<f32> {
   let canvas_res = u.resolutions.xy;
   let depth_res = u.depth_map_res.xy;
+  let color_res = u.color_map_res.xy; // NEW: Get color texture resolution
+  let parallax_strength = u.effect_params.x;
 
   let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
   let fg_scale = 1.5 - (zoom_progress * 1.49);
   let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
 
+  // Correctly sample depth using aspect-corrected UVs
   let depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
   let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
   
-  let parallax_offset = (repeating_uv - 0.5) * parallax_depth * 0.4;
-  let final_uv = repeating_uv + parallax_offset;
+  // Calculate view-corrected parallax offset
+  let view_dir = normalize(uv - zoom_center);
+  let parallax_offset = view_dir * (parallax_depth * parallax_strength) / fg_scale;
+  let final_uv = repeating_uv - parallax_offset;
   
-  let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
+  // --- FIX: APPLY ASPECT CORRECTION TO THE FINAL COLOR UV ---
+  // Before sampling the color texture, convert final_uv to the color texture's coordinate space.
+  let color_uv = get_corrected_uvs(final_uv, canvas_res, color_res);
+  // --- END FIX ---
+  
+  // Use the corrected color_uv for the texture sample
+  let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(color_uv), 0.0);
 
+  // --- The rest of the function remains the same ---
   let fade_in_duration = 0.25;
   var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
-  // --- IMPROVEMENT 1 (COMPUTE-COMPATIBLE ANTI-ALIASING) ---
-  // Since fwidth() is unavailable in compute shaders, we calculate the gradient manually.
-  // First, get the size of a single texel in our depth map.
   let texel_size = 1.0 / depth_res;
-
-  // Sample the depth at the neighbors along the X and Y axes.
   let depth_x = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv + vec2(texel_size.x, 0.0), 0.0).r;
   let depth_y = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv + vec2(0.0, texel_size.y), 0.0).r;
-
-  // The gradient is the sum of the differences in each direction. This is what fwidth() approximates.
   let gradient_x = abs(depth_x - parallax_depth);
   let gradient_y = abs(depth_y - parallax_depth);
-  let edge_gradient = (gradient_x + gradient_y) * 1.5; // Multiplier for artistic control
+  let edge_gradient = (gradient_x + gradient_y) * 1.5;
 
   let cutout_alpha = smoothstep(min_depth - edge_gradient, min_depth + edge_gradient, parallax_depth) *
                    (1.0 - smoothstep(max_depth - edge_gradient, max_depth + edge_gradient, parallax_depth));
-  // --- END IMPROVEMENT 1 ---
 
   final_alpha = final_alpha * cutout_alpha;
 
   return vec4(foreground_color.rgb, final_alpha);
 }
-
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
