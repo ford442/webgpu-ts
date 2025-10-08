@@ -19,18 +19,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let currentTime = u.config.x;
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
-  // --- MODIFIED: Start of new conditional logic ---
-  var ambientDisplacement = vec2<f32>(0.0, 0.0);
+var ambientDisplacement = vec2<f32>(0.0, 0.0);
 
-  // Only apply ambient motion if the depth is 0.5 or greater
-if (center_depth >= 0.5) {
+// Calculate a factor that is 0.0 in the foreground and 1.0 in the background.
+// The transition happens between depth values 0.5 and 0.75.
+let background_factor = smoothstep(0.5, 0.75, center_depth);
+
+// Only apply ambient motion if we are in the background.
+if (background_factor > 0.0) {
   let time = currentTime * 0.5;
   let base_ambient_strength = 0.02; 
   let ambient_freq = 15.0;
   let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
-  ambientDisplacement = motion * base_ambient_strength;
+  // Scale the effect by the background_factor so it fades in smoothly.
+  ambientDisplacement = motion * base_ambient_strength * background_factor;
 }
-  // --- MODIFIED: End of new conditional logic ---
 
 
   // --- Occlusion and Ripple logic below remains unchanged ---
