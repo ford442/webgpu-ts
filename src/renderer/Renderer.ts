@@ -213,14 +213,6 @@ private async createPipelines(): Promise<void> {
         }));
     }
 
-    const computePerspectivePipeline = this.pipelines.get('computePerspective');
-    if (computePerspectivePipeline) {
-        this.bindGroups.set('computePerspective', this.device.createBindGroup({
-            layout: computePerspectivePipeline.getBindGroupLayout(0),
-            entries: computeEntries
-        }));
-    }
-}
     
     private swapDepthTextures() {
         const temp = this.depthTextureRead;
@@ -264,7 +256,7 @@ private async createPipelines(): Promise<void> {
                 computeUniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
                 // --- MODIFIED: Start of changes ---
                 // Write zoomTime and the farthest point coordinates
-                computeUniformArray.set([currentTime, farthestPoint.x, 0.5, 0], 4);
+computeUniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
                 // --- MODIFIED: End of changes ---
                 const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
                 for (let i = 0; i < this.ripplePoints.length; i++) {
