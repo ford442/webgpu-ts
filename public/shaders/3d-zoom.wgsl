@@ -39,22 +39,24 @@ fn create_zooming_layer(
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
-    // --- FIXED: Reverted to fract() ---
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
 
     let depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
     let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
-    let posterized_depth = floor(parallax_depth * depth_levels) / depth_levels;
 
-    let parallax_offset = (repeating_uv - 0.5) * posterized_depth * 0.4;
+    // --- FIXED: Use the SMOOTH depth for parallax ---
+    // This preserves the 3D shape of the object.
+    let parallax_offset = (repeating_uv - 0.5) * parallax_depth * 0.4;
     let final_uv = repeating_uv + parallax_offset;
     
-    // --- FIXED: Reverted to fract() ---
     let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
 
     let fade_in_duration = 0.25;
     var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
+    // --- Use the POSTERIZED depth only for the cutout ---
+    // This creates the sharp, controllable edge.
+    let posterized_depth = floor(parallax_depth * depth_levels) / depth_levels;
     let cutout_alpha = smoothstep(depth_threshold - edge_softness, depth_threshold + edge_softness, posterized_depth);
     final_alpha = final_alpha * cutout_alpha;
 
