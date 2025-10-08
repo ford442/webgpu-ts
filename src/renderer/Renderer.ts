@@ -1,4 +1,4 @@
-export type RenderMode = 'liquid' | 'image' | 'video' | 'ripple' | 'liquid-v1' | 'shader' | 'liquid-zoom';
+import { RenderMode } from './types';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
