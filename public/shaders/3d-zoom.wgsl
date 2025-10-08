@@ -36,27 +36,28 @@ fn create_zooming_layer(
     let depth_levels = u.config.z;
     let edge_softness = (1.0 - edge_hardness) * 0.1;
 
+    // 1. Do all zoom math in a continuous, "unwrapped" coordinate space
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
-    let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
+    let scaled_uv = (uv - zoom_center) * fg_scale + zoom_center;
 
-    let depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
-    let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
-
-    // --- FIXED: Use the SMOOTH depth for parallax ---
-    // This preserves the 3D shape of the object.
-    let parallax_offset = (repeating_uv - 0.5) * parallax_depth * 0.4;
-    let final_uv = repeating_uv + parallax_offset;
+    // 2. Correct the UVs for the depth map, THEN wrap and sample
+    let depth_uv_corrected = get_corrected_uvs(scaled_uv, canvas_res, depth_res);
+    let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fract(depth_uv_corrected), 0.0).r;
+    let posterized_depth = floor(parallax_depth * depth_levels) / depth_levels;
     
-    let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
+    // 3. Calculate parallax offset (this happens in the unwrapped space)
+    let parallax_offset = (scaled_uv - zoom_center) * posterized_depth * 0.4;
+    let final_uv_unwrapped = scaled_uv + parallax_offset;
+    
+    // 4. Sample the color texture. No aspect correction is needed here because the canvas
+    //    and image aspect ratios match. Just wrap the final coordinate.
+    let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv_unwrapped), 0.0);
 
+    // 5. Calculate alpha using the depth value we found
     let fade_in_duration = 0.25;
     var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
-
-    // --- Use the POSTERIZED depth only for the cutout ---
-    // This creates the sharp, controllable edge.
-    let posterized_depth = floor(parallax_depth * depth_levels) / depth_levels;
     let cutout_alpha = smoothstep(depth_threshold - edge_softness, depth_threshold + edge_softness, posterized_depth);
     final_alpha = final_alpha * cutout_alpha;
 
