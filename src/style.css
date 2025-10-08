@@ -28,6 +28,9 @@ canvas {
     border-radius: 8px;
     margin-top: 20px;
     cursor: crosshair;
+    min-width: 1024px;
+    min-height: 1024px;
+    max-width: 100%;
 }
 
 .controls {
