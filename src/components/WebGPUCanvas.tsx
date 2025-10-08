@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Renderer } from '../renderer/Renderer';
 import { RenderMode } from '../renderer/types';
 
@@ -13,7 +13,6 @@ interface WebGPUCanvasProps {
 
 const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
 
     useEffect(() => {
@@ -36,8 +35,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         let active = true;
         const animate = () => {
             if (!active) return;
-            if (rendererRef.current && videoRef.current) {
-                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY, farthestPoint);
+            if (rendererRef.current) {
+                rendererRef.current.render(mode, zoom, panX, panY, farthestPoint);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
