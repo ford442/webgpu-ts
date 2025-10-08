@@ -24,7 +24,7 @@ fn create_zooming_layer(
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
 
     // 1. Calculate the fast, cyclical, zooming UVs for the foreground.
-    let fg_scale = 1.0 - (zoom_progress * 0.5);
+let fg_scale = 1.5 - zoom_progress;
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
 
     // 2. Sample the foreground color with parallax.
