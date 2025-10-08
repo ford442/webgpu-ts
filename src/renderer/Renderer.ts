@@ -236,7 +236,6 @@ private async createPipelines(): Promise<void> {
         const commandEncoder = this.device.createCommandEncoder();
 
         if (mode.startsWith('liquid')) {
-            this.createBindGroups();
 
             const computePass = commandEncoder.beginComputePass();
             const computeV1BG = this.bindGroups.get('computeV1');
