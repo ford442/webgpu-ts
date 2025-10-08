@@ -48,8 +48,6 @@ export class Renderer {
         return true;
     }
 
-    // ... (The rest of the file remains the same as the previous simplified version)
-
     private async fetchImageUrls(): Promise<void> {
         const bucketName = 'my-sd35-space-images-2025';
         const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
@@ -201,7 +199,7 @@ export class Renderer {
         return this.imageDimensions;
     }
 
-    public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number, imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}): void {
+public render(mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}): void {
 
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
