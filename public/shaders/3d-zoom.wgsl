@@ -5,30 +5,12 @@
 @group(0) @binding(5) var staticDepthTexture: texture_2d<f32>;
 
 struct Uniforms {
-  // resolution.xy = canvas, resolution.zw = image
-  resolution: vec4<f32>,
-  // zoom_config.x = time, .yz = zoom_center, .w = depthThreshold
-  // edgeHardness is now passed in zoom_config.w's alpha channel, effectively. Let's adjust.
-  // Let's redefine for clarity
-  config: vec4<f32>,        // canvas_w, canvas_h, image_w, image_h
-  zoom_config: vec4<f32>,   // time, farthestX, farthestY, depthThreshold
+  resolutions: vec4<f32>,   // .xy = canvas, .zw = image
+  time_zoom: vec4<f32>,     // .x = time, .yz = zoom_center
+  config: vec4<f32>,        // .x = depthThreshold, .y = edgeHardness
 };
-
-
-// Let's assume the render code sends edgeHardness in the last slot.
-// So zoom_config becomes (time, farthestX, farthestY, depthThreshold) and let's add edgeHardness somewhere.
-// It's simpler to just use the structure I outlined in thought.
-// But for a minimal change:
-// We'll pass edgeHardness in uniformArray[7]. So let's make the buffer bigger.
-// No, the user will get confused. Let's stick to the minimal change.
-// The renderer is writing into a 32-byte (8 float) buffer.
-// Let's use the second float of the first vec4 for edgeHardness.
-// config: vec4<f32> // canvas_w, canvas_h, image_w, image_h
-// zoom_config: vec4<f32> // time, farthestX, farthestY, depthThreshold
-// I'll assume the renderer has been updated to provide a larger uniform buffer if needed. Let's keep it simple.
-// The user's code puts canvas and image dims in the first vec4. And other stuff in the second.
-// This means the uniform struct is wrong. Let's fix it.
 @group(0) @binding(3) var<uniform> u: Uniforms;
+
 fn get_corrected_uvs(uv: vec2<f32>, canvas_res: vec2<f32>, texture_res: vec2<f32>) -> vec2<f32> {
     let canvas_aspect = canvas_res.x / canvas_res.y;
     let texture_aspect = texture_res.x / texture_res.y;
@@ -49,27 +31,21 @@ fn create_zooming_layer(
 ) -> vec4<f32> {
     let canvas_res = u.resolutions.xy;
     let image_res = u.resolutions.zw;
-    let depth_threshold = u.zoom_config.w;
-    // NOTE: We need edgeHardness. Let's assume it's passed in an unused uniform slot.
-    // Let's just hardcode it for now to prove the concept.
-    let edge_softness = 0.02;
+    let depth_threshold = u.config.x;
+    let edge_hardness = u.config.y;
+    let edge_softness = (1.0 - edge_hardness) * 0.1;
 
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
 
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
-
-    // Convert our canvas-space UVs to texture-space UVs for sampling
     let texture_uv = get_corrected_uvs(repeating_uv, canvas_res, image_res);
 
-    // --- All sampling now uses the corrected texture_uv ---
     let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, texture_uv, 0.0).r;
-
     let parallax_offset = (repeating_uv - 0.5) * parallax_depth * 0.4;
     let final_uv_canvas_space = repeating_uv + parallax_offset;
 
-    // Convert final canvas-space UVs to texture-space for color lookup
     let final_texture_uv = get_corrected_uvs(final_uv_canvas_space, canvas_res, image_res);
     let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_texture_uv), 0.0);
 
@@ -84,12 +60,14 @@ fn create_zooming_layer(
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let resolution = u.config.zw;
-    let uv = vec2<f32>(global_id.xy) / resolution;
-    let zoom_time = u.zoom_config.x;
-    let zoom_center = u.zoom_config.yz;
+    let canvas_res = u.resolutions.xy;
+    let image_res = u.resolutions.zw;
+    let uv = vec2<f32>(global_id.xy) / canvas_res;
+    let zoom_time = u.time_zoom.x;
+    let zoom_center = u.time_zoom.yz;
 
-    let background_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
+    let corrected_bg_uv = get_corrected_uvs(uv, canvas_res, image_res);
+    let background_color = textureSampleLevel(readTexture, u_sampler, corrected_bg_uv, 0.0);
 
     let foreground1 = create_zooming_layer(uv, zoom_time, zoom_center, 0.0);
     let foreground2 = create_zooming_layer(uv, zoom_time, zoom_center, 0.5);

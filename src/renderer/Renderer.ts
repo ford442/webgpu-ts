@@ -130,7 +130,7 @@ export class Renderer {
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
-        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
         const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
@@ -194,11 +194,15 @@ export class Renderer {
             const computePass = commandEncoder.beginComputePass();
             const computeZoomBG = this.bindGroups.get('computeZoom');
             if (computeZoomBG) {
-                const uniformArray = new Float32Array(8);
+                // Create a 12-element (48-byte) array
+                const uniformArray = new Float32Array(12);
+
+                // vec4 0: Resolutions
                 uniformArray.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
-                uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, depthThreshold], 4);
-                // Also send edgeHardness, let's put it in the last slot of zoom_config for now
-                uniformArray[7] = edgeHardness;
+                // vec4 1: Time and Zoom Center
+                uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
+                // vec4 2: Config values
+                uniformArray.set([depthThreshold, edgeHardness], 8);
 
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
 
