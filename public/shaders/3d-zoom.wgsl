@@ -91,32 +91,30 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let zoom_time = u.time_zoom.x;
   let zoom_center = u.time_zoom.yz;
 
-  let horizon_depth = 0.1;
-  let midground_depth = 0.5;
+let horizon_depth = 0.3; // Horizon now covers the furthest 30% of the scene.
+let midground_depth = 0.6; // Mid-ground covers the next 30%.
 
-  // --- Calculate all layers first ---
+var final_color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
   
-  // 1. Horizon Layer (Furthest)
-  let slowest_speed = 0.01;
-  let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
-  let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
-  let blended_horizon = mix(horizon1, horizon2, horizon2.a);
+let slowest_speed = 0.025;
+let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
+let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
+let blended_horizon = mix(horizon1, horizon2, horizon2.a);
+final_color = mix(final_color, blended_horizon, blended_horizon.a);
 
-  // 2. Mid-ground Layer
-  let slow_speed = 0.03;
-  let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
-  let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
-  let blended_midground = mix(mid1, mid2, mid2.a);
+// 2. The Mid-ground Layer (now starts from the new horizon_depth)
+let slow_speed = 0.05; // Slightly increase mid-ground speed as well
+let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
+let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
+let blended_midground = mix(mid1, mid2, mid2.a);
+final_color = mix(final_color, blended_midground, blended_midground.a);
 
-  // 3. Foreground Layer (Closest)
-  let fast_speed = 0.15;
-  let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
-  let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
- let blended_foreground = mix(fg1, fg2, fg2.a);
-
-  var final_color = mix(blended_midground, blended_foreground, blended_foreground.a);
-  final_color = mix(blended_horizon, final_color, final_color.a);
-
+// 3. The Foreground Layer (starts from the new midground_depth)
+let fast_speed = 0.15;
+let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
+let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
+let blended_foreground = mix(fg1, fg2, fg2.a);
+final_color = mix(final_color, blended_foreground, blended_foreground.a);
   // --- IMPROVEMENT 3: ATMOSPHERIC FOG ---
   // We need a single depth value for the fog calculation. Let's use the static
   // depth map at the original, un-zoomed UV as a baseline.
