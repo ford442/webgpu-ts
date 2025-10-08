@@ -9,7 +9,7 @@ interface WebGPUCanvasProps {
     depthThreshold: number;
     edgeHardness: number;
     imageDimensions: { width: number; height: number };
-    depthLevels: number; // Add the missing prop
+    depthLevels: number;
 }
 
 const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
@@ -19,7 +19,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
     depthThreshold,
     edgeHardness,
     imageDimensions,
-    depthLevels // Add to destructuring
+    depthLevels
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationFrameId = useRef<number>(0);
@@ -38,16 +38,14 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
                     (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
                 }
                 
-                // This logic correctly handles the initial resize
-                const initialWidth = container.clientWidth;
-                const initialHeight = container.clientHeight;
-                renderer.handleResize(initialWidth, initialHeight);
+                // --- FIXED: Call handleResize with no arguments ---
+                renderer.handleResize();
 
-            const observer = new ResizeObserver(entries => {
-    // The renderer can now get the size itself
-    renderer.handleResize();
-});
-observer.observe(container);
+                const observer = new ResizeObserver(entries => {
+                    // --- FIXED: Call handleResize with no arguments ---
+                    renderer.handleResize();
+                });
+                observer.observe(container);
             }
         };
 
@@ -63,14 +61,13 @@ observer.observe(container);
         const animate = () => {
             if (!active) return;
             if (rendererRef.current) {
-                // Update the render call to include depthLevels and remove old props
+                // The render call signature is correct from our previous fixes
                 rendererRef.current.render(mode, 0, 0, 0, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    // Update the dependency array
     }, [mode, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels, rendererRef]);
 
     return (
