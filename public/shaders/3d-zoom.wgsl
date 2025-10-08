@@ -7,9 +7,10 @@
 struct Uniforms {
   resolutions: vec4<f32>,
   time_zoom: vec4<f32>,
-  config: vec4<f32>,
+  config: vec4<f32>, // Use config.xyz for fog color, config.w for fog density
   depth_map_res: vec4<f32>,
 };
+
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 // The 'get_corrected_uvs' and 'create_layer' functions are correct and do not need changes.
@@ -27,79 +28,94 @@ fn get_corrected_uvs(uv: vec2<f32>, canvas_res: vec2<f32>, texture_res: vec2<f32
 }
 
 fn create_layer(
-    uv: vec2<f32>,
-    zoom_time: f32,
-    zoom_center: vec2<f32>,
-    cycle_offset: f32,
-    zoom_speed: f32,
-    min_depth: f32,
-    max_depth: f32
+  uv: vec2<f32>,
+  zoom_time: f32,
+  zoom_center: vec2<f32>,
+  cycle_offset: f32,
+  zoom_speed: f32,
+  min_depth: f32,
+  max_depth: f32
 ) -> vec4<f32> {
-    let canvas_res = u.resolutions.xy;
-    let depth_res = u.depth_map_res.xy;
-    let edge_softness = 0.02;
+  let canvas_res = u.resolutions.xy;
+  let depth_res = u.depth_map_res.xy;
 
-    let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
-    let fg_scale = 1.5 - (zoom_progress * 1.49);
-    let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
+  let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
+  let fg_scale = 1.5 - (zoom_progress * 1.49);
+  let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
 
-    let depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
-    let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
-    
-    let parallax_offset = (repeating_uv - 0.5) * parallax_depth * 0.4;
-    let final_uv = repeating_uv + parallax_offset;
-    
-    let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
+  let depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
+  let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
+  
+  let parallax_offset = (repeating_uv - 0.5) * parallax_depth * 0.4;
+  let final_uv = repeating_uv + parallax_offset;
+  
+  let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
 
-    let fade_in_duration = 0.25;
-    var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
+  let fade_in_duration = 0.25;
+  var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
-    let cutout_alpha = smoothstep(min_depth - edge_softness, min_depth + edge_softness, parallax_depth) *
-                       (1.0 - smoothstep(max_depth - edge_softness, max_depth + edge_softness, parallax_depth));
-    final_alpha = final_alpha * cutout_alpha;
+  // --- IMPROVEMENT 1: ADAPTIVE ANTI-ALIASING ---
+  // Calculate the screen-space gradient of the depth value. This gives us a
+  // per-pixel edge softness that's perfectly tailored to the edge.
+  let edge_gradient = fwidth(parallax_depth) * 1.5; // Multiplier for artistic control
 
-    return vec4(foreground_color.rgb, final_alpha);
+  let cutout_alpha = smoothstep(min_depth - edge_gradient, min_depth + edge_gradient, parallax_depth) *
+                   (1.0 - smoothstep(max_depth - edge_gradient, max_depth + edge_gradient, parallax_depth));
+  // --- END IMPROVEMENT 1 ---
+
+  final_alpha = final_alpha * cutout_alpha;
+
+  return vec4(foreground_color.rgb, final_alpha);
 }
 
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let canvas_res = u.resolutions.xy;
-    let uv = vec2<f32>(global_id.xy) / canvas_res;
-    let zoom_time = u.time_zoom.x;
-    let zoom_center = u.time_zoom.yz;
+  let canvas_res = u.resolutions.xy;
+  let uv = vec2<f32>(global_id.xy) / canvas_res;
+  let zoom_time = u.time_zoom.x;
+  let zoom_center = u.time_zoom.yz;
 
-    let horizon_depth = 0.1;
-    let midground_depth = 0.5;
+  let horizon_depth = 0.1;
+  let midground_depth = 0.5;
 
-    // --- Start with a transparent canvas ---
-    var final_color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+  // --- Calculate all layers first ---
+  
+  // 1. Horizon Layer (Furthest)
+  let slowest_speed = 0.01;
+  let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
+  let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
+  let blended_horizon = mix(horizon1, horizon2, horizon2.a);
 
-    // --- NEW: The Slowest-Moving Horizon Layer ---
-    // This replaces the static background. It moves at a crawl.
-    let slowest_speed = 0.01;
-    let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
-    let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
-    let blended_horizon = mix(horizon1, horizon2, horizon2.a);
-    // Blend the horizon over the transparent background
-    final_color = mix(final_color, blended_horizon, blended_horizon.a);
+  // 2. Mid-ground Layer
+  let slow_speed = 0.03;
+  let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
+  let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
+  let blended_midground = mix(mid1, mid2, mid2.a);
 
-    // 2. The Slow-Moving Mid-ground (no change to this logic)
-    let slow_speed = 0.03;
-    let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
-    let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
-    let blended_midground = mix(mid1, mid2, mid2.a);
-    // Blend the mid-ground over the result
-    final_color = mix(final_color, blended_midground, blended_midground.a);
+  // 3. Foreground Layer (Closest)
+  let fast_speed = 0.15;
+  let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
+  let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
+ let blended_foreground = mix(fg1, fg2, fg2.a);
 
-    // 3. The Fast-Moving Foreground (no change to this logic)
-    let fast_speed = 0.15;
-    let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
-    let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
-    let blended_foreground = mix(fg1, fg2, fg2.a);
-    // Blend the foreground over the result
-    final_color = mix(final_color, blended_foreground, blended_foreground.a);
-    
-    // As a final step, blend over a solid black to remove any alpha gaps
-    textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
+  var final_color = mix(blended_midground, blended_foreground, blended_foreground.a);
+  final_color = mix(blended_horizon, final_color, final_color.a);
+
+  // --- IMPROVEMENT 3: ATMOSPHERIC FOG ---
+  // We need a single depth value for the fog calculation. Let's use the static
+  // depth map at the original, un-zoomed UV as a baseline.
+  let fog_depth_uv = get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy);
+  let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fog_depth_uv, 0.0).r;
+  
+  let fog_color = u.config.xyz;
+  let fog_density = u.config.w;
+
+  // The fog factor should be close to 1 for near objects (high depth) and
+  // close to 0 for far objects (low depth).
+  let fog_amount = pow(base_depth, fog_density); // 'pow' gives more artistic control
+  final_color.rgb = mix(fog_color, final_color.rgb, fog_amount);
+  // --- END IMPROVEMENT 3 ---
+
+  textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
 }
