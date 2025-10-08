@@ -20,17 +20,36 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const renderer = new Renderer(canvas);
-        
-        (async () => {
+
+        const initRenderer = async () => {
             const success = await renderer.init();
             if (success) {
                 if (rendererRef && 'current' in rendererRef) {
                     (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
                 }
+
+                // --- NEW: Set up the ResizeObserver after initialization ---
+                const observer = new ResizeObserver(entries => {
+                    for (const entry of entries) {
+                        const canvas = entry.target as HTMLCanvasElement;
+                        const width = entry.contentBoxSize[0].inlineSize;
+                        const height = entry.contentBoxSize[0].blockSize;
+                        // Call our new resize handler
+                        renderer.handleResize(width, height);
+                    }
+                });
+                observer.observe(canvas);
             }
-        })();
-        return () => cancelAnimationFrame(animationFrameId.current);
-    }, [rendererRef]); 
+        };
+
+        initRenderer();
+
+        return () => {
+            cancelAnimationFrame(animationFrameId.current);
+            // If you want to disconnect the observer when the component unmounts:
+            // observer.disconnect();
+        };
+    }, [rendererRef]);
 
     useEffect(() => {
         let active = true;
@@ -46,7 +65,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
     }, [mode, zoom, panX, panY, farthestPoint, depthThreshold, rendererRef]); // Add depthThreshold to dependency array
 
     return (
-        <canvas ref={canvasRef} width="2048" height="2048" />
+        <canvas ref={canvasRef} />
     );
 };
 
