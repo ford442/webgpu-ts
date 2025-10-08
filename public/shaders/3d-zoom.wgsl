@@ -114,8 +114,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // The fog factor should be close to 1 for near objects (high depth) and
   // close to 0 for far objects (low depth).
   let fog_amount = pow(base_depth, fog_density); // 'pow' gives more artistic control
-  final_color.rgb = mix(fog_color, final_color.rgb, fog_amount);
-  // --- END IMPROVEMENT 3 ---
+  // Calculate the new RGB value first.
+  let mixed_rgb = mix(fog_color, final_color.rgb, fog_amount);
+  // Construct a new vec4 with the new RGB and original alpha, then assign it.
+  final_color = vec4<f32>(mixed_rgb, final_color.a);
 
   textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
 }
