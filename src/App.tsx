@@ -95,18 +95,32 @@ function App() {
             const { data, dims } = result.predicted_depth;
             const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
 
-            // ... (min/max and farthest point calculation remains the same) ...
+            // --- START: This is the section that needs to be restored ---
+            let min = Infinity, max = -Infinity;
+            let minIndex = 0;
+            data.forEach((v: number, i: number) => {
+                if (v < min) {
+                    min = v;
+                    minIndex = i;
+                }
+                if (v > max) max = v;
+            });
+            // --- END: This is the section that needs to be restored ---
+
+            const farthestY = Math.floor(minIndex / width);
+            const farthestX = minIndex % width;
+            setFarthestPoint({ x: farthestX / width, y: farthestY / height });
 
             const range = max - min;
             const normalizedData = new Float32Array(data.length);
+
             for (let i = 0; i < data.length; ++i) {
                 normalizedData[i] = 1.0 - ((data[i] - min) / range);
             }
 
-            // --- NEW: Calculate and set the optimal threshold ---
             const newThreshold = findOptimalThreshold(normalizedData);
             console.log(`Optimal depth threshold found: ${newThreshold.toFixed(3)}`);
-            setDepthThreshold(newThreshold); // Update our React state
+            setDepthThreshold(newThreshold);
 
             setStatus('Updating depth map on GPU...');
             rendererRef.current.updateDepthMap(normalizedData, width, height);
