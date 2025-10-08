@@ -224,21 +224,35 @@ public render(mode: RenderMode, farthestPoint: { x: number, y: number }, depthTh
             // Let's send depth_res in a cleaner way.
             
             // --- New, Cleaner Uniform Layout ---
-            const cleanUniforms = new Float32Array(16); // Use a 4x4 buffer for clarity
-            
-            // vec4 0: resolutions (canvas.xy, image.zw)
-            cleanUniforms.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
-            
-            // vec4 1: time_zoom (time.x, zoom_center.yz)
-            cleanUniforms.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
+           const cleanUniforms = new Float32Array(24); 
+  
+// vec4 0 (Offset 0): resolutions
+cleanUniforms.set([this.canvas.width, this.canvas.height], 0); // Canvas res
+// We can use imageDimensions from the render args or this.imageDimensions
+cleanUniforms.set([imageDimensions.width, imageDimensions.height], 2); // Original color texture res
 
-            // vec4 2: config (depthThreshold.x, edgeHardness.y, depthLevels.z)
-            cleanUniforms.set([depthThreshold, edgeHardness, depthLevels], 8);
-            
-            // vec4 3: depth_map_res (depth_w.x, depth_h.y)
-            cleanUniforms.set([depthDimensions.width, depthDimensions.height], 12);
-            
-            this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, cleanUniforms);
+// vec4 1 (Offset 4): time_zoom
+cleanUniforms.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
+
+// vec4 2 (Offset 8): config (fog_color.xyz, fog_density.w)
+// Example fog values: dark gray fog with a density of 4.0
+const fogColor = [0.1, 0.1, 0.12];
+const fogDensity = 4.0;
+cleanUniforms.set([...fogColor, fogDensity], 8);
+
+// vec4 3 (Offset 12): depth_map_res
+cleanUniforms.set([depthDimensions.width, depthDimensions.height], 12);
+
+// vec4 4 (Offset 16): color_map_res - THIS IS THE NEWLY REQUIRED DATA
+cleanUniforms.set([imageDimensions.width, imageDimensions.height], 16);
+
+// vec4 5 (Offset 20): effect_params (parallax_strength.x) - ALSO NEW
+const parallaxStrength = 0.05; // A good starting value for parallax
+cleanUniforms.set([parallaxStrength], 20);
+
+
+this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, cleanUniforms);
+
 
 
             computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
