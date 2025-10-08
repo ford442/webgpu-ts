@@ -6,9 +6,8 @@
 @group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
 
 struct Uniforms {
-  config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
-  zoom_config: vec4<f32>,         // zoomTime, farthestX, farthestY, unused
-  ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
+  config: vec4<f32>,        // time, rippleCount, resolutionX, resolutionY
+  zoom_config: vec4<f32>,   // zoomTime, farthestX, farthestY, unused
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
