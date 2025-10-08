@@ -36,22 +36,21 @@ fn create_zooming_layer(
     let depth_levels = u.config.z;
     let edge_softness = (1.0 - edge_hardness) * 0.1;
 
-    // 1. Use a single, constant speed for the layer for stability
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
-    let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
+    // --- MODIFIED: Use mod() instead of fract() ---
+    let repeating_uv = mod((uv - zoom_center) * fg_scale + zoom_center, 1.0);
 
-    // 2. Sample the depth map once using the definitive UV coordinate
     let depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
     let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
     let posterized_depth = floor(parallax_depth * depth_levels) / depth_levels;
 
-    // 3. Use this single, stable depth value for all subsequent effects
     let parallax_offset = (repeating_uv - 0.5) * posterized_depth * 0.4;
     let final_uv = repeating_uv + parallax_offset;
     
-    let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
+    // --- MODIFIED: Use mod() instead of fract() ---
+    let foreground_color = textureSampleLevel(readTexture, u_sampler, mod(final_uv, 1.0), 0.0);
 
     let fade_in_duration = 0.25;
     var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
