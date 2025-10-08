@@ -22,7 +22,20 @@ export class Renderer {
         if (!navigator.gpu) return false;
         const adapter = await navigator.gpu.requestAdapter();
         if (!adapter) return false;
-        this.device = await adapter.requestDevice();
+
+        // --- FIXED: Restore the feature request logic ---
+        const requiredFeatures: GPUFeatureName[] = [];
+        if (adapter.features.has('float32-filterable')) {
+            requiredFeatures.push('float32-filterable');
+        } else {
+            console.warn("Device does not support 'float32-filterable'. Some effects may not work as intended.");
+        }
+
+        this.device = await adapter.requestDevice({
+            requiredFeatures,
+        });
+        // --- End of fix ---
+
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
@@ -33,6 +46,8 @@ export class Renderer {
 
         return true;
     }
+
+    // ... (The rest of the file remains the same as the previous simplified version)
 
     private async fetchImageUrls(): Promise<void> {
         const bucketName = 'my-sd35-space-images-2025';
@@ -73,14 +88,19 @@ export class Renderer {
 
     public updateDepthMap(data: Float32Array, width: number, height: number): void {
         if (!this.device) return;
-        if (this.staticDepthTexture) this.staticDepthTexture.destroy();
+        if (this.staticDepthTexture && (this.staticDepthTexture.width !== width || this.staticDepthTexture.height !== height)) {
+            this.staticDepthTexture.destroy();
+        }
 
-        const depthTextureDescriptor: GPUTextureDescriptor = {
-            size: [width, height],
-            format: 'r32float',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-        };
-        this.staticDepthTexture = this.device.createTexture(depthTextureDescriptor);
+        if (!this.staticDepthTexture || this.staticDepthTexture.width !== width || this.staticDepthTexture.height !== height) {
+            const depthTextureDescriptor: GPUTextureDescriptor = {
+                size: [width, height],
+                format: 'r32float',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+            };
+            this.staticDepthTexture = this.device.createTexture(depthTextureDescriptor);
+        }
+
         this.device.queue.writeTexture({ texture: this.staticDepthTexture }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
         this.createBindGroups();
     }
@@ -160,8 +180,6 @@ export class Renderer {
         }
 
         const textureView = this.context.getCurrentTexture().createView();
-
-        // --- FIXED: Added type assertions for loadOp and storeOp ---
         const renderPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [{
                 view: textureView,
@@ -170,7 +188,6 @@ export class Renderer {
                 storeOp: 'store' as GPUStoreOp
             }]
         };
-
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
         const presentPipeline = this.pipelines.get('present') as GPURenderPipeline;
         if (presentPipeline && this.bindGroups.has('present')) {
