@@ -20,7 +20,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
 var ambientDisplacement = vec2<f32>(0.0, 0.0);
-let background_factor = smoothstep(0.5, 0.75, center_depth);
+let background_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
 
 if (background_factor > 0.0) {
     let time = currentTime * 0.5;
@@ -66,7 +66,7 @@ if (background_factor > 0.0) {
   //    - center_depth = 0.0 is pure foreground (no parallax)
   //    - center_depth = 1.0 is pure background (full parallax)
   //    - smoothstep creates a nice falloff instead of a hard edge.
-let background_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
+let parallax_mix_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
 
   // 3. Add the parallax effect to the main interactive displacement.
   let finalDisplacement = interactiveDisplacement + (parallaxDisplacement * parallax_mix_factor);
