@@ -66,7 +66,7 @@ if (background_factor > 0.0) {
   //    - center_depth = 0.0 is pure foreground (no parallax)
   //    - center_depth = 1.0 is pure background (full parallax)
   //    - smoothstep creates a nice falloff instead of a hard edge.
-let parallax_mix_factor = smoothstep(0.5, 0.75, center_depth);
+let background_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
 
   // 3. Add the parallax effect to the main interactive displacement.
   let finalDisplacement = interactiveDisplacement + (parallaxDisplacement * parallax_mix_factor);
