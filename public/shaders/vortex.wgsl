@@ -22,22 +22,27 @@ fn create_zooming_layer(
 ) -> vec4<f32> {
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
-    let fg_scale = 1.5 - zoom_progress;
+
+    // --- CHANGE #1: Make the layer zoom completely past ---
+    // The scale now goes from 1.5 down to almost 0, creating a much larger zoom.
+    let fg_scale = 1.5 - (zoom_progress * 1.49);
+    
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
     let parallax_offset = (repeating_uv - 0.5) * depth * 0.4;
     let parallax_uv = repeating_uv + parallax_offset;
-    let foreground_color = textureSampleLevel(readTexture, u_sampler, parallax_uv, 0.0);
-    let dissolve_threshold = 1.0 - zoom_progress;
-    let alpha = smoothstep(dissolve_threshold - 0.15, dissolve_threshold, depth);
-    let fade_duration = 0.2;
-    var cycle_fade = 1.0;
-    if (zoom_progress < fade_duration) {
-      cycle_fade = zoom_progress / fade_duration;
-    } else if (zoom_progress > (1.0 - fade_duration)) {
-      cycle_fade = (1.0 - zoom_progress) / fade_duration;
-    }
-    let final_alpha = alpha * smoothstep(0.0, 1.0, cycle_fade);
+
+    // --- CHANGE #2: Fix texture tearing artifacts ---
+    // By wrapping the final UV coordinate with fract(), we ensure it never goes
+    // out of bounds, which prevents the "missing texture" issue at the edges.
+    let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(parallax_uv), 0.0);
+
+    // --- CHANGE #3: Replace dissolve with a simple fade-in ---
+    // This makes the layer fade in smoothly at the start and then stay fully
+    // visible as it zooms past the camera, instead of dissolving away.
+    let fade_in_duration = 0.25;
+    let final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
+
     return vec4(foreground_color.rgb, final_alpha);
 }
 
