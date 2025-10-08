@@ -145,14 +145,15 @@ export class Renderer {
     }
 
 private async createPipelines(): Promise<void> {
-    const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidZoomCode, textureCode, liquidPerspectiveCode] = await Promise.all([ // MODIFIED
+   const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = await Promise.all([ // MODIFIED
         fetch('shaders/galaxy.wgsl').then(res => res.text()),
         fetch('shaders/imageVideo.wgsl').then(res => res.text()),
         fetch('shaders/liquid-v1.wgsl').then(res => res.text()),
         fetch('shaders/liquid.wgsl').then(res => res.text()),
         fetch('shaders/liquid-zoom.wgsl').then(res => res.text()),
         fetch('shaders/texture.wgsl').then(res => res.text()),
-        fetch('shaders/liquid-perspective.wgsl').then(res => res.text()), // MODIFIED: Added this line
+        fetch('shaders/liquid-perspective.wgsl').then(res => res.text()),
+        fetch('shaders/vortex.wgsl').then(res => res.text()), // ADD THIS
     ]);
 
     const galaxyModule = this.device.createShaderModule({ code: galaxyCode });
@@ -161,16 +162,18 @@ private async createPipelines(): Promise<void> {
     const liquidModule = this.device.createShaderModule({ code: liquidCode });
     const liquidZoomModule = this.device.createShaderModule({ code: liquidZoomCode });
     const textureModule = this.device.createShaderModule({ code: textureCode });
-    const liquidPerspectiveModule = this.device.createShaderModule({ code: liquidPerspectiveCode }); // MODIFIED: Added this line
-
+    const liquidPerspectiveModule = this.device.createShaderModule({ code: liquidPerspectiveCode });
+    const vortexModule = this.device.createShaderModule({ code: vortexCode }); // ADD THIS
+    
         const commonConfig = { vertex: { module: imageVideoModule, entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }] }, primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology } };
         this.pipelines.set('galaxy', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: galaxyModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: galaxyModule, entryPoint: 'fs_main' }, primitive: { topology: 'triangle-list' as GPUPrimitiveTopology } }));
         this.pipelines.set('imageVideo', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: imageVideoModule, entryPoint: 'fs_main' } }));
         this.pipelines.set('liquid', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } }));
         this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }));
         this.pipelines.set('compute', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }));
-        this.pipelines.set('computeZoom', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidZoomModule, entryPoint: 'main' } }));
-        this.pipelines.set('computePerspective', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidPerspectiveModule, entryPoint: 'main' } }));
+    this.pipelines.set('computeZoom', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidZoomModule, entryPoint: 'main' } }));
+    this.pipelines.set('computePerspective', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidPerspectiveModule, entryPoint: 'main' } }));
+    this.pipelines.set('computeVortex', this.device.createComputePipeline({ layout: 'auto', compute: { module: vortexModule, entryPoint: 'main' } })); // ADD THIS
 }
 
  private createBindGroups(): void {
@@ -220,6 +223,15 @@ private async createPipelines(): Promise<void> {
             entries: computeEntries
         }));
     }
+
+    const computeVortexPipeline = this.pipelines.get('computeVortex');
+    if (computeVortexPipeline) {
+        this.bindGroups.set('computeVortex', this.device.createBindGroup({
+            layout: computeVortexPipeline.getBindGroupLayout(0),
+            entries: computeEntries
+        }));
+    }
+     
 }
     
     private swapDepthTextures() {
