@@ -220,9 +220,7 @@ private async createPipelines(): Promise<void> {
         this.depthTextureWrite = temp;
     }
 
-    // --- MODIFIED: Start of changes ---
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }): void {
-    // --- MODIFIED: End of changes ---
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
 
@@ -244,13 +242,14 @@ private async createPipelines(): Promise<void> {
             const computeV1BG = this.bindGroups.get('computeV1');
             const computeBG = this.bindGroups.get('compute');
             const computeZoomBG = this.bindGroups.get('computeZoom');
+            const computePerspectiveBG = this.bindGroups.get('computePerspective'); // MODIFIED: Added this line
 
             if (mode === 'liquid-v1' && computeV1BG) {
                 this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
                 computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeV1BG);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-} else if ((mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeBG) { // MODIFIED
+            } else if ((mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective') && computeBG) { // MODIFIED
                 this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
                 if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
                 const computeUniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
@@ -267,9 +266,12 @@ private async createPipelines(): Promise<void> {
                 computeUniformArray.set(rippleData, 8);
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, computeUniformArray);
                 
-if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) { // MODIFIED
+                if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) {
                     computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
                     computePass.setBindGroup(0, computeZoomBG);
+                } else if (mode === 'liquid-perspective' && computePerspectiveBG) { // MODIFIED: Added this else if block
+                    computePass.setPipeline(this.pipelines.get('computePerspective') as GPUComputePipeline);
+                    computePass.setBindGroup(0, computePerspectiveBG);
                 } else {
                     computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
                     computePass.setBindGroup(0, computeBG);
@@ -277,8 +279,7 @@ if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) { // 
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
             }
             computePass.end();
-            
-            if (mode === 'liquid' || mode === 'liquid-zoom') {
+            if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective') { // MODIFIED
                 this.swapDepthTextures();
             }
         }
@@ -338,8 +339,9 @@ if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) { // 
             case 'liquid-v1':
             case 'liquid':
             case 'liquid-zoom':
-            case 'liquid-vortex': // MODIFIED
-            if (liquidPipeline && this.bindGroups.has('liquid')) {
+            case 'liquid-vortex':
+            case 'liquid-perspective': // MODIFIED: Added this line
+                if (liquidPipeline && this.bindGroups.has('liquid')) {
                     passEncoder.setPipeline(liquidPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('liquid')!);
                     passEncoder.draw(4);
