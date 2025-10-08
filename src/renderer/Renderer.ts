@@ -356,6 +356,7 @@ private async createPipelines(): Promise<void> {
             case 'liquid-zoom':
             case 'liquid-vortex':
             case 'liquid-perspective': // MODIFIED: Added this line
+             case 'vortex': // ADD THIS
                 if (liquidPipeline && this.bindGroups.has('liquid')) {
                     passEncoder.setPipeline(liquidPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('liquid')!);
