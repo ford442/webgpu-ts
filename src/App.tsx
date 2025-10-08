@@ -25,8 +25,48 @@ function App() {
       // ... (this function is unchanged)
   };
 
-  const findOptimalThreshold = (data: Float32Array): number => {
-      // ... (this function is unchanged)
+const findOptimalThreshold = (data: Float32Array): number => {
+    const binCount = 256;
+    const histogram = new Array(binCount).fill(0);
+
+    for (let i = 0; i < data.length; ++i) {
+        const bin = Math.min(Math.floor(data[i] * binCount), binCount - 1);
+        histogram[bin]++;
+    }
+
+    const totalPixels = data.length;
+    let bestThreshold = 0;
+    let maxVariance = 0;
+
+    let sum = 0;
+    for (let i = 0; i < binCount; i++) {
+        sum += i * histogram[i];
+    }
+
+    let sumB = 0;
+    let wB = 0;
+    let wF = 0;
+
+    for (let t = 0; t < binCount; t++) {
+        wB += histogram[t];
+        if (wB === 0) continue;
+
+        wF = totalPixels - wB;
+        if (wF === 0) break;
+
+        sumB += t * histogram[t];
+
+        const mB = sumB / wB;
+        const mF = (sum - sumB) / wF;
+
+        const variance = wB * wF * (mB - mF) * (mB - mF);
+
+        if (variance > maxVariance) {
+            maxVariance = variance;
+            bestThreshold = t;
+        }
+   }
+    return bestThreshold / binCount;
   };
 
   const runDepthAnalysis = useCallback(async (imageUrl: string) => {
