@@ -212,7 +212,7 @@ private async createPipelines(): Promise<void> {
             entries: computeEntries
         }));
     }
-
+   }
     
     private swapDepthTextures() {
         const temp = this.depthTextureRead;
