@@ -13,7 +13,8 @@ function App() {
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
     const [depthThreshold, setDepthThreshold] = useState(0.5);
     const [edgeHardness, setEdgeHardness] = useState(0.5);
-    const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 }); // New state
+ const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 });
+  const [depthDimensions, setDepthDimensions] = useState({ width: 1, height: 1 }); // New state
     const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
     const [depthLevels, setDepthLevels] = useState(5); // Start with 5 levels
 
@@ -89,7 +90,7 @@ function App() {
             const result = await depthEstimator(imageUrl);
             const { data, dims } = result.predicted_depth;
             const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
-
+            setDepthDimensions({ width, height });
             // --- START: This is the section that needs to be restored ---
             let min = Infinity, max = -Infinity;
             let minIndex = 0;
@@ -209,6 +210,7 @@ function App() {
         edgeHardness={edgeHardness}
         depthLevels={depthLevels}
         imageDimensions={imageDimensions}
+        depthDimensions={depthDimensions} // Pass the new prop
       />
       {depthMapResult && (
            <div className="debug-container">
