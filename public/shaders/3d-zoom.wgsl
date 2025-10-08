@@ -121,18 +121,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // We need a single depth value for the fog calculation. Let's use the static
   // depth map at the original, un-zoomed UV as a baseline.
   let fog_depth_uv = get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy);
-  let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fog_depth_uv, 0.0).r;
-  
-  let fog_color = u.config.xyz;
-  let fog_density = u.config.w;
+let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fog_depth_uv, 0.0).r;
 
-  // The fog factor should be close to 1 for near objects (high depth) and
-  // close to 0 for far objects (low depth).
-  let fog_amount = pow(base_depth, fog_density); // 'pow' gives more artistic control
-  // Calculate the new RGB value first.
-  let mixed_rgb = mix(fog_color, final_color.rgb, fog_amount);
-  // Construct a new vec4 with the new RGB and original alpha, then assign it.
-  final_color = vec4<f32>(mixed_rgb, final_color.a);
+let fog_color = u.config.xyz;
+let fog_density = u.config.w;
+
+// The distance into the scene is 1.0 (far) - base_depth (near)
+let distance = 1.0 - base_depth; 
+
+// The standard exponential fog formula gives a much smoother, more natural falloff.
+let fog_amount = exp(-distance * fog_density);
+
+// CORRECTED LINE:
+let mixed_rgb = mix(fog_color, final_color.rgb, fog_amount);
+final_color = vec4<f32>(mixed_rgb, final_color.a);
+// --- END IMPROVEMENT 2 ---
 
   textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
 }
