@@ -12,6 +12,8 @@ struct Uniforms {
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
+// The 'get_corrected_uvs' and 'create_layer' functions are correct and do not need changes.
+// [omitted for brevity]
 fn get_corrected_uvs(uv: vec2<f32>, canvas_res: vec2<f32>, texture_res: vec2<f32>) -> vec2<f32> {
     let canvas_aspect = canvas_res.x / canvas_res.y;
     let texture_aspect = texture_res.x / texture_res.y;
@@ -24,20 +26,18 @@ fn get_corrected_uvs(uv: vec2<f32>, canvas_res: vec2<f32>, texture_res: vec2<f32
     return (uv - 0.5) * scale + 0.5;
 }
 
-// --- NEW: A more flexible layer creation function ---
 fn create_layer(
     uv: vec2<f32>,
     zoom_time: f32,
     zoom_center: vec2<f32>,
     cycle_offset: f32,
     zoom_speed: f32,
-    min_depth: f32, // The shallowest depth for this layer
-    max_depth: f32  // The deepest depth for this layer
+    min_depth: f32,
+    max_depth: f32
 ) -> vec4<f32> {
     let canvas_res = u.resolutions.xy;
     let depth_res = u.depth_map_res.xy;
-    let depth_levels = u.config.z;
-    let edge_softness = 0.02; // Use a small fixed softness for blending layers
+    let edge_softness = 0.02;
 
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
@@ -54,13 +54,13 @@ fn create_layer(
     let fade_in_duration = 0.25;
     var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
-    // This creates a "band pass" alpha mask, selecting only pixels within the min/max depth range
     let cutout_alpha = smoothstep(min_depth - edge_softness, min_depth + edge_softness, parallax_depth) *
                        (1.0 - smoothstep(max_depth - edge_softness, max_depth + edge_softness, parallax_depth));
     final_alpha = final_alpha * cutout_alpha;
 
     return vec4(foreground_color.rgb, final_alpha);
 }
+
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -69,37 +69,37 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let zoom_time = u.time_zoom.x;
     let zoom_center = u.time_zoom.yz;
 
-    // --- NEW: Define our depth slices ---
-    // These could become sliders in the UI later!
-    let horizon_depth = 0.1; // Anything below this is static
-    let midground_depth = 0.5; // Anything between horizon and this is mid-ground
+    let horizon_depth = 0.1;
+    let midground_depth = 0.5;
 
-    // 1. The Static Horizon
-    // We sample the original image and check the depth at the current pixel (uv)
-    let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy), 0.0).r;
-    var final_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
-    // If the pixel is not part of the horizon, make it transparent for now
-    if (base_depth > horizon_depth) {
-        final_color.a = 0.0;
-    }
+    // --- Start with a transparent canvas ---
+    var final_color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 
-    // 2. The Slow-Moving Mid-ground
-    // Two layers, offset in time, moving slowly, for the mid-ground depth slice
+    // --- NEW: The Slowest-Moving Horizon Layer ---
+    // This replaces the static background. It moves at a crawl.
+    let slowest_speed = 0.01;
+    let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
+    let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
+    let blended_horizon = mix(horizon1, horizon2, horizon2.a);
+    // Blend the horizon over the transparent background
+    final_color = mix(final_color, blended_horizon, blended_horizon.a);
+
+    // 2. The Slow-Moving Mid-ground (no change to this logic)
     let slow_speed = 0.03;
     let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
     let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
     let blended_midground = mix(mid1, mid2, mid2.a);
-    // Blend the mid-ground over the static horizon
+    // Blend the mid-ground over the result
     final_color = mix(final_color, blended_midground, blended_midground.a);
 
-    // 3. The Fast-Moving Foreground
-    // Two layers, offset in time, moving quickly, for the foreground depth slice
+    // 3. The Fast-Moving Foreground (no change to this logic)
     let fast_speed = 0.15;
     let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
     let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
     let blended_foreground = mix(fg1, fg2, fg2.a);
-    // Blend the foreground over the result of the previous blend
+    // Blend the foreground over the result
     final_color = mix(final_color, blended_foreground, blended_foreground.a);
     
+    // As a final step, blend over a solid black to remove any alpha gaps
     textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
 }
