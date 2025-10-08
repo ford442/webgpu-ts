@@ -4,35 +4,30 @@ import { RenderMode } from '../renderer/types';
 
 interface WebGPUCanvasProps {
     mode: RenderMode;
-    zoom: number;
-    panX: number;
-    panY: number;
     rendererRef: React.MutableRefObject<Renderer | null>;
     farthestPoint: { x: number; y: number };
-    // --- ADD THE MISSING PROPS ---
     depthThreshold: number;
     edgeHardness: number;
-    imageDimensions: { width: number; height: number }; // Added from previous step
+    imageDimensions: { width: number; height: number };
+    depthLevels: number; // Add the missing prop
 }
 
 const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
-                                                       mode,
-                                                       zoom,
-                                                       panX,
-                                                       panY,
-                                                       rendererRef,
-                                                       farthestPoint,
-                                                       depthThreshold,
-                                                       edgeHardness,
-                                                       imageDimensions
-                                                   }) => {
+    mode,
+    rendererRef,
+    farthestPoint,
+    depthThreshold,
+    edgeHardness,
+    imageDimensions,
+    depthLevels // Add to destructuring
+}) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationFrameId = useRef<number>(0);
 
     useEffect(() => {
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
-        const container = canvas.parentElement; // Get the container
+        const container = canvas.parentElement; 
         if (!container) return;
         const renderer = new Renderer(canvas);
 
@@ -42,14 +37,16 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
                 if (rendererRef && 'current' in rendererRef) {
                     (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
                 }
-                const initialWidth = canvas.clientWidth;
-                const initialHeight = canvas.clientHeight;
+                
+                // This logic correctly handles the initial resize
+                const initialWidth = container.clientWidth;
+                const initialHeight = container.clientHeight;
                 renderer.handleResize(initialWidth, initialHeight);
+
                 const observer = new ResizeObserver(entries => {
                     for (const entry of entries) {
                         const width = entry.contentBoxSize[0].inlineSize;
                         const height = entry.contentBoxSize[0].blockSize;
-                        // The renderer will now handle the aspect ratio logic
                         renderer.handleResize(width, height);
                     }
                 });
@@ -69,15 +66,15 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
         const animate = () => {
             if (!active) return;
             if (rendererRef.current) {
-                // --- UPDATE THE RENDER CALL TO INCLUDE THE NEW PROPS ---
-                rendererRef.current.render(mode, zoom, panX, panY, farthestPoint, depthThreshold, edgeHardness, imageDimensions);
+                // Update the render call to include depthLevels and remove old props
+                rendererRef.current.render(mode, 0, 0, 0, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-        // --- UPDATE THE DEPENDENCY ARRAY ---
-    }, [mode, zoom, panX, panY, farthestPoint, depthThreshold, edgeHardness, imageDimensions, rendererRef]);
+    // Update the dependency array
+    }, [mode, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels, rendererRef]);
 
     return (
         <canvas ref={canvasRef} />
