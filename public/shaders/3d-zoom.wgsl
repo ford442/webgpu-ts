@@ -54,10 +54,19 @@ fn create_layer(
   let fade_in_duration = 0.25;
   var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
-  // --- IMPROVEMENT 1: ADAPTIVE ANTI-ALIASING ---
-  // Calculate the screen-space gradient of the depth value. This gives us a
-  // per-pixel edge softness that's perfectly tailored to the edge.
-  let edge_gradient = fwidth(parallax_depth) * 1.5; // Multiplier for artistic control
+  // --- IMPROVEMENT 1 (COMPUTE-COMPATIBLE ANTI-ALIASING) ---
+  // Since fwidth() is unavailable in compute shaders, we calculate the gradient manually.
+  // First, get the size of a single texel in our depth map.
+  let texel_size = 1.0 / depth_res;
+
+  // Sample the depth at the neighbors along the X and Y axes.
+  let depth_x = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv + vec2(texel_size.x, 0.0), 0.0).r;
+  let depth_y = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv + vec2(0.0, texel_size.y), 0.0).r;
+
+  // The gradient is the sum of the differences in each direction. This is what fwidth() approximates.
+  let gradient_x = abs(depth_x - parallax_depth);
+  let gradient_y = abs(depth_y - parallax_depth);
+  let edge_gradient = (gradient_x + gradient_y) * 1.5; // Multiplier for artistic control
 
   let cutout_alpha = smoothstep(min_depth - edge_gradient, min_depth + edge_gradient, parallax_depth) *
                    (1.0 - smoothstep(max_depth - edge_gradient, max_depth + edge_gradient, parallax_depth));
