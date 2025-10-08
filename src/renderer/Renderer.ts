@@ -199,21 +199,6 @@ export class Renderer {
         return this.imageDimensions;
     }
 
-That's a great piece of logic from Jules! It's a very clear and direct way to handle the specific aspect ratio difference between the main image and the AI-generated depth map. It calculates the exact scaling and offset needed to fit one inside the other.
-
-Let's integrate this new, more explicit correction logic into our project. We'll update the renderer to send the necessary data and then replace our old correction function in the shader with this new code block.
-
-The Fix
-Here are the updated files. We'll adjust the Renderer to send the depthDimensions in a dedicated uniform and then use that in the shader with the new logic.
-
-1. src/renderer/Renderer.ts (Modified)
-We'll reorganize the uniform data slightly for clarity to match the new shader code.
-
-TypeScript
-
-// In src/renderer/Renderer.ts
-
-// Update the render method
 public render(mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}): void {
     if (!this.device || !this.imageTexture) return;
     const currentTime = performance.now() / 1000.0;
