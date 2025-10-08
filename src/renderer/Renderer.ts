@@ -16,6 +16,7 @@ export class Renderer {
 
     private depthTextureRead!: GPUTexture;
     private depthTextureWrite!: GPUTexture;
+    private staticDepthTexture!: GPUTexture; // Add this new texture property
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
@@ -81,25 +82,29 @@ export class Renderer {
   public updateDepthMap(data: Float32Array, width: number, height: number): void {
     if (!this.device) return;
 
-    if (this.depthTextureRead && (this.depthTextureRead.width !== width || this.depthTextureRead.height !== height)) {
-        this.depthTextureRead.destroy();
-        this.depthTextureWrite.destroy();
-    }
+      if (this.depthTextureRead && (this.depthTextureRead.width !== width || this.depthTextureRead.height !== height)) {
+          this.depthTextureRead.destroy();
+          this.depthTextureWrite.destroy();
+          this.staticDepthTexture.destroy(); // Destroy the old static texture too
+      }
 
-    if (!this.depthTextureRead || this.depthTextureRead.width !== width || this.depthTextureRead.height !== height) {
-        const depthTextureDescriptor: GPUTextureDescriptor = {
-            size: [width, height],
-            format: 'r32float',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
-        };
-        this.depthTextureRead = this.device.createTexture(depthTextureDescriptor);
-        this.depthTextureWrite = this.device.createTexture(depthTextureDescriptor);
-    }
+      if (!this.depthTextureRead || this.depthTextureRead.width !== width || this.depthTextureRead.height !== height) {
+          const depthTextureDescriptor: GPUTextureDescriptor = {
+              size: [width, height],
+              format: 'r32float',
+              usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
+          };
+          this.depthTextureRead = this.device.createTexture(depthTextureDescriptor);
+          this.depthTextureWrite = this.device.createTexture(depthTextureDescriptor);
+          this.staticDepthTexture = this.device.createTexture(depthTextureDescriptor); // Create the new static texture
+      }
 
-    this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
-    this.device.queue.writeTexture({ texture: this.depthTextureWrite }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
+      // Write the initial depth data to all three textures
+      this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
+      this.device.queue.writeTexture({ texture: this.depthTextureWrite }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
+      this.device.queue.writeTexture({ texture: this.staticDepthTexture }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
 
-    this.createBindGroups();
+      this.createBindGroups();
   }
     
     private async createResources(): Promise<void> {
@@ -108,7 +113,7 @@ export class Renderer {
         this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
 
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    
+
         const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
             format: 'r32float',
@@ -116,9 +121,13 @@ export class Renderer {
         };
         this.depthTextureRead = this.device.createTexture(placeholderDepthDescriptor);
         this.depthTextureWrite = this.device.createTexture(placeholderDepthDescriptor);
-        this.device.queue.writeTexture({ texture: this.depthTextureRead }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
-        this.device.queue.writeTexture({ texture: this.depthTextureWrite }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
-        
+        this.staticDepthTexture = this.device.createTexture(placeholderDepthDescriptor); // Create placeholder
+
+        const placeholderData = new Float32Array([0.0]);
+        this.device.queue.writeTexture({ texture: this.depthTextureRead }, placeholderData, { bytesPerRow: 4 }, [1, 1]);
+        this.device.queue.writeTexture({ texture: this.depthTextureWrite }, placeholderData, { bytesPerRow: 4 }, [1, 1]);
+        this.device.queue.writeTexture({ texture: this.staticDepthTexture }, placeholderData, { bytesPerRow: 4 }, [1, 1]);
+
         this.writeTexture = this.device.createTexture({
             size: [width, height],
             format: 'rgba16float',
@@ -159,6 +168,7 @@ private async createPipelines(): Promise<void> {
                 { binding: 4, resource: this.depthTextureRead.createView() },
                 { binding: 5, resource: this.nonFilteringSampler },
                 { binding: 6, resource: this.depthTextureWrite.createView() },
+                { binding: 7, resource: this.staticDepthTexture.createView() }, // Add binding for the new texture
             ]
         }));
     }

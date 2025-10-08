@@ -1,9 +1,10 @@
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(1) var readTexture: texture_2d<f32>;
 @group(0) @binding(2) var writeTexture: texture_storage_2d<rgba16float, write>;
-@group(0) @binding(4) var readDepthTexture: texture_2d<f32>;
+@group(0) @binding(4) var readDepthTexture: texture_2d<f32>; // Animated depth
 @group(0) @binding(5) var non_filtering_sampler: sampler;
 @group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
+@group(0) @binding(7) var staticDepthTexture: texture_2d<f32>; // NEW: Static depth for parallax
 
 struct Uniforms {
   config: vec4<f32>,        // time, rippleCount, resolutionX, resolutionY
@@ -22,15 +23,32 @@ fn create_zooming_layer(
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
     let fg_scale = 1.5 - (zoom_progress * 1.49);
-    let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
-    let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
-    let parallax_offset = (repeating_uv - 0.5) * depth * 0.4;
-    let parallax_uv = repeating_uv + parallax_offset;
-    let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(parallax_uv), 0.0);
-    let fade_in_duration = 0.25;
-    let final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
-    return vec4(foreground_color.rgb, final_alpha);
-}
+
+        let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
+
+        // --- FIXED: Use STATIC depth map for parallax calculation ---
+        let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
+        let parallax_offset = (repeating_uv - 0.5) * parallax_depth * 0.4;
+        let parallax_uv = repeating_uv + parallax_offset;
+        let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(parallax_uv), 0.0);
+
+        let fade_in_duration = 0.25;
+        var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
+
+        // --- FIXED: Smooth the cutout by sampling 4 times (bilinear filter) ---
+        let texel_size = 1.0 / vec2<f32>(textureDimensions(readDepthTexture));
+        let d00 = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
+        let d10 = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv + vec2<f32>(texel_size.x, 0.0), 0.0).r;
+        let d01 = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv + vec2<f32>(0.0, texel_size.y), 0.0).r;
+        let d11 = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv + texel_size, 0.0).r;
+        let smoothed_depth = (d00 + d10 + d01 + d11) * 0.25;
+
+        let cutout_alpha = smoothstep(background_depth_threshold - 0.02, background_depth_threshold + 0.02, smoothed_depth);
+
+        final_alpha = final_alpha * cutout_alpha;
+
+        return vec4(foreground_color.rgb, final_alpha);
+    }
 
 // --- Helper function to create a scrolling foreground DEPTH layer ---
 // This is the function that was moved to the top level to fix the error.
