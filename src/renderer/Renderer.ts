@@ -201,7 +201,8 @@ export class Renderer {
         return this.imageDimensions;
     }
 
-    public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number): void {
+    public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number, imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}): void {
+
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
         const commandEncoder = this.device.createCommandEncoder();
@@ -210,18 +211,17 @@ export class Renderer {
             const computePass = commandEncoder.beginComputePass();
             const computeZoomBG = this.bindGroups.get('computeZoom');
             if (computeZoomBG) {
-                // Create a 12-element (48-byte) array
-                const uniformArray = new Float32Array(12);
+            const uniformArray = new Float32Array(12);
 
-                // vec4 0: Resolutions
-                uniformArray.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
-                // vec4 1: Time and Zoom Center
-                uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
-                // vec4 2: Config values
-                uniformArray.set([depthThreshold, edgeHardness, depthLevels], 8); // Add depthLevels
+            // vec4 0: Resolutions
+            uniformArray.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
+            // vec4 1: Time, Zoom Center, and Depth Width
+            uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, depthDimensions.width], 4);
+            // vec4 2: Config values and Depth Height
+            uniformArray.set([depthThreshold, edgeHardness, depthLevels, depthDimensions.height], 8);
 
-                this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
-
+            this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
+            
                 computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeZoomBG);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
