@@ -12,7 +12,7 @@ struct Uniforms {
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// --- Helper function to calculate a zooming foreground layer ---
+// --- Helper function to calculate a zooming foreground COLOR layer ---
 fn create_zooming_layer(
     uv: vec2<f32>,
     zoom_time: f32,
@@ -49,28 +49,20 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let uv = vec2<f32>(global_id.xy) / resolution;
     let zoom_time = u.zoom_config.x;
     let zoom_center = u.zoom_config.yz;
-
-    // --- Liquid/ripple logic is removed ---
     let displaced_uv = uv;
 
-    // --- Continuous Zoom Logic ---
-
-    // 1. Calculate the slow, continuous zoom for the absolute background.
+    // --- Continuous Zoom Logic for COLOR ---
     let bg_scale = pow(0.95, zoom_time);
     let bg_uv = (displaced_uv - zoom_center) * bg_scale + zoom_center;
     let background_color = textureSampleLevel(readTexture, u_sampler, fract(bg_uv), 0.0);
-
-    // 2. Calculate two foreground layers, offset by half a cycle.
     let foreground1 = create_zooming_layer(displaced_uv, zoom_time, zoom_center, 0.0);
-    let foreground2 = create_zooming_layer(displaced_uv, zoom_time, zoom_center, 0.5); // Offset by 0.5
-
-    // 3. Blend the layers. Mix the second layer on top of the first, then mix the result on top of the background.
+    let foreground2 = create_zooming_layer(displaced_uv, zoom_time, zoom_center, 0.5);
     let blended_foreground = mix(foreground1, foreground2, foreground2.a);
     let final_color = mix(background_color, blended_foreground, blended_foreground.a);
-
     textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
 
-    // --- MODIFIED: Continuous Zoom Logic for DEPTH ---
+
+    // --- Continuous Zoom Logic for DEPTH ---
 
     // 1. Define the threshold for what we consider the "stationary background".
     //    Anything with a normalized depth value below this will not scroll.
