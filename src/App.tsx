@@ -16,10 +16,10 @@ function App() {
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
-  const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 }); // Default to center
-  const [depthThreshold, setDepthThreshold] = useState(0.05);
+    const [depthThreshold, setDepthThreshold] = useState(0.5); // This will now be controlled by the slider
+    const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
 
-  const rendererRef = useRef<Renderer | null>(null);
+    const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
   
   const loadModel = async () => {
@@ -120,7 +120,7 @@ function App() {
 
             const newThreshold = findOptimalThreshold(normalizedData);
             console.log(`Optimal depth threshold found: ${newThreshold.toFixed(3)}`);
-            setDepthThreshold(newThreshold);
+            setDepthThreshold(newThreshold); // Set the new threshold in the UI
 
             setStatus('Updating depth map on GPU...');
             rendererRef.current.updateDepthMap(normalizedData, width, height);
@@ -205,6 +205,8 @@ function App() {
         autoChangeDelay={autoChangeDelay}
         setAutoChangeDelay={setAutoChangeDelay}
         onLoadModel={loadModel}
+        depthThreshold={depthThreshold} // Pass the state to the controls
+        setDepthThreshold={setDepthThreshold} // Pass the setter function
         isModelLoaded={!!depthEstimator}
       />
         <WebGPUCanvas

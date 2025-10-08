@@ -18,6 +18,8 @@ interface ControlsProps {
     setAutoChangeDelay: (delay: number) => void;
     onLoadModel: () => void;
     isModelLoaded: boolean;
+    depthThreshold: number; // Add this
+    setDepthThreshold: (value: number) => void; // Add this
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
@@ -28,7 +30,8 @@ const Controls: React.FC<ControlsProps> = ({
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
-    onLoadModel, isModelLoaded
+onLoadModel, isModelLoaded,
+depthThreshold, setDepthThreshold
 }) => {
     return (
         <div className="controls">
@@ -48,6 +51,17 @@ const Controls: React.FC<ControlsProps> = ({
                 <div className="control-group">
                     <label></label>
                     <button onClick={onNewImage}>New Random Image</button>
+                </div>
+                <div className="control-group">
+                    <label htmlFor="depth-slider">Depth Cutoff:</label>
+                    <input
+                        type="range"
+                        id="depth-slider"
+                        min="0"
+                        max="100"
+                        value={depthThreshold * 100}
+                        onChange={(e) => setDepthThreshold(parseFloat(e.target.value) / 100)}
+                    />
                 </div>
                 <div className="control-group">
                     <label htmlFor="auto-change-toggle">Auto Change:</label>
