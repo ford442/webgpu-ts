@@ -128,7 +128,7 @@ function App() {
         }
     }, [depthEstimator]);
 
-     const handleNewImage = useCallback(async () => {
+    const handleNewImage = useCallback(async () => {
     if (!rendererRef.current) {
         console.warn("Renderer not ready yet.");
         return;
@@ -141,6 +141,10 @@ function App() {
         if (dims) {
             setImageDimensions(dims);
         }
+
+        // --- THE KEY FIX: Force the canvas to resize to the new image's aspect ratio ---
+        rendererRef.current.handleResize();
+
         if (depthEstimator) {
             await runDepthAnalysis(newImageUrl);
         } else {
@@ -150,7 +154,7 @@ function App() {
     } else {
         setStatus('Failed to load a random image.');
     }
-  }, [depthEstimator, runDepthAnalysis]);
+}, [depthEstimator, runDepthAnalysis]);
 
   useEffect(() => {
     if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
