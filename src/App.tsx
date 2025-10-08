@@ -115,7 +115,7 @@ function App() {
             const normalizedData = new Float32Array(data.length);
 
             for (let i = 0; i < data.length; ++i) {
-                normalizedData[i] = 1.0 - ((data[i] - min) / range);
+                normalizedData[i] = (data[i] - min) / range;
             }
 
             const newThreshold = findOptimalThreshold(normalizedData);
