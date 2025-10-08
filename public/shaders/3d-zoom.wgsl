@@ -9,7 +9,6 @@ struct Uniforms {
   time_zoom: vec4<f32>,     // .x = time, .yz = zoom_center, .w = depth_w
   config: vec4<f32>,        // .x = depthThreshold, .y = edgeHardness, .z = depthLevels, .w = depth_h
 };
-
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 fn get_corrected_uvs(uv: vec2<f32>, canvas_res: vec2<f32>, texture_res: vec2<f32>) -> vec2<f32> {
@@ -30,43 +29,33 @@ fn create_zooming_layer(
     zoom_center: vec2<f32>,
     cycle_offset: f32
 ) -> vec4<f32> {
+    // --- ADDED: Define variables from uniforms at the top of the function ---
+    let canvas_res = u.resolutions.xy;
+    let depth_res = vec2<f32>(u.time_zoom.w, u.config.w);
     let depth_threshold = u.config.x;
     let edge_hardness = u.config.y;
+    let depth_levels = u.config.z;
     let edge_softness = (1.0 - edge_hardness) * 0.1;
 
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
+    let fg_scale = 1.5 - (zoom_progress * 1.49);
 
-    let repeating_uv = fract((uv - zoom_center) * (1.5 - (zoom_progress * 1.49)) + zoom_center);
+    let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
     
-    let parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
-    let posterized_depth = floor(parallax_depth * u.config.z) / u.config.z;
-
-    // --- NEW: Create a scale multiplier based on depth ---
-    // Objects with depth 0 (far away) have a scale of 1.0.
-    // Objects with depth 1.0 (very close) will have a scale of 2.0, making them appear much larger.
-    let depth_based_scale_factor = 1.0 + posterized_depth;
+    let depth_uv = get_corrected_uvs(repeating_uv, canvas_res, depth_res);
+    var parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, depth_uv, 0.0).r;
+    let posterized_depth = floor(parallax_depth * depth_levels) / depth_levels;
     
-    // --- MODIFIED: Apply the new scale factor ---
-    // The scale now goes from (1.5 * factor) down to 0, creating the dynamic size change.
-    let fg_scale = (1.5 * depth_based_scale_factor) - (zoom_progress * (1.49 * depth_based_scale_factor));
-
-    // We now re-calculate the repeating_uv using this new, dynamic scale
-    let final_repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
-
-    // All subsequent calculations use the final UVs
-    let final_parallax_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, final_repeating_uv, 0.0).r;
-    let final_posterized_depth = floor(final_parallax_depth * u.config.z) / u.config.z;
-
-    let parallax_offset = (final_repeating_uv - 0.5) * final_posterized_depth * 0.4;
-    let final_uv = final_repeating_uv + parallax_offset;
-
+    let parallax_offset = (repeating_uv - 0.5) * posterized_depth * 0.4;
+    let final_uv = repeating_uv + parallax_offset;
+    
     let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
 
     let fade_in_duration = 0.25;
     var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
-    let cutout_alpha = smoothstep(depth_threshold - edge_softness, depth_threshold + edge_softness, final_posterized_depth);
+    let cutout_alpha = smoothstep(depth_threshold - edge_softness, depth_threshold + edge_softness, posterized_depth);
     final_alpha = final_alpha * cutout_alpha;
 
     return vec4(foreground_color.rgb, final_alpha);
@@ -79,14 +68,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let zoom_time = u.time_zoom.x;
     let zoom_center = u.time_zoom.yz;
 
-    // No correction needed for the background anymore
     let background_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
-
+    
     let foreground1 = create_zooming_layer(uv, zoom_time, zoom_center, 0.0);
     let foreground2 = create_zooming_layer(uv, zoom_time, zoom_center, 0.5);
-
+    
     let blended_foreground = mix(foreground1, foreground2, foreground2.a);
     let final_color = mix(background_color, blended_foreground, blended_foreground.a);
-
+    
     textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
 }
