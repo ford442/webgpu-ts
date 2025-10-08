@@ -19,81 +19,46 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let currentTime = u.config.x;
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
+  // --- Ambient Displacement (Background Only) ---
   var ambientDisplacement = vec2<f32>(0.0, 0.0);
-
   let background_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
 
-// Only apply ambient motion if we are in the background.
-if (background_factor > 0.0) {
-  let time = currentTime * 0.5;
-let base_ambient_strength = 0.04; 
-  let ambient_freq = 15.0;
-  let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
-  // Scale the effect by the background_factor so it fades in smoothly.
-  ambientDisplacement = motion * base_ambient_strength * background_factor;
-}
-
-  let pixel_size = 1.0 / resolution;
-  let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(0.0, pixel_size.y), 0.0).r;
-  let depth_down = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(0.0, pixel_size.y), 0.0).r;
-  let depth_left = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv - vec2(pixel_size.x, 0.0), 0.0).r;
-  let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv + vec2(pixel_size.x, 0.0), 0.0).r;
-
-  let fg_influence_occlusion = 
-      max(0.0, depth_up - center_depth) +
-      max(0.0, depth_down - center_depth) +
-      max(0.0, depth_left - center_depth) +
-      max(0.0, depth_right - center_depth);
-
-  if (fg_influence_occlusion > 0.05) {
-      let grad_x = (depth_right - depth_left);
-      let grad_y = (depth_up - depth_down);
-      let gradient_vec = vec2<f32>(grad_x, grad_y);
-      let grad_len_sq = dot(gradient_vec, gradient_vec);
-
-      if (grad_len_sq > 0.00001) {
-        let gradient = normalize(gradient_vec);
-        let projection = dot(ambientDisplacement, gradient);
-
-        if (projection > 0.0) {
-          ambientDisplacement = ambientDisplacement - projection * gradient;
-        }
-      }
+  if (background_factor > 0.0) {
+    let time = currentTime * 0.5;
+    let base_ambient_strength = 0.004; // You can now increase this value safely!
+    let ambient_freq = 15.0;
+    let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
+    ambientDisplacement = motion * base_ambient_strength * background_factor;
   }
   
+  // --- Mouse-driven Ripples ---
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
   let rippleCount = u32(u.config.y);
   for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
     let rippleData = u.ripples[i];
-    let rippleCenter = rippleData.xy;
-    let rippleStartTime = rippleData.z;
-    let timeSinceClick = u.config.x - rippleStartTime;
-
+    let timeSinceClick = u.config.x - rippleData.z;
     if (timeSinceClick > 0.0 && timeSinceClick < 3.0) {
-      let direction_vec = uv - rippleCenter;
+      let direction_vec = uv - rippleData.xy;
       let dist = length(direction_vec);
-
       if (dist > 0.0001) {
-        let rippleOriginDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, rippleCenter, 0.0).r;
-        let rippleOriginDepthFactor = 1.0 - rippleOriginDepth;
+        let rippleOriginDepthFactor = 1.0 - textureSampleLevel(readDepthTexture, non_filtering_sampler, rippleData.xy, 0.0).r;
         let ripple_speed = mix(1.0, 2.0, rippleOriginDepthFactor);
         let ripple_amplitude = mix(0.005, 0.015, rippleOriginDepthFactor);
-        let ripple_frequency = 25.0;
-        let wave = sin(dist * ripple_frequency - timeSinceClick * ripple_speed);
+        let wave = sin(dist * 25.0 - timeSinceClick * ripple_speed);
         let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / (3.0 * mix(0.5, 1.0, rippleOriginDepthFactor)));
         let falloff = 1.0 / (dist * 20.0 + 1.0);
-        let displacement = wave * ripple_amplitude * attenuation * falloff;
-        let direction = direction_vec / dist;
-        mouseDisplacement += direction * displacement;
+        mouseDisplacement += (direction_vec / dist) * wave * ripple_amplitude * falloff;
       }
     }
   }
   
+  // --- Final Output ---
   let totalDisplacement = mouseDisplacement + ambientDisplacement;
   let colorDisplacedUV = uv + totalDisplacement;
   let color = textureSampleLevel(readTexture, u_sampler, colorDisplacedUV, 0.0);
   textureStore(writeTexture, global_id.xy, color);
 
+  // Update depth texture for next frame
   let depthDisplacedUV = uv + mouseDisplacement;
   let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthDisplacedUV, 0.0).r;
   textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
