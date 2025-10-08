@@ -160,7 +160,17 @@ export class Renderer {
         }
 
         const textureView = this.context.getCurrentTexture().createView();
-        const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear', storeOp: 'store' }] };
+
+        // --- FIXED: Added type assertions for loadOp and storeOp ---
+        const renderPassDescriptor: GPURenderPassDescriptor = {
+            colorAttachments: [{
+                view: textureView,
+                clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+                loadOp: 'clear' as GPULoadOp,
+                storeOp: 'store' as GPUStoreOp
+            }]
+        };
+
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
         const presentPipeline = this.pipelines.get('present') as GPURenderPipeline;
         if (presentPipeline && this.bindGroups.has('present')) {
