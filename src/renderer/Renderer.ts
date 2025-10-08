@@ -144,22 +144,24 @@ export class Renderer {
         await this.loadRandomImage();
     }
 
-    private async createPipelines(): Promise<void> {
-        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidZoomCode, textureCode] = await Promise.all([
-            fetch('shaders/galaxy.wgsl').then(res => res.text()),
-            fetch('shaders/imageVideo.wgsl').then(res => res.text()),
-            fetch('shaders/liquid-v1.wgsl').then(res => res.text()),
-            fetch('shaders/liquid.wgsl').then(res => res.text()),
-            fetch('shaders/liquid-zoom.wgsl').then(res => res.text()),
-            fetch('shaders/texture.wgsl').then(res => res.text()),
-        ]);
+private async createPipelines(): Promise<void> {
+    const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidZoomCode, textureCode, liquidPerspectiveCode] = await Promise.all([ // MODIFIED
+        fetch('shaders/galaxy.wgsl').then(res => res.text()),
+        fetch('shaders/imageVideo.wgsl').then(res => res.text()),
+        fetch('shaders/liquid-v1.wgsl').then(res => res.text()),
+        fetch('shaders/liquid.wgsl').then(res => res.text()),
+        fetch('shaders/liquid-zoom.wgsl').then(res => res.text()),
+        fetch('shaders/texture.wgsl').then(res => res.text()),
+        fetch('shaders/liquid-perspective.wgsl').then(res => res.text()), // MODIFIED: Added this line
+    ]);
 
-        const galaxyModule = this.device.createShaderModule({ code: galaxyCode });
-        const imageVideoModule = this.device.createShaderModule({ code: imageVideoCode });
-        const liquidV1Module = this.device.createShaderModule({ code: liquidV1Code });
-        const liquidModule = this.device.createShaderModule({ code: liquidCode });
-        const liquidZoomModule = this.device.createShaderModule({ code: liquidZoomCode });
-        const textureModule = this.device.createShaderModule({ code: textureCode });
+    const galaxyModule = this.device.createShaderModule({ code: galaxyCode });
+    const imageVideoModule = this.device.createShaderModule({ code: imageVideoCode });
+    const liquidV1Module = this.device.createShaderModule({ code: liquidV1Code });
+    const liquidModule = this.device.createShaderModule({ code: liquidCode });
+    const liquidZoomModule = this.device.createShaderModule({ code: liquidZoomCode });
+    const textureModule = this.device.createShaderModule({ code: textureCode });
+    const liquidPerspectiveModule = this.device.createShaderModule({ code: liquidPerspectiveCode }); // MODIFIED: Added this line
 
         const commonConfig = { vertex: { module: imageVideoModule, entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }] }, primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology } };
         this.pipelines.set('galaxy', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, vertex: { module: galaxyModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: galaxyModule, entryPoint: 'fs_main' }, primitive: { topology: 'triangle-list' as GPUPrimitiveTopology } }));
@@ -168,7 +170,8 @@ export class Renderer {
         this.pipelines.set('computeV1', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }));
         this.pipelines.set('compute', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }));
         this.pipelines.set('computeZoom', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidZoomModule, entryPoint: 'main' } }));
-    }
+        this.pipelines.set('computePerspective', this.device.createComputePipeline({ layout: 'auto', compute: { module: liquidPerspectiveModule, entryPoint: 'main' } }));
+}
 
     private createBindGroups(): void {
         if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite) return;
@@ -203,12 +206,12 @@ export class Renderer {
         this.bindGroups.set('compute', this.device.createBindGroup({ layout: computeLayout, entries: computeEntries }));
 
         const computeZoomPipeline = this.pipelines.get('computeZoom');
-        if (computeZoomPipeline) {
-            this.bindGroups.set('computeZoom', this.device.createBindGroup({
-                layout: computeZoomPipeline.getBindGroupLayout(0),
-                entries: computeEntries
-            }));
-        }
+ if (computeZoomPipeline) {
+        this.bindGroups.set('computeZoom', this.device.createBindGroup({
+            layout: computeZoomPipeline.getBindGroupLayout(0),
+            entries: computeEntries
+        }));
+    }
     }
     
     private swapDepthTextures() {
@@ -288,6 +291,14 @@ if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) { // 
         const imageVideoPipeline = this.pipelines.get('imageVideo') as GPURenderPipeline;
         const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
 
+        const computePerspectivePipeline = this.pipelines.get('computePerspective');
+        if (computePerspectivePipeline) {
+            this.bindGroups.set('computePerspective', this.device.createBindGroup({
+            layout: computePerspectivePipeline.getBindGroupLayout(0),
+            entries: computeEntries
+            }));
+        }
+        
         switch (mode) {
             case 'shader':
                 if (galaxyPipeline && this.bindGroups.has('galaxy')) {
