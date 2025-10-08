@@ -13,6 +13,7 @@ export class Renderer {
     private v2ComputeUniformBuffer!: GPUBuffer;
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
+    private imageDimensions = { width: 1, height: 1 }; // Add property to store dimensions
 
     private staticDepthTexture!: GPUTexture;
 
@@ -69,6 +70,7 @@ export class Renderer {
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
+            this.imageDimensions = { width: imageBitmap.width, height: imageBitmap.height };
 
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
@@ -179,7 +181,11 @@ export class Renderer {
         }
     }
 
-    public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, depthThreshold: number): void {
+    public getImageDimensions(): { width: number, height: number } {
+        return this.imageDimensions;
+    }
+
+    public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}): void {
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
         const commandEncoder = this.device.createCommandEncoder();
@@ -189,9 +195,13 @@ export class Renderer {
             const computeZoomBG = this.bindGroups.get('computeZoom');
             if (computeZoomBG) {
                 const uniformArray = new Float32Array(8);
-                uniformArray.set([currentTime, edgeHardness, this.canvas.width, this.canvas.height], 0);
+                uniformArray.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
                 uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, depthThreshold], 4);
+                // Also send edgeHardness, let's put it in the last slot of zoom_config for now
+                uniformArray[7] = edgeHardness;
+
                 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
+
                 computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeZoomBG);
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);

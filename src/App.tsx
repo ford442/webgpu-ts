@@ -17,7 +17,8 @@ function App() {
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
     const [depthThreshold, setDepthThreshold] = useState(0.5);
-    const [edgeHardness, setEdgeHardness] = useState(0.5); // New state for edge hardness (0-1 range)
+    const [edgeHardness, setEdgeHardness] = useState(0.5);
+    const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 }); // New state
     const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
 
     const rendererRef = useRef<Renderer | null>(null);
@@ -143,6 +144,10 @@ function App() {
     const newImageUrl = await rendererRef.current.loadRandomImage();
     
     if (newImageUrl) {
+        const dims = rendererRef.current.getImageDimensions();
+        if (dims) {
+            setImageDimensions(dims);
+        }
         if (depthEstimator) {
             await runDepthAnalysis(newImageUrl);
         } else {
@@ -220,7 +225,8 @@ function App() {
             panY={panY}
             farthestPoint={farthestPoint}
             depthThreshold={depthThreshold}
-            edgeHardness={edgeHardness} // Pass down the new state
+            edgeHardness={edgeHardness}
+            imageDimensions={imageDimensions} // Pass down the new state
         />
       {depthMapResult && (
         <div className="debug-container">
