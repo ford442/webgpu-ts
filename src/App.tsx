@@ -8,11 +8,6 @@ import './style.css';
 
 function App() {
   const [mode, setMode] = useState<RenderMode>('3d-zoom');
-  const [zoom, setZoom] = useState(1.0);
-  const [panX, setPanX] = useState(0.5);
-  const [panY, setPanY] = useState(0.5);
-  const [autoChangeEnabled, setAutoChangeEnabled] = useState(false);
-  const [autoChangeDelay, setAutoChangeDelay] = useState(10);
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
@@ -21,6 +16,7 @@ function App() {
     const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 }); // New state
     const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
     const [depthLevels, setDepthLevels] = useState(5); // Start with 5 levels
+  const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 });
 
     const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -41,54 +37,51 @@ function App() {
     }
   };
 
-    const findOptimalThreshold = (data: Float32Array): number => {
-        const binCount = 256; // Use 256 bins for the histogram
-        const histogram = new Array(binCount).fill(0);
+   const findOptimalThreshold = (data: Float32Array): number => {
+    const binCount = 256;
+    const histogram = new Array(binCount).fill(0);
 
-        // 1. Create the histogram from the normalized depth data
-        for (let i = 0; i < data.length; ++i) {
-            const bin = Math.min(Math.floor(data[i] * binCount), binCount - 1);
-            histogram[bin]++;
+    for (let i = 0; i < data.length; ++i) {
+        const bin = Math.min(Math.floor(data[i] * binCount), binCount - 1);
+        histogram[bin]++;
+    }
+
+    const totalPixels = data.length;
+    let bestThreshold = 0;
+    let maxVariance = 0;
+
+    let sum = 0;
+    for (let i = 0; i < binCount; i++) {
+        sum += i * histogram[i];
+    }
+
+    let sumB = 0;
+    let wB = 0;
+    let wF = 0;
+
+    for (let t = 0; t < binCount; t++) {
+        wB += histogram[t];
+        if (wB === 0) continue;
+
+        wF = totalPixels - wB;
+        if (wF === 0) break;
+
+        sumB += t * histogram[t];
+
+        const mB = sumB / wB;
+        const mF = (sum - sumB) / wF;
+
+        const variance = wB * wF * (mB - mF) * (mB - mF);
+
+        if (variance > maxVariance) {
+            maxVariance = variance;
+            bestThreshold = t;
         }
+    }
 
-        const totalPixels = data.length;
-        let bestThreshold = 0;
-        let maxVariance = 0;
-
-        let sum = 0;
-        for (let i = 0; i < binCount; i++) {
-            sum += i * histogram[i];
-        }
-
-        let sumB = 0;
-        let wB = 0; // weight background
-        let wF = 0; // weight foreground
-
-        // 2. Iterate through all possible thresholds to find the best one
-        for (let t = 0; t < binCount; t++) {
-            wB += histogram[t];
-            if (wB === 0) continue;
-
-            wF = totalPixels - wB;
-            if (wF === 0) break;
-
-            sumB += t * histogram[t];
-
-            const mB = sumB / wB; // mean background
-            const mF = (sum - sumB) / wF; // mean foreground
-
-            // Calculate between-class variance
-            const variance = wB * wF * (mB - mF) * (mB - mF);
-
-            if (variance > maxVariance) {
-                maxVariance = variance;
-                bestThreshold = t;
-            }
-        }
-
-        // 3. Return the best threshold, normalized back to the 0.0 - 1.0 range
-        return bestThreshold / binCount;
-    };
+    // --- ADD THIS MISSING RETURN STATEMENT ---
+    return bestThreshold / binCount;
+  };
 
     const runDepthAnalysis = useCallback(async (imageUrl: string) => {
         if (!depthEstimator || !rendererRef.current) return;
@@ -136,7 +129,7 @@ function App() {
         }
     }, [depthEstimator]);
 
-    const handleNewImage = useCallback(async () => {
+     const handleNewImage = useCallback(async () => {
     if (!rendererRef.current) {
         console.warn("Renderer not ready yet.");
         return;
@@ -203,34 +196,27 @@ function App() {
       <p><strong>Status:</strong> {status}</p>
       <Controls
         mode={mode} setMode={setMode}
-        zoom={zoom} setZoom={setZoom}
-        panX={panX} setPanX={setPanX}
-        panY={panY} setPanY={setPanY}
         onNewImage={handleNewImage}
-        autoChangeEnabled={autoChangeEnabled}
-        setAutoChangeEnabled={setAutoChangeEnabled}
-        autoChangeDelay={autoChangeDelay}
-        setAutoChangeDelay={setAutoChangeDelay}
         onLoadModel={loadModel}
+        isModelLoaded={!!depthEstimator}
         depthThreshold={depthThreshold}
         setDepthThreshold={setDepthThreshold}
-        edgeHardness={edgeHardness} // Pass down the new state
-        setEdgeHardness={setEdgeHardness} // Pass down the setter
-        isModelLoaded={!!depthEstimator}
+        edgeHardness={edgeHardness}
+        setEdgeHardness={setEdgeHardness}
+        depthLevels={depthLevels}
+        setDepthLevels={setDepthLevels}
       />
-        <WebGPUCanvas
-            rendererRef={rendererRef}
-            mode={mode}
-            zoom={zoom}
-            panX={panX}
-            panY={panY}
-            farthestPoint={farthestPoint}
-            depthThreshold={depthThreshold}
-            edgeHardness={edgeHardness}
-            imageDimensions={imageDimensions} // Pass down the new state
-        />
+      <WebGPUCanvas
+        rendererRef={rendererRef}
+        mode={mode}
+        farthestPoint={farthestPoint}
+        depthThreshold={depthThreshold}
+        edgeHardness={edgeHardness}
+        depthLevels={depthLevels}
+        imageDimensions={imageDimensions}
+      />
       {depthMapResult && (
-        <div className="debug-container">
+           <div className="debug-container">
           <h2>AI Model Output (Debug Depth Map)</h2>
           <canvas ref={debugCanvasRef} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
         </div>
