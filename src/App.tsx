@@ -7,7 +7,7 @@ import { pipeline } from '@huggingface/transformers';
 import './style.css';
 
 function App() {
-  const [mode, setMode] = useState<RenderMode>('3d-zoom');
+  const [mode, setMode] = useState<RenderMode>('3d-parallax');
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
