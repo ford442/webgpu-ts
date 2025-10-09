@@ -149,10 +149,80 @@ export class Renderer {
     }
 
     public getImageDimensions = () => this.imageDimensions;
-    public async fetchImageUrls(): Promise<void> { /* ... (no change) ... */ }
-    public handleResize = () => { /* ... (no change) ... */ };
-    public async loadRandomImage(): Promise<string | undefined> { /* ... (no change) ... */ }
+    
+ private async fetchImageUrls(): Promise<void> {
+        const bucketName = 'my-sd35-space-images-2025';
+        const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            const data = await response.json();
+            this.imageUrls = data.items ? data.items.map((item: { name: string }) => `https://storage.googleapis.com/${bucketName}/${item.name}`) : [];
+        } catch (e) {
+            console.error("Failed to fetch image list:", e);
+            this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
+        }
+    }
+    
+ public handleResize(): void {
+    if (!this.device || !this.canvas.parentElement) return;
 
+    // Get the current size of the container
+    const containerWidth = this.canvas.parentElement.clientWidth;
+    const containerHeight = this.canvas.parentElement.clientHeight;
+    
+    const imageAspect = this.imageDimensions.width / this.imageDimensions.height;
+    
+    let newCanvasWidth = containerWidth;
+    let newCanvasHeight = Math.round(containerWidth / imageAspect);
+
+    if (newCanvasHeight > containerHeight) {
+        newCanvasHeight = containerHeight;
+        newCanvasWidth = Math.round(containerHeight * imageAspect);
+    }
+    
+    if (this.canvas.width !== newCanvasWidth || this.canvas.height !== newCanvasHeight) {
+        this.canvas.style.width = newCanvasWidth + 'px';
+        this.canvas.style.height = newCanvasHeight + 'px';
+        this.canvas.width = newCanvasWidth;
+        this.canvas.height = newCanvasHeight;
+
+        this.context.configure({device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied'});
+
+        if (this.writeTexture) this.writeTexture.destroy();
+        this.writeTexture = this.device.createTexture({
+            size: [newCanvasWidth, newCanvasHeight],
+            format: 'rgba16float',
+            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        this.createBindGroups();
+    }
+}
+    
+ public async loadRandomImage(): Promise<string | undefined> {
+        try {
+            if (this.imageUrls.length === 0) return;
+            const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
+            const response = await fetch(imageUrl);
+            const imageBitmap = await createImageBitmap(await response.blob());
+            this.imageDimensions = { width: imageBitmap.width, height: imageBitmap.height };
+
+            if (this.imageTexture) this.imageTexture.destroy();
+            this.imageTexture = this.device.createTexture({
+                size: [imageBitmap.width, imageBitmap.height],
+                format: 'rgba16float',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+            });
+            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+
+            this.createBindGroups();
+            return imageUrl;
+        } catch (e) {
+            console.error("Failed to load image:", e);
+            return undefined;
+        }
+    }
+    
     private async generateMipmaps(texture: GPUTexture): Promise<void> {
         if (!this.blitPipeline) return; // Guard against pipeline not being ready
         const blitSampler = this.device.createSampler({ magFilter: 'linear' });
