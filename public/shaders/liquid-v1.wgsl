@@ -22,9 +22,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let frequency = 15.0;
 
 
-    if (depth > 0.95) {
-    let frequency = 25.0;
-        rate = 0.21;      // Move faster
+    if (depth > 0.65) {
+        rate = 0.1;      // Move faster
         strength = 0.005; // Move more subtly
     }
 
