@@ -7,45 +7,26 @@ interface ControlsProps {
     onNewImage: () => void;
     onLoadModel: () => void;
     isModelLoaded: boolean;
-    // For 3D Zoom
+    isRendererReady: boolean;
+
+    // Props for '3d-zoom'
     depthThreshold: number; setDepthThreshold: (v: number) => void;
     edgeHardness: number; setEdgeHardness: (v: number) => void;
     depthLevels: number; setDepthLevels: (v: number) => void;
     fogColor: string; setFogColor: (v: string) => void;
     fogDensity: number; setFogDensity: (v: number) => void;
     parallaxStrength: number; setParallaxStrength: (v: number) => void;
-    // For 3D Parallax
+    
+    // Props for '3d-parallax'
     displacementScale: number; setDisplacementScale: (v: number) => void;
     ambientLight: number; setAmbientLight: (v: number) => void;
     smoothness: number; setSmoothness: (v: number) => void;
     pointSize: number; setPointSize: (v: number) => void;
-    setDepthLevels: (value: number) => void;
-    isRendererReady: boolean; // Add the new prop
 }
 
-const Controls: React.FC<ControlsProps> = ({ 
-    mode, setMode, 
-    onNewImage,
-    onLoadModel, isModelLoaded,
-    depthThreshold, setDepthThreshold,
-    edgeHardness, setEdgeHardness,
-    depthLevels, setDepthLevels,
-    fogColor, setFogColor,
-    fogDensity, setFogDensity,
-    parallaxStrength, setParallaxStrength,
-    isRendererReady // Destructure the new prop
-}) => {
+const Controls: React.FC<ControlsProps> = (props) => {
     return (
         <div className="controls">
-               <div className="control-group">
-                <button onClick={onLoadModel} disabled={isModelLoaded}>
-                    {isModelLoaded ? 'AI Model Loaded' : 'Load AI Model'}
-                </button>
-                {/* --- MODIFIED: Add the disabled attribute --- */}
-                <button onClick={onNewImage} disabled={!isRendererReady}>
-                    Load New Random Image
-                </button>
-            </div>
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
                 <select id="mode-select" value={props.mode} onChange={(e) => props.setMode(e.target.value as RenderMode)}>
@@ -55,11 +36,14 @@ const Controls: React.FC<ControlsProps> = ({
             </div>
             <div className="control-group">
                 <button onClick={props.onLoadModel} disabled={props.isModelLoaded}>
-                {props.isModelLoaded ? 'AI Model Loaded' : 'Load AI Model'}
+                    {props.isModelLoaded ? 'AI Model Loaded' : 'Load AI Model'}
                 </button>
-                <button onClick={props.onNewImage}>Load New Random Image</button>
+                <button onClick={props.onNewImage} disabled={!props.isRendererReady}>
+                    Load New Random Image
+                </button>
             </div>
 
+            {/* --- Sliders for 3D Zoom --- */}
             {props.mode === '3d-zoom' && (<>
                 <div className="control-group">
                     <label htmlFor="depth-slider">Depth Cutoff:</label>
@@ -87,6 +71,7 @@ const Controls: React.FC<ControlsProps> = ({
                 </div>
             </>)}
 
+            {/* --- Sliders for 3D Parallax --- */}
             {props.mode === '3d-parallax' && (<>
                  <div className="control-group">
                     <label htmlFor="d-scale">Displacement:</label>
