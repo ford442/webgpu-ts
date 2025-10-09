@@ -21,26 +21,31 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // --- MODIFIED: Start of Changes ---
 
-    // 1. Define the base animation parameters.
-    let rate = 0.8;
-    let strength = 0.015;
-    let frequency = 25.0;
+    // 1. Define a slower, more subtle background motion.
+    let bg_rate = 0.25;      // Slower
+    let bg_strength = 0.003; // More subtle
+    let bg_freq = 15.0;
+    let bg_time = time * bg_rate;
+    let bg_d1 = sin(uv.y * bg_freq + bg_time) * bg_strength;
+    let bg_d2 = cos(uv.x * bg_freq * 0.7 + bg_time) * bg_strength;
+    let background_displacement = vec2<f32>(bg_d1, bg_d2);
 
-    // 2. Calculate the foreground strength factor.
-    // It returns 1.0 at depth 0.0 (closest) and smoothly ramps down to 0.0 at depth 0.15.
-    // Any pixel with depth > 0.15 will have a strength of 0.
-    let foreground_strength = 1.0 - smoothstep(0.0, 0.15, depth);
+    // 2. Define the additional "foreground" motion.
+    let fg_rate = 0.9;
+    let fg_strength = 0.015;
+    let fg_freq = 25.0;
+    let fg_time = time * fg_rate;
+    let fg_d1 = sin(uv.x * fg_freq + fg_time) * fg_strength;
+    let fg_d2 = cos(uv.y * fg_freq * 1.3 + fg_time) * fg_strength;
+    let foreground_displacement = vec2<f32>(fg_d1, fg_d2);
 
-    // 3. Calculate the displacement vector.
-    let anim_time = time * rate;
-    let d1 = sin(uv.x * frequency + anim_time) * strength;
-    let d2 = cos(uv.y * frequency * 1.3 + anim_time) * strength;
-    let displacement = vec2<f32>(d1, d2);
+    // 3. Widen the blend range for the foreground effect to be "looser".
+    // The effect now covers the nearest 40% of the depth map instead of just 15%.
+    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.4, depth);
 
-    // 4. Apply the strength factor to the final displacement.
-    // If foreground_strength is 0, the displacement will be zero.
-    let final_displacement = displacement * foreground_strength;
-    
+    // 4. Combine the displacements.
+    let final_displacement = background_displacement + (foreground_displacement * foreground_mix_factor);
+
     // --- MODIFIED: End of Changes ---
 
     var displacedUV = uv + final_displacement;
