@@ -40,7 +40,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // 3. Define a toned-down foreground motion.
     let fg_rate = 0.6;
-    let fg_strength = 0.008;
+    let fg_strength = 0.013;
     let fg_freq = 18.0;
     let fg_time = time * fg_rate;
     let fg_d1 = sin(uv.x * fg_freq + fg_time) * fg_strength;
