@@ -40,12 +40,6 @@ function App() {
     });
   }, [displacementScale, ambientLight, smoothness, pointSize]);
 
-  useEffect(() => {
-    rendererRef.current?.updateParallaxParams({
-        displacementScale, ambient: ambientLight, smoothness, pointSize
-    });
-  }, [displacementScale, ambientLight, smoothness, pointSize]);
-
   const loadModel = async () => {
     if (depthEstimator) {
       setStatus('AI model is already loaded.');
