@@ -273,28 +273,23 @@ export class Renderer {
         this.createBindGroups();
     }
 
-    private async generateMipmaps(texture: GPUTexture): Promise<void> {
-        const blitSampler = this.device.createSampler({ magFilter: 'linear' });
-        const commandEncoder = this.device.createCommandEncoder();
-        let srcView = texture.createView({ baseMipLevel: 0, mipLevelCount: 1 });
-        for (let i = 1; i < texture.mipLevelCount; i++) {
-            const dstView = texture.createView({ baseMipLevel: i, mipLevelCount: 1 });
-            const passEncoder = commandEncoder.beginRenderPass({
-                colorAttachments: [{ view: dstView, loadOp: 'clear', storeOp: 'store', clearValue: [0,0,0,0] }],
+   private async generateMipmaps(texture: GPUTexture): Promise<void> {
+        // The blitPipeline creation is correct from a previous step
+        if (!this.blitPipeline) {
+            const blitShaderModule = this.device.createShaderModule({
+                code: await fetch('shaders/blit.wgsl').then(r => r.text()),
             });
-            const bindGroup = this.device.createBindGroup({
-                layout: this.blitPipeline.getBindGroupLayout(0),
-                entries: [ { binding: 0, resource: blitSampler }, { binding: 1, resource: srcView } ],
+            this.blitPipeline = this.device.createRenderPipeline({
+                layout: 'auto',
+                vertex: { module: blitShaderModule, entryPoint: 'vs_main' },
+                fragment: {
+                    module: blitShaderModule,
+                    entryPoint: 'fs_main',
+                    targets: [{ format: texture.format as GPUTextureFormat }],
+                },
+                primitive: { topology: 'triangle-strip' },
             });
-            passEncoder.setPipeline(this.blitPipeline);
-            passEncoder.setBindGroup(0, bindGroup);
-            passEncoder.draw(4);
-            passEncoder.end();
-            srcView = dstView;
         }
-        this.device.queue.submit([commandEncoder.finish()]);
-    }
-
     
     public getImageDimensions(): { width: number, height: number } {
         return this.imageDimensions;
