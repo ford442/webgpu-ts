@@ -48,7 +48,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let foreground_displacement = vec2<f32>(fg_d1, fg_d2);
     
     // 4. Use the moving depth to blend the foreground effect.
-    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.25, moving_depth);
+    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.5, moving_depth);
 
     // 5. Combine all displacements. We start with the depth's own movement,
     // ensuring the color sticks to the moving depth contours.
