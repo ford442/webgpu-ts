@@ -16,7 +16,16 @@ export class Renderer {
     private imageDimensions = { width: 1, height: 1 }; // Add property to store dimensions
 
     private staticDepthTexture!: GPUTexture;
-
+    
+ private hexToRgb(hex: string): [number, number, number] {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? [
+            parseInt(result[1], 16) / 255,
+            parseInt(result[2], 16) / 255,
+            parseInt(result[3], 16) / 255
+        ] : [0, 0, 0];
+    }
+    
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
     public async init(): Promise<boolean> {
@@ -122,15 +131,6 @@ export class Renderer {
     }
 }
     
-    function hexToRgb(hex: string): [number, number, number] {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? [
-        parseInt(result[1], 16) / 255,
-        parseInt(result[2], 16) / 255,
-        parseInt(result[3], 16) / 255
-    ] : [0, 0, 0];
-}
-    
     public updateDepthMap(data: Float32Array, width: number, height: number): void {
         if (!this.device) return;
         if (this.staticDepthTexture && (this.staticDepthTexture.width !== width || this.staticDepthTexture.height !== height)) {
@@ -211,66 +211,42 @@ export class Renderer {
     }
 
 public render(mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}, fogColor: string, fogDensity: number, parallaxStrength: number): void {
-    if (!this.device || !this.imageTexture) return;
-    const currentTime = performance.now() / 1000.0;
-    const commandEncoder = this.device.createCommandEncoder();
+        if (!this.device || !this.imageTexture) return;
+        const currentTime = performance.now() / 1000.0;
+        const commandEncoder = this.device.createCommandEncoder();
 
-    if (mode === '3d-zoom') {
-        const computePass = commandEncoder.beginComputePass();
-        const computeZoomBG = this.bindGroups.get('computeZoom');
-        if (computeZoomBG) {
-            const uniformArray = new Float32Array(12);
+        if (mode === '3d-zoom') {
+            const computePass = commandEncoder.beginComputePass();
+            const computeZoomBG = this.bindGroups.get('computeZoom');
+            if (computeZoomBG) {
+                const cleanUniforms = new Float32Array(24); 
+                
+                // vec4 0 (Offset 0): resolutions
+                cleanUniforms.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
 
-            // vec4 0: Resolutions (canvas.xy, image.zw)
-            uniformArray.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
-            
-            // vec4 1: Time, Zoom Center, and a new slot for depth map resolution
-            uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
-            
-            // vec4 2: Config values and the new depth map resolution
-            uniformArray.set([depthThreshold, edgeHardness, depthLevels], 8);
-            
-            const parsedFogColor = hexToRgb(fogColor);
-            cleanUniforms.set([...parsedFogColor, fogDensity], 8);
-            
-            // Overwrite specific slots for the dedicated depth_map_res uniform
-            // This is a bit of a hack to fit it in the existing buffer structure
-            // Let's send depth_res in a cleaner way.
-            
-            // --- New, Cleaner Uniform Layout ---
-           const cleanUniforms = new Float32Array(24); 
-  
-// vec4 0 (Offset 0): resolutions
-cleanUniforms.set([this.canvas.width, this.canvas.height], 0); // Canvas res
-// We can use imageDimensions from the render args or this.imageDimensions
-cleanUniforms.set([imageDimensions.width, imageDimensions.height], 2); // Original color texture res
+                // vec4 1 (Offset 4): time_zoom
+                cleanUniforms.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
 
-// vec4 1 (Offset 4): time_zoom
-cleanUniforms.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
+                // vec4 2 (Offset 8): config (fog_color.xyz, fog_density.w)
+                const parsedFogColor = this.hexToRgb(fogColor); // Use 'this.hexToRgb'
+                cleanUniforms.set([...parsedFogColor, fogDensity], 8);
 
-// vec4 2 (Offset 8): config (fog_color.xyz, fog_density.w)
-// Example fog values: dark gray fog with a density of 4.0
-const fogColor = [0.1, 0.1, 0.12];
-const fogDensity = 4.0;
-cleanUniforms.set([...fogColor, fogDensity], 8);
+                // vec4 3 (Offset 12): depth_map_res
+                cleanUniforms.set([depthDimensions.width, depthDimensions.height], 12);
 
-// vec4 3 (Offset 12): depth_map_res
-cleanUniforms.set([depthDimensions.width, depthDimensions.height], 12);
+                // vec4 4 (Offset 16): color_map_res
+                cleanUniforms.set([imageDimensions.width, imageDimensions.height], 16);
 
-// vec4 4 (Offset 16): color_map_res - THIS IS THE NEWLY REQUIRED DATA
-cleanUniforms.set([imageDimensions.width, imageDimensions.height], 16);
+                // vec4 5 (Offset 20): effect_params
+                cleanUniforms.set([parallaxStrength], 20);
 
-// vec4 5 (Offset 20): effect_params (parallax_strength.x) - ALSO NEW
-cleanUniforms.set([parallaxStrength], 20);
+                this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, cleanUniforms);
 
-
-this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, cleanUniforms);
-
- computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
-  computePass.setBindGroup(0, computeZoomBG);
-    computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-        }
-        computePass.end();
+                computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
+                computePass.setBindGroup(0, computeZoomBG);
+                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+            }
+            computePass.end();
         }
 
         const textureView = this.context.getCurrentTexture().createView();
