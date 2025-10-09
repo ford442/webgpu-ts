@@ -64,31 +64,28 @@ export class Renderer {
         return result ? [ parseInt(result[1], 16)/255, parseInt(result[2], 16)/255, parseInt(result[3], 16)/255 ] : [0,0,0];
     }
     
-    public async init(): Promise<boolean> {
-        if (!navigator.gpu) return false;
-        const adapter = await navigator.gpu.requestAdapter();
-        if (!adapter) return false;
-        const requiredFeatures: GPUFeatureName[] = [];
-        if (adapter.features.has('float32-filterable')) requiredFeatures.push('float32-filterable');
-        this.device = await adapter.requestDevice({ requiredFeatures });
+  public async init(): Promise<boolean> {
+    if (!navigator.gpu) return false;
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) return false;
+    const requiredFeatures: GPUFeatureName[] = [];
+    if (adapter.features.has('float32-filterable')) requiredFeatures.push('float32-filterable');
+    this.device = await adapter.requestDevice({ requiredFeatures });
 
-        // --- NEW: Add device loss detection ---
-        // This listens for the device to be lost and sets our flag.
-        this.device.lost.then((info) => {
-            console.error(`WebGPU device was lost: ${info.message}`);
-            this.isDeviceLost = true;
-            // Optionally, you could show a message to the user here,
-            // telling them to refresh the page.
-        });
+    // Add robust device loss detection
+    this.device.lost.then((info) => {
+        console.error(`WebGPU device was lost: ${info.message}`);
+        this.isDeviceLost = true;
+    });
 
-        this.context = this.canvas.getContext('webgpu')!;
-        this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-        this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
-        await this.fetchImageUrls();
-        await this.createResources();
-        await this.createPipelines();
-        return true;
-    }
+    this.context = this.canvas.getContext('webgpu')!;
+    this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+    this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
+    await this.fetchImageUrls();
+    await this.createResources();
+    await this.createPipelines();
+    return true;
+}
 
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
@@ -263,74 +260,59 @@ export class Renderer {
         this.device.queue.submit([commandEncoder.finish()]);
     }
     
-  public render(
-        mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, 
-        imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}, 
-        fogColor: string, fogDensity: number, parallaxStrength: number
-    ): void {
-        // --- MODIFIED: Check the device loss flag at the start of every frame ---
-        if (!this.device || !this.context || this.isDeviceLost) return;
+public render(
+    mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, 
+    imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}, 
+    fogColor: string, fogDensity: number, parallaxStrength: number
+): void {
+    // Abort if the device is lost or not ready
+    if (!this.device || !this.context || this.isDeviceLost) return;
 
+    // We only care about zoom mode now. If it's anything else, do nothing.
+    if (mode !== '3d-zoom') return;
 
-   let textureView: GPUTextureView;
-        try {
-            textureView = this.context.getCurrentTexture().createView();
-        } catch (e) {
-            console.error("Failed to get current texture: ", e);
-            return; // Exit the render loop for this frame
-        }
-    const commandEncoder = this.device.createCommandEncoder();
-
-     if (mode === '3d-zoom') {
-            const computePass = commandEncoder.beginComputePass();
-            const bg = this.bindGroups.get('computeZoom');
-            if (bg) {
-                const uniforms = new Float32Array(24);
-                uniforms.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
-                uniforms.set([performance.now()/1000.0, farthestPoint.x, farthestPoint.y], 4);
-                const parsedFogColor = this.hexToRgb(fogColor);
-                uniforms.set([...parsedFogColor, fogDensity], 8);
-                uniforms.set([depthDimensions.width, depthDimensions.height], 12);
-                uniforms.set([imageDimensions.width, imageDimensions.height], 16);
-                uniforms.set([parallaxStrength, depthThreshold, edgeHardness, depthLevels], 20);
-                this.device.queue.writeBuffer(this.uniformBuffer, 0, uniforms);
-                
-                computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
-                computePass.setBindGroup(0, bg);
-                computePass.dispatchWorkgroups(Math.ceil(this.canvas.width / 8), Math.ceil(this.canvas.height / 8), 1);
-            }
-            computePass.end();
-
-            const passEncoder = commandEncoder.beginRenderPass({
-                colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: [0,0,0,1] }]
-            });
-            const presentBG = this.bindGroups.get('present');
-            if (presentBG) {
-                passEncoder.setPipeline(this.pipelines.get('present') as GPURenderPipeline);
-                passEncoder.setBindGroup(0, presentBG);
-                passEncoder.draw(4);
-            }
-            passEncoder.end();
-
-        } else if (mode === '3d-parallax') {
-            const passEncoder = commandEncoder.beginRenderPass({ colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: [0.1, 0.1, 0.1, 1] }] });
-            const parallaxBG = this.bindGroups.get('3d-parallax');
-            if (parallaxBG) {
-                this.device.queue.writeBuffer(
-                    this.uniformBuffer, 0,
-                    new Float32Array([
-                        this.cameraState.rotationX, this.cameraState.rotationY, this.cameraState.zoom, 
-                        this.parallaxParams.displacementScale, this.parallaxParams.ambient, this.parallaxParams.smoothness,
-                        this.mouseState.x, this.mouseState.y, this.parallaxParams.pointSize
-                    ])
-                );
-                passEncoder.setPipeline(this.pipelines.get('3d-parallax') as GPURenderPipeline);
-                passEncoder.setBindGroup(0, parallaxBG);
-                passEncoder.draw(GRID_SIZE * GRID_SIZE * 4);
-            }
-            passEncoder.end();
-        }
-        
-        this.device.queue.submit([commandEncoder.finish()]);
+    let textureView: GPUTextureView;
+    try {
+        textureView = this.context.getCurrentTexture().createView();
+    } catch (e) {
+        console.error("Failed to get current texture view. Aborting frame.", e);
+        return;
     }
+
+    const commandEncoder = this.device.createCommandEncoder();
+    
+    // --- Compute Pass for the Zoom Effect ---
+    const computePass = commandEncoder.beginComputePass();
+    const bg = this.bindGroups.get('computeZoom');
+    if (bg) {
+        const uniforms = new Float32Array(24);
+        uniforms.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
+        uniforms.set([performance.now()/1000.0, farthestPoint.x, farthestPoint.y], 4);
+        const parsedFogColor = this.hexToRgb(fogColor);
+        uniforms.set([...parsedFogColor, fogDensity], 8);
+        uniforms.set([depthDimensions.width, depthDimensions.height], 12);
+        uniforms.set([imageDimensions.width, imageDimensions.height], 16);
+        uniforms.set([parallaxStrength, depthThreshold, edgeHardness, depthLevels], 20);
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, uniforms);
+        
+        computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
+        computePass.setBindGroup(0, bg);
+        computePass.dispatchWorkgroups(Math.ceil(this.canvas.width / 8), Math.ceil(this.canvas.height / 8), 1);
+    }
+    computePass.end();
+
+    // --- Render Pass to Present the Result ---
+    const passEncoder = commandEncoder.beginRenderPass({
+        colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: [0,0,0,1] }]
+    });
+    const presentBG = this.bindGroups.get('present');
+    if (presentBG) {
+        passEncoder.setPipeline(this.pipelines.get('present') as GPURenderPipeline);
+        passEncoder.setBindGroup(0, presentBG);
+        passEncoder.draw(4);
+    }
+    passEncoder.end();
+    
+    this.device.queue.submit([commandEncoder.finish()]);
+}
 }
