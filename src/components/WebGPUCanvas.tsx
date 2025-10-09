@@ -2,80 +2,71 @@ import React, { useRef, useEffect } from 'react';
 import { Renderer } from '../renderer/Renderer';
 import { RenderMode } from '../renderer/types';
 
+// This interface is now simplified to match what App.tsx provides
 interface WebGPUCanvasProps {
     mode: RenderMode;
     rendererRef: React.MutableRefObject<Renderer | null>;
+    onRendererReady: () => void;
     farthestPoint: { x: number; y: number };
-    depthThreshold: number;
-    edgeHardness: number;
     imageDimensions: { width: number; height: number };
-    depthLevels: number; // Add the missing prop
+    depthDimensions: { width: number; height: number };
+    parallaxStrength: number;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
-    mode,
-    rendererRef,
-    farthestPoint,
-    depthThreshold,
-    edgeHardness,
-    imageDimensions,
-    depthLevels // Add to destructuring
-}) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = (props) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationFrameId = useRef<number>(0);
 
+    // Effect for renderer initialization (no changes here)
     useEffect(() => {
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
-        const container = canvas.parentElement; 
+        const container = canvas.parentElement;
         if (!container) return;
         const renderer = new Renderer(canvas);
 
         const initRenderer = async () => {
             const success = await renderer.init();
             if (success) {
-                if (rendererRef && 'current' in rendererRef) {
-                    (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
+                if (props.rendererRef && 'current' in props.rendererRef) {
+                    (props.rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
                 }
+                props.onRendererReady();
                 
-                // This logic correctly handles the initial resize
-                const initialWidth = container.clientWidth;
-                const initialHeight = container.clientHeight;
-                renderer.handleResize(initialWidth, initialHeight);
-
-                const observer = new ResizeObserver(entries => {
-                    for (const entry of entries) {
-                        const width = entry.contentBoxSize[0].inlineSize;
-                        const height = entry.contentBoxSize[0].blockSize;
-                        renderer.handleResize(width, height);
-                    }
-                });
+                const observer = new ResizeObserver(() => renderer.handleResize());
                 observer.observe(container);
+                renderer.handleResize();
             }
         };
-
         initRenderer();
 
         return () => {
             cancelAnimationFrame(animationFrameId.current);
         };
-    }, [rendererRef]);
+    }, [props.rendererRef, props.onRendererReady]);
 
+    // Effect for the main animation loop
     useEffect(() => {
         let active = true;
         const animate = () => {
             if (!active) return;
-            if (rendererRef.current) {
-                // Update the render call to include depthLevels and remove old props
-                rendererRef.current.render(mode, 0, 0, 0, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels);
+            if (props.rendererRef.current) {
+                // This call is now simplified to match the new Renderer.render signature
+                props.rendererRef.current.render(
+                    props.mode, 
+                    props.farthestPoint,
+                    props.imageDimensions, 
+                    props.depthDimensions, 
+                    props.parallaxStrength
+                );
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    // Update the dependency array
-    }, [mode, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels, rendererRef]);
+    }, [props]); // Reruns whenever any prop changes
 
+    // We can remove the mouse handlers as they were for the parallax mesh mode
     return (
         <canvas ref={canvasRef} />
     );

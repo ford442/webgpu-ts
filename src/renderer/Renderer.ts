@@ -5,80 +5,195 @@ export class Renderer {
     private device!: GPUDevice;
     private context!: GPUCanvasContext;
     private presentationFormat!: GPUTextureFormat;
+    
     private pipelines = new Map<string, GPURenderPipeline | GPUComputePipeline>();
     private bindGroups = new Map<string, GPUBindGroup>();
     private sampler!: GPUSampler;
     private nonFilteringSampler!: GPUSampler;
     private imageUrls: string[] = [];
-    private v2ComputeUniformBuffer!: GPUBuffer;
+    private uniformBuffer!: GPUBuffer;
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
-    private imageDimensions = { width: 1, height: 1 }; // Add property to store dimensions
-
     private staticDepthTexture!: GPUTexture;
+    public imageDimensions = { width: 1, height: 1 };
+    private maxTextureSize = 8192; // A safe default
+
+    private isDeviceLost = false;
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
-    public async init(): Promise<boolean> {
-        if (!navigator.gpu) return false;
-        const adapter = await navigator.gpu.requestAdapter();
-        if (!adapter) return false;
+public async init(): Promise<boolean> {
+    if (!navigator.gpu) return false;
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) return false;
 
-        // --- FIXED: Restore the feature request logic ---
-        const requiredFeatures: GPUFeatureName[] = [];
-        if (adapter.features.has('float32-filterable')) {
-            requiredFeatures.push('float32-filterable');
-        } else {
-            console.warn("Device does not support 'float32-filterable'. Some effects may not work as intended.");
-        }
+    // --- NEW: Check if the 'float32-filterable' feature is available ---
+    const requiredFeatures: GPUFeatureName[] = [];
+    if (adapter.features.has('float32-filterable')) {
+        requiredFeatures.push('float32-filterable');
+    }
+    
+    // --- MODIFIED: Request the feature when creating the device ---
+    this.device = await adapter.requestDevice({
+        requiredFeatures, // Pass the requested features here
+        requiredLimits: {
+            maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
+        },
+    });
 
-        this.device = await adapter.requestDevice({
-            requiredFeatures,
+    this.device.lost.then((info) => {
+        console.error(`WebGPU device was lost: ${info.message}`);
+        this.isDeviceLost = true;
+    });
+
+    this.context = this.canvas.getContext('webgpu')!;
+    this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+    this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
+    
+    await this.fetchImageUrls();
+    await this.createResources();
+    await this.createPipelines();
+    return true;
+}
+
+    private async createResources(): Promise<void> {
+        this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+        this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
+        this.uniformBuffer = this.device.createBuffer({
+            size: 96, // Matches the uniform buffer size in the shader
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-        // --- End of fix ---
 
-        this.context = this.canvas.getContext('webgpu')!;
-        this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+        this.staticDepthTexture = this.device.createTexture({
+            size: [1, 1], format: 'r32float',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        });
+        this.device.queue.writeTexture({texture: this.staticDepthTexture}, new Float32Array([0.0]), {bytesPerRow: 4}, [1,1]);
+
+        this.writeTexture = this.device.createTexture({
+            size: [this.canvas.width, this.canvas.height], format: 'rgba16float',
+            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        await this.loadRandomImage();
+    }
+    
+    private async createPipelines(): Promise<void> {
+        const [zoomCode, textureCode] = await Promise.all([
+            fetch('shaders/3d-zoom.wgsl').then(r => r.text()),
+            fetch('shaders/texture.wgsl').then(r => r.text()),
+        ]);
+
+        const zoomModule = this.device.createShaderModule({ code: zoomCode });
+        const textureModule = this.device.createShaderModule({ code: textureCode });
+
+        this.pipelines.set('present', this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: { module: textureModule, entryPoint: 'vs_main' },
+            fragment: { module: textureModule, entryPoint: 'fs_main', targets: [{ format: this.presentationFormat }] },
+            primitive: { topology: 'triangle-strip' }
+        }));
+        
+        this.pipelines.set('computeZoom', this.device.createComputePipeline({
+            layout: 'auto',
+            compute: { module: zoomModule, entryPoint: 'main' }
+        }));
+    }
+
+    public createBindGroups(): void {
+        if (!this.imageTexture || !this.staticDepthTexture) return;
+        
+        const computeZoomPipeline = this.pipelines.get('computeZoom') as GPUComputePipeline;
+        this.bindGroups.set('computeZoom', this.device.createBindGroup({
+            layout: computeZoomPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: this.sampler },
+                { binding: 1, resource: this.imageTexture.createView() },
+                { binding: 2, resource: this.writeTexture.createView() },
+                { binding: 3, resource: { buffer: this.uniformBuffer } },
+                { binding: 4, resource: this.nonFilteringSampler },
+                { binding: 5, resource: this.staticDepthTexture.createView() }
+            ]
+        }));
+        
+        const presentPipeline = this.pipelines.get('present') as GPURenderPipeline;
+        this.bindGroups.set('present', this.device.createBindGroup({
+            layout: presentPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: this.sampler },
+                { binding: 1, resource: this.writeTexture.createView() }
+            ]
+        }));
+    }
+    
+    public updateDepthMap(data: Float32Array, width: number, height: number): void {
+        if (!this.device || this.isDeviceLost) return;
+        this.staticDepthTexture?.destroy();
+        this.staticDepthTexture = this.device.createTexture({
+            size: [width, height],
+            format: 'r32float',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+        });
+        this.device.queue.writeTexture(
+            { texture: this.staticDepthTexture },
+            data,
+            { bytesPerRow: width * 4, rowsPerImage: height },
+            [width, height]
+        );
+        this.createBindGroups();
+    }
+
+    public getImageDimensions = () => this.imageDimensions;
+    
+    private async fetchImageUrls(): Promise<void> {
+        // This is a simplified version for stability
+        this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
+    }
+    
+   public handleResize(): void {
+    if (!this.device || this.isDeviceLost || !this.canvas.parentElement) return;
+
+    let newWidth = this.canvas.parentElement.clientWidth;
+    let newHeight = this.canvas.parentElement.clientHeight;
+    
+    // --- NEW: Add a safeguard to clamp the size to the max limit ---
+    newWidth = Math.min(newWidth, this.maxTextureSize);
+    newHeight = Math.min(newHeight, this.maxTextureSize);
+    
+    if (newWidth === 0 || newHeight === 0) return;
+    
+    if (this.canvas.width !== newWidth || this.canvas.height !== newHeight) {
+        this.canvas.width = newWidth;
+        this.canvas.height = newHeight;
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
 
-        await this.fetchImageUrls();
-        await this.createResources();
-        await this.createPipelines();
-
-        return true;
+        this.writeTexture?.destroy();
+        this.writeTexture = this.device.createTexture({
+            size: [newWidth, newHeight],
+            format: 'rgba16float',
+            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        this.createBindGroups();
     }
-
-    // ... (The rest of the file remains the same as the previous simplified version)
-
-    private async fetchImageUrls(): Promise<void> {
-        const bucketName = 'my-sd35-space-images-2025';
-        const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
-        try {
-            const response = await fetch(apiUrl);
-            if (!response.ok) throw new Error(`API error: ${response.status}`);
-            const data = await response.json();
-            this.imageUrls = data.items ? data.items.map((item: { name: string }) => `https://storage.googleapis.com/${bucketName}/${item.name}`) : [];
-        } catch (e) {
-            console.error("Failed to fetch image list:", e);
-            this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
-        }
-    }
-
+}
+    
     public async loadRandomImage(): Promise<string | undefined> {
         try {
-            if (this.imageUrls.length === 0) return;
-            const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
-            const response = await fetch(imageUrl);
+            const imageUrl = this.imageUrls[0]; // Always load the same image for now
+            const response = await fetch(imageUrl, { mode: 'cors' });
             const imageBitmap = await createImageBitmap(await response.blob());
             this.imageDimensions = { width: imageBitmap.width, height: imageBitmap.height };
 
-            if (this.imageTexture) this.imageTexture.destroy();
+            this.imageTexture?.destroy();
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
-                format: 'rgba16float',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+                format: 'rgba8unorm', // Use a standard format
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
             });
-            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+            this.device.queue.copyExternalImageToTexture(
+                { source: imageBitmap },
+                { texture: this.imageTexture },
+                [imageBitmap.width, imageBitmap.height]
+            );
 
             this.createBindGroups();
             return imageUrl;
@@ -87,161 +202,58 @@ export class Renderer {
             return undefined;
         }
     }
+    
+    public render(
+        mode: RenderMode,
+        farthestPoint: { x: number, y: number },
+        imageDimensions: {width: number, height: number},
+        depthDimensions: {width: number, height: number},
+        parallaxStrength: number
+    ): void {
+        if (this.isDeviceLost) return;
 
-    public handleResize(containerWidth: number, containerHeight: number): void {
-        if (!this.device) return;
-
-        const imageAspect = this.imageDimensions.width / this.imageDimensions.height;
-
-        let newCanvasWidth = containerWidth;
-        let newCanvasHeight = Math.round(containerWidth / imageAspect);
-
-        if (newCanvasHeight > containerHeight) {
-            newCanvasHeight = containerHeight;
-            newCanvasWidth = Math.round(containerHeight * imageAspect);
+        let textureView: GPUTextureView;
+        try {
+            textureView = this.context.getCurrentTexture().createView();
+        } catch (e) {
+            console.error("Could not get texture from context. Device may be lost.", e);
+            // This is a strong indicator of device loss, so we'll set the flag and stop.
+            this.isDeviceLost = true;
+            return;
         }
 
-        // Set both the display size (CSS) and the drawing buffer size (attributes)
-        this.canvas.style.width = newCanvasWidth + 'px';
-        this.canvas.style.height = newCanvasHeight + 'px';
-        this.canvas.width = newCanvasWidth;
-        this.canvas.height = newCanvasHeight;
-
-        this.context.configure({device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied'});
-
-        if (this.writeTexture && (this.writeTexture.width !== newCanvasWidth || this.writeTexture.height !== newCanvasHeight)) {
-            this.writeTexture.destroy();
-            this.writeTexture = this.device.createTexture({
-                size: [newCanvasWidth, newCanvasHeight],
-                format: 'rgba16float',
-                usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-            });
-            this.createBindGroups();
-        }
-    }
-
-    public updateDepthMap(data: Float32Array, width: number, height: number): void {
-        if (!this.device) return;
-        if (this.staticDepthTexture && (this.staticDepthTexture.width !== width || this.staticDepthTexture.height !== height)) {
-            this.staticDepthTexture.destroy();
-        }
-
-        if (!this.staticDepthTexture || this.staticDepthTexture.width !== width || this.staticDepthTexture.height !== height) {
-            const depthTextureDescriptor: GPUTextureDescriptor = {
-                size: [width, height],
-                format: 'r32float',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-            };
-            this.staticDepthTexture = this.device.createTexture(depthTextureDescriptor);
-        }
-
-        this.device.queue.writeTexture({ texture: this.staticDepthTexture }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
-        this.createBindGroups();
-    }
-
-    private async createResources(): Promise<void> {
-        this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
-        this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
-        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-
-        const placeholderDepthDescriptor: GPUTextureDescriptor = {
-            size: [1, 1],
-            format: 'r32float',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-        };
-        this.staticDepthTexture = this.device.createTexture(placeholderDepthDescriptor);
-        this.device.queue.writeTexture({ texture: this.staticDepthTexture }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
-
-        this.writeTexture = this.device.createTexture({
-            size: [this.canvas.width, this.canvas.height],
-            format: 'rgba16float',
-            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        await this.loadRandomImage();
-    }
-
-    private async createPipelines(): Promise<void> {
-        const [zoomCode, textureCode] = await Promise.all([
-            fetch('shaders/3d-zoom.wgsl').then(res => res.text()),
-            fetch('shaders/texture.wgsl').then(res => res.text()),
-        ]);
-        const zoomModule = this.device.createShaderModule({ code: zoomCode });
-        const textureModule = this.device.createShaderModule({ code: textureCode });
-        const commonConfig = { vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { targets: [{ format: this.presentationFormat }] }, primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology } };
-        this.pipelines.set('present', this.device.createRenderPipeline({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } }));
-        this.pipelines.set('computeZoom', this.device.createComputePipeline({ layout: 'auto', compute: { module: zoomModule, entryPoint: 'main' } }));
-    }
-
-    private createBindGroups(): void {
-        if (!this.imageTexture || !this.staticDepthTexture) return;
-
-        this.bindGroups.set('present', this.device.createBindGroup({ layout: this.pipelines.get('present')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
-
-        const computeZoomPipeline = this.pipelines.get('computeZoom');
-        if (computeZoomPipeline) {
-            this.bindGroups.set('computeZoom', this.device.createBindGroup({
-                layout: computeZoomPipeline.getBindGroupLayout(0),
-                entries: [
-                    { binding: 0, resource: this.sampler },
-                    { binding: 1, resource: this.imageTexture.createView() },
-                    { binding: 2, resource: this.writeTexture.createView() },
-                    { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
-                    { binding: 4, resource: this.nonFilteringSampler },
-                    { binding: 5, resource: this.staticDepthTexture.createView() },
-                ]
-            }));
-        }
-    }
-
-    public getImageDimensions(): { width: number, height: number } {
-        return this.imageDimensions;
-    }
-
-    public render(mode: RenderMode, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number): void {
-        if (!this.device || !this.imageTexture) return;
-        const currentTime = performance.now() / 1000.0;
         const commandEncoder = this.device.createCommandEncoder();
-
-        if (mode === '3d-zoom') {
-            const computePass = commandEncoder.beginComputePass();
-            const computeZoomBG = this.bindGroups.get('computeZoom');
-            if (computeZoomBG) {
-                // Create a 12-element (48-byte) array
-                const uniformArray = new Float32Array(12);
-
-                // vec4 0: Resolutions
-                uniformArray.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
-                // vec4 1: Time and Zoom Center
-                uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y], 4);
-                // vec4 2: Config values
-                uniformArray.set([depthThreshold, edgeHardness, depthLevels], 8); // Add depthLevels
-
-                this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
-
-                computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
-                computePass.setBindGroup(0, computeZoomBG);
-                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-            }
-            computePass.end();
+        
+        // Compute Pass
+        const computePass = commandEncoder.beginComputePass();
+        const bg = this.bindGroups.get('computeZoom');
+        if (bg) {
+            const uniforms = new Float32Array(24);
+            uniforms.set([this.canvas.width, this.canvas.height, imageDimensions.width, imageDimensions.height], 0);
+            uniforms.set([performance.now()/1000.0, farthestPoint.x, farthestPoint.y, 0], 4);
+            uniforms.set([depthDimensions.width, depthDimensions.height], 12);
+            uniforms.set([imageDimensions.width, imageDimensions.height], 16);
+            uniforms.set([parallaxStrength, 0.5, 0.5, 5], 20); // Using some default values
+            this.device.queue.writeBuffer(this.uniformBuffer, 0, uniforms);
+            
+            computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
+            computePass.setBindGroup(0, bg);
+            computePass.dispatchWorkgroups(Math.ceil(this.canvas.width / 8), Math.ceil(this.canvas.height / 8), 1);
         }
+        computePass.end();
 
-        const textureView = this.context.getCurrentTexture().createView();
-        const renderPassDescriptor: GPURenderPassDescriptor = {
-            colorAttachments: [{
-                view: textureView,
-                clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                loadOp: 'clear' as GPULoadOp,
-                storeOp: 'store' as GPUStoreOp
-            }]
-        };
-        const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-        const presentPipeline = this.pipelines.get('present') as GPURenderPipeline;
-        if (presentPipeline && this.bindGroups.has('present')) {
-            passEncoder.setPipeline(presentPipeline);
-            passEncoder.setBindGroup(0, this.bindGroups.get('present')!);
+        // Render Pass
+        const passEncoder = commandEncoder.beginRenderPass({
+            colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: [0,0,0,1] }]
+        });
+        const presentBG = this.bindGroups.get('present');
+        if (presentBG) {
+            passEncoder.setPipeline(this.pipelines.get('present') as GPURenderPipeline);
+            passEncoder.setBindGroup(0, presentBG);
             passEncoder.draw(4);
         }
         passEncoder.end();
+        
         this.device.queue.submit([commandEncoder.finish()]);
     }
 }
