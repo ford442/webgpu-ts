@@ -245,7 +245,7 @@ private createBindGroups(): void {
         this.depthTextureWrite = temp;
     }
 
-public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }): void {
+public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, mousePosition: { x: number, y: number }): void {
     if (!this.device || !this.imageTexture) return;
     const currentTime = performance.now() / 1000.0;
 
@@ -269,8 +269,11 @@ public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, pa
         const computeVortexBG = this.bindGroups.get('computeVortex');
 
        if (mode === 'liquid-v1' && computeV1BG) {
-            this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
-            computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
+        this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([
+                this.canvas.width, this.canvas.height,
+                mousePosition.x, mousePosition.y
+            ]));
+           computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
             computePass.setBindGroup(0, computeV1BG);
             computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
         } else if ((mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex') && computeBG) {
