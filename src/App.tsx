@@ -16,9 +16,8 @@ function App() {
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
-  // --- MODIFIED: Start of changes ---
-  const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 }); // Default to center
-  // --- MODIFIED: End of changes ---
+  const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
+  const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 }); // ADD THIS
 
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -159,15 +158,15 @@ function App() {
         onLoadModel={loadModel}
         isModelLoaded={!!depthEstimator}
       />
-      <WebGPUCanvas
+       <WebGPUCanvas
         rendererRef={rendererRef}
         mode={mode}
         zoom={zoom}
         panX={panX}
         panY={panY}
-        // --- MODIFIED: Start of changes ---
         farthestPoint={farthestPoint}
-        // --- MODIFIED: End of changes ---
+        mousePosition={mousePosition} // ADD THIS
+        setMousePosition={setMousePosition} // ADD THIS
       />
       {depthMapResult && (
         <div className="debug-container">
