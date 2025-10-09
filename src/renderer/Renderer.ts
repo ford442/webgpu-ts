@@ -175,28 +175,83 @@ export class Renderer {
         }
     }
     
-    // ... (All other public methods like loadRandomImage, updateDepthMap, handleResize, etc. remain the same)
-    public async loadRandomImage(): Promise<string | undefined> {
+   public async loadRandomImage(): Promise<string | undefined> {
         try {
-            if (this.imageUrls.length === 0) await this.fetchImageUrls();
+            if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
             this.imageDimensions = { width: imageBitmap.width, height: imageBitmap.height };
 
             if (this.imageTexture) this.imageTexture.destroy();
-            const mipLevelCount = Math.floor(Math.log2(Math.max(imageBitmap.width, imageBitmap.height))) + 1;
             this.imageTexture = this.device.createTexture({
-                size: [imageBitmap.width, imageBitmap.height, 1],
-                mipLevelCount, format: 'rgba16float',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                size: [imageBitmap.width, imageBitmap.height],
+                format: 'rgba16float',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
-            await this.generateMipmaps(this.imageTexture);
 
             this.createBindGroups();
             return imageUrl;
-        } catch (e) { console.error("Failed to load image:", e); return undefined; }
+        } catch (e) {
+            console.error("Failed to load image:", e);
+            return undefined;
+        }
+    }
+
+  public handleResize(): void {
+    if (!this.device || !this.canvas.parentElement) return;
+
+    // Get the current size of the container
+    const containerWidth = this.canvas.parentElement.clientWidth;
+    const containerHeight = this.canvas.parentElement.clientHeight;
+    
+    const imageAspect = this.imageDimensions.width / this.imageDimensions.height;
+    
+    let newCanvasWidth = containerWidth;
+    let newCanvasHeight = Math.round(containerWidth / imageAspect);
+
+    if (newCanvasHeight > containerHeight) {
+        newCanvasHeight = containerHeight;
+        newCanvasWidth = Math.round(containerHeight * imageAspect);
+    }
+    
+    // Only resize if there's a meaningful change to avoid unnecessary re-creations
+    if (this.canvas.width !== newCanvasWidth || this.canvas.height !== newCanvasHeight) {
+        this.canvas.style.width = newCanvasWidth + 'px';
+        this.canvas.style.height = newCanvasHeight + 'px';
+        this.canvas.width = newCanvasWidth;
+        this.canvas.height = newCanvasHeight;
+
+        this.context.configure({device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied'});
+
+        if (this.writeTexture) this.writeTexture.destroy();
+        this.writeTexture = this.device.createTexture({
+            size: [newCanvasWidth, newCanvasHeight],
+            format: 'rgba16float',
+            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        this.createBindGroups();
+    }
+}
+    
+    public updateDepthMap(data: Float32Array, width: number, height: number): void {
+        if (!this.device) return;
+        if (this.staticDepthTexture && (this.staticDepthTexture.width !== width || this.staticDepthTexture.height !== height)) {
+            this.staticDepthTexture.destroy();
+        }
+
+        if (!this.staticDepthTexture || this.staticDepthTexture.width !== width || this.staticDepthTexture.height !== height) {
+            const depthTextureDescriptor: GPUTextureDescriptor = {
+                size: [width, height],
+                format: 'r32float',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+            };
+            this.staticDepthTexture = this.device.createTexture(depthTextureDescriptor);
+        }
+
+        this.device.queue.writeTexture({ texture: this.staticDepthTexture }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
+        this.createBindGroups();
     }
 
     private async generateMipmaps(texture: GPUTexture): Promise<void> {
