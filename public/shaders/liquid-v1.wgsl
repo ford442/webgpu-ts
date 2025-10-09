@@ -19,9 +19,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
     let time = u.time;
 
-    // --- MODIFIED: Start of Changes ---
-
-    // 1. Define parameters for both background and foreground motion.
     let bg_rate = 0.5;
     let bg_strength = 0.02;
     let bg_freq = 15.0;
@@ -30,15 +27,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let fg_strength = 0.01; // More subtle movement
     let fg_freq = 25.0;     // Higher frequency for a different pattern
 
-    // 2. Calculate background displacement (same as before).
-    // This creates a right-to-left feeling wave.
     let bg_time = time * bg_rate;
     let bg_d1 = sin(uv.y * bg_freq + bg_time) * bg_strength; // Swapped uv.x/y
     let bg_d2 = cos(uv.x * bg_freq * 0.7 + bg_time) * bg_strength;
     let bg_displacement = vec2<f32>(bg_d1, bg_d2);
 
-    // 3. Calculate foreground displacement with different parameters.
-    // This creates a top-to-bottom feeling wave.
     let fg_time = time * fg_rate;
     let fg_d1 = sin(uv.x * fg_freq + fg_time) * fg_strength;
     let fg_d2 = cos(uv.y * fg_freq * 1.3 + fg_time) * fg_strength; // Changed multiplier
@@ -48,14 +41,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // This will be 1.0 for the absolute foreground (depth < 0.1)
     // and smoothly decrease to 0.0 for the background.
     let foreground_factor = 1.0 - smoothstep(0.1, 0.5, depth);
-
-    // 5. Mix the two displacement vectors based on the foreground_factor.
     let final_displacement = mix(bg_displacement, fg_displacement, foreground_factor);
     
-    // --- MODIFIED: End of Changes ---
-
     var displacedUV = uv + final_displacement;
-
     var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
     textureStore(writeTexture, global_id.xy, color);
 }
