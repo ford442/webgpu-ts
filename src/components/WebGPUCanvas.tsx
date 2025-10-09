@@ -8,12 +8,12 @@ interface WebGPUCanvasProps {
     panX: number;
     panY: number;
     rendererRef: React.MutableRefObject<Renderer | null>;
-    // --- MODIFIED: Start of changes ---
     farthestPoint: { x: number; y: number };
-    // --- MODIFIED: End of changes ---
+    mousePosition: { x: number; y: number }; // ADD THIS
+    setMousePosition: (pos: { x: number, y: number }) => void; // ADD THIS
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
@@ -43,24 +43,35 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         })();
         return () => cancelAnimationFrame(animationFrameId.current);
     }, [rendererRef]); 
-
-    useEffect(() => {
+    
+ useEffect(() => {
         let active = true;
         const animate = () => {
             if (!active) return;
             if (rendererRef.current && videoRef.current) {
-                // --- MODIFIED: Start of changes ---
-                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY, farthestPoint);
-                // --- MODIFIED: End of changes ---
+                // Pass mousePosition to the renderer
+                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY, farthestPoint, mousePosition);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    // --- MODIFIED: Start of changes ---
-    }, [mode, zoom, panX, panY, farthestPoint]); // Add farthestPoint to dependency array
-    // --- MODIFIED: End of changes ---
+    }, [mode, zoom, panX, panY, farthestPoint, mousePosition]); // Add mousePosition to dependency array
 
+     const updateMousePosition = (event: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!canvasRef.current) return;
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / canvas.width;
+        const y = (event.clientY - rect.top) / canvas.height;
+        setMousePosition({ x, y });
+    };
+
+    const handleMouseLeave = () => {
+        setIsMouseDown(false);
+        setMousePosition({ x: -1, y: -1 }); // Reset when mouse leaves
+    };
+    
     const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!rendererRef.current) return;
         const canvas = canvasRef.current!;
@@ -81,6 +92,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
     const handleMouseLeave = () => setIsMouseDown(false);
 
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+                updateMousePosition(event); // Always update mouse position
+
         if (isMouseDown && (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1')) {
             const now = performance.now();
             if (now - lastMouseAddTime.current < 10) return;
@@ -89,7 +102,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         }
     };
 
-    return (
+   return (
         <canvas ref={canvasRef} width="2048" height="2048" onMouseMove={handleCanvasMouseMove} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave} />
     );
 };
