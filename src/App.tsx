@@ -7,9 +7,7 @@ import { pipeline } from '@huggingface/transformers';
 import './style.css';
 
 function App() {
-  // Hardcode the mode to '3d-zoom'. No more mode switching.
-  const mode: RenderMode = '3d-zoom';
-  
+  const [mode, setMode] = useState<RenderMode>('3d-zoom'); // Re-introduce mode state
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const rendererRef = useRef<Renderer | null>(null);
@@ -21,6 +19,12 @@ function App() {
   const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 });
   const [depthDimensions, setDepthDimensions] = useState({ width: 1, height: 1 });
   
+  // --- ADDED: State for 3D Parallax controls ---
+  const [displacementScale, setDisplacementScale] = useState(0.3);
+  const [ambientLight, setAmbientLight] = useState(0.2);
+  const [smoothness, setSmoothness] = useState(1.0);
+  const [pointSize, setPointSize] = useState(3.0);
+    
   const loadModel = async () => {
     if (depthEstimator) return;
     try {
@@ -86,18 +90,24 @@ function App() {
     }
   }, [depthEstimator, runDepthAnalysis]);
 
-  return (
+return (
     <div id="app-container">
-      <h1>WebGPU Depth Effects (Zoom Only)</h1>
+      <h1>WebGPU Depth Effects</h1>
       <p><strong>Status:</strong> {status}</p>
-        <div className="controls">
-            <button onClick={loadModel} disabled={!!depthEstimator}>
-                {depthEstimator ? 'AI Model Loaded' : 'Load AI Model'}
-            </button>
-            <button onClick={handleNewImage} disabled={!isRendererReady}>
-                Load New Random Image
-            </button>
-        </div>
+      <Controls
+        mode={mode}
+        setMode={setMode}
+        onNewImage={handleNewImage}
+        onLoadModel={loadModel}
+        isModelLoaded={!!depthEstimator}
+        isRendererReady={isRendererReady}
+        // Pass all slider props for both modes
+        parallaxStrength={parallaxStrength} setParallaxStrength={setParallaxStrength}
+        displacementScale={displacementScale} setDisplacementScale={setDisplacementScale}
+        ambientLight={ambientLight} setAmbientLight={setAmbientLight}
+        smoothness={smoothness} setSmoothness={setSmoothness}
+        pointSize={pointSize} setPointSize={setPointSize}
+      />
       <WebGPUCanvas
         rendererRef={rendererRef}
         mode={mode}
