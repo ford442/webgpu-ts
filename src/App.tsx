@@ -163,6 +163,7 @@ function App() {
     }
   }, [depthMapResult]);
 
+
   return (
     <div id="app-container">
       <h1>WebGPU Depth Effects</h1>
