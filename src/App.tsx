@@ -214,10 +214,11 @@ function App() {
         onNewImage={handleNewImage}
         onLoadModel={loadModel}
         isModelLoaded={!!depthEstimator}
+        isRendererReady={isRendererReady}
         // Props for 3D Zoom
         depthThreshold={depthThreshold} setDepthThreshold={setDepthThreshold}
         edgeHardness={edgeHardness} setEdgeHardness={setEdgeHardness}
-        depthLevels={depthLevels} setDepthLevels={setDepthLevels}
+        depthLevels={depthLevels} setDepthLevels={setDepthLevels} // The duplicate was here
         fogColor={fogColor} setFogColor={setFogColor}
         fogDensity={fogDensity} setFogDensity={setFogDensity}
         parallaxStrength={parallaxStrength} setParallaxStrength={setParallaxStrength}
@@ -226,12 +227,11 @@ function App() {
         ambientLight={ambientLight} setAmbientLight={setAmbientLight}
         smoothness={smoothness} setSmoothness={setSmoothness}
         pointSize={pointSize} setPointSize={setPointSize}
-           setDepthLevels={setDepthLevels}
-        isRendererReady={isRendererReady} // Pass the new state
       />
       <WebGPUCanvas
         rendererRef={rendererRef}
         mode={mode}
+        onRendererReady={() => setIsRendererReady(true)}
         // Props passed to the canvas
         farthestPoint={farthestPoint}
         depthThreshold={depthThreshold}
@@ -242,10 +242,9 @@ function App() {
         fogColor={fogColor}
         fogDensity={fogDensity}
         parallaxStrength={parallaxStrength}
-        onRendererReady={() => setIsRendererReady(true)} // Pass a callback to be notified when ready
       />
       {depthMapResult && (
-        <div className="debug-container">
+           <div className="debug-container">
           <h2>AI Model Output (Debug Depth Map)</h2>
           <canvas ref={debugCanvasRef} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
         </div>
