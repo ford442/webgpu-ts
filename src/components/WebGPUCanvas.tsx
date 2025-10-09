@@ -20,7 +20,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
     const lastMouseAddTime = useRef(0);
-    const [isMouseDown, setIsMouseDown] = useState(false);
 
     useEffect(() => {
         if (!canvasRef.current) return;
