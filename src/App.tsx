@@ -34,6 +34,7 @@ function App() {
   const [smoothness, setSmoothness] = useState(1.0);
   const [pointSize, setPointSize] = useState(3.0);
     
+  // This useEffect correctly updates the parallax params when they change
   useEffect(() => {
     rendererRef.current?.updateParallaxParams({
         displacementScale, ambient: ambientLight, smoothness, pointSize
@@ -56,115 +57,80 @@ function App() {
     }
   };
 
-   const findOptimalThreshold = (data: Float32Array): number => {
+  const findOptimalThreshold = (data: Float32Array): number => {
     const binCount = 256;
     const histogram = new Array(binCount).fill(0);
-
     for (let i = 0; i < data.length; ++i) {
         const bin = Math.min(Math.floor(data[i] * binCount), binCount - 1);
         histogram[bin]++;
     }
-
     const totalPixels = data.length;
-    let bestThreshold = 0;
-    let maxVariance = 0;
-
-    let sum = 0;
-    for (let i = 0; i < binCount; i++) {
-        sum += i * histogram[i];
-    }
-
-    let sumB = 0;
-    let wB = 0;
-    let wF = 0;
-
+    let bestThreshold = 0, maxVariance = 0, sum = 0;
+    for (let i = 0; i < binCount; i++) sum += i * histogram[i];
+    let sumB = 0, wB = 0, wF = 0;
     for (let t = 0; t < binCount; t++) {
         wB += histogram[t];
         if (wB === 0) continue;
-
         wF = totalPixels - wB;
         if (wF === 0) break;
-
         sumB += t * histogram[t];
-
         const mB = sumB / wB;
         const mF = (sum - sumB) / wF;
-
         const variance = wB * wF * (mB - mF) * (mB - mF);
-
         if (variance > maxVariance) {
             maxVariance = variance;
             bestThreshold = t;
         }
     }
-
-    // --- ADD THIS MISSING RETURN STATEMENT ---
     return bestThreshold / binCount;
   };
 
-    const runDepthAnalysis = useCallback(async (imageUrl: string) => {
-        if (!depthEstimator || !rendererRef.current) return;
-        setStatus('Analyzing image with AI model...');
-        try {
-            const result = await depthEstimator(imageUrl);
-            const { data, dims } = result.predicted_depth;
-            const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
-            setDepthDimensions({ width, height });
-            // --- START: This is the section that needs to be restored ---
-            let min = Infinity, max = -Infinity;
-            let minIndex = 0;
-            data.forEach((v: number, i: number) => {
-                if (v < min) {
-                    min = v;
-                    minIndex = i;
-                }
-                if (v > max) max = v;
-            });
-            // --- END: This is the section that needs to be restored ---
+  const runDepthAnalysis = useCallback(async (imageUrl: string) => {
+    if (!depthEstimator || !rendererRef.current) return;
+    setStatus('Analyzing image with AI model...');
+    try {
+        const result = await depthEstimator(imageUrl);
+        const { data, dims } = result.predicted_depth;
+        const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
+        setDepthDimensions({ width, height });
+        
+        let min = Infinity, max = -Infinity, minIndex = 0;
+        data.forEach((v: number, i: number) => {
+            if (v < min) { min = v; minIndex = i; }
+            if (v > max) max = v;
+        });
+        
+        const farthestY = Math.floor(minIndex / width);
+        const farthestX = minIndex % width;
+        setFarthestPoint({ x: farthestX / width, y: farthestY / height });
 
-            const farthestY = Math.floor(minIndex / width);
-            const farthestX = minIndex % width;
-            setFarthestPoint({ x: farthestX / width, y: farthestY / height });
-
-            const range = max - min;
-            const normalizedData = new Float32Array(data.length);
-
-            for (let i = 0; i < data.length; ++i) {
-                normalizedData[i] = (data[i] - min) / range;
-            }
-
-            const newThreshold = findOptimalThreshold(normalizedData);
-            console.log(`Optimal depth threshold found: ${newThreshold.toFixed(3)}`);
-            setDepthThreshold(newThreshold); // Set the new threshold in the UI
-
-            setStatus('Updating depth map on GPU...');
-            rendererRef.current.updateDepthMap(normalizedData, width, height);
-
-            setDepthMapResult(result);
-            setStatus('Ready.');
-        } catch (e: any) {
-            console.error("Error during analysis:", e);
-            setStatus(`Failed to analyze image: ${e.message}`);
+        const range = max - min;
+        const normalizedData = new Float32Array(data.length);
+        for (let i = 0; i < data.length; ++i) {
+            normalizedData[i] = (data[i] - min) / range;
         }
-    }, [depthEstimator]);
 
-    const handleNewImage = useCallback(async () => {
-    if (!rendererRef.current) {
-        console.warn("Renderer not ready yet.");
-        return;
+        const newThreshold = findOptimalThreshold(normalizedData);
+        setDepthThreshold(newThreshold);
+
+        setStatus('Updating depth map on GPU...');
+        rendererRef.current.updateDepthMap(normalizedData, width, height);
+        setDepthMapResult(result);
+        setStatus('Ready.');
+    } catch (e: any) {
+        console.error("Error during analysis:", e);
+        setStatus(`Failed to analyze image: ${e.message}`);
     }
+  }, [depthEstimator]);
+
+  const handleNewImage = useCallback(async () => {
+    if (!rendererRef.current) return;
     setStatus('Loading random image...');
     const newImageUrl = await rendererRef.current.loadRandomImage();
-    
     if (newImageUrl) {
         const dims = rendererRef.current.getImageDimensions();
-        if (dims) {
-            setImageDimensions(dims);
-        }
-
-        // --- THE KEY FIX: Force the canvas to resize to the new image's aspect ratio ---
+        if (dims) setImageDimensions(dims);
         rendererRef.current.handleResize();
-
         if (depthEstimator) {
             await runDepthAnalysis(newImageUrl);
         } else {
@@ -174,7 +140,7 @@ function App() {
     } else {
         setStatus('Failed to load a random image.');
     }
-}, [depthEstimator, runDepthAnalysis]);
+  }, [depthEstimator, runDepthAnalysis]);
 
   useEffect(() => {
     if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
@@ -183,16 +149,11 @@ function App() {
       const canvas = debugCanvasRef.current;
       const context = canvas.getContext('2d');
       if (!width || !height || !context) return;
-      
       canvas.width = width;
       canvas.height = height;
       const imageData = context.createImageData(width, height);
-
       let min = Infinity, max = -Infinity;
-      data.forEach((v: number) => {
-        if (v < min) min = v;
-        if (v > max) max = v;
-      });
+      data.forEach((v: number) => { if (v < min) min = v; if (v > max) max = v; });
       const range = max - min;
       for (let i = 0; i < data.length; ++i) {
         const value = Math.round(((data[i] - min) / range) * 255);
@@ -205,7 +166,6 @@ function App() {
     }
   }, [depthMapResult]);
 
-
   return (
     <div id="app-container">
       <h1>WebGPU Depth Effects</h1>
@@ -216,12 +176,14 @@ function App() {
         onLoadModel={loadModel}
         isModelLoaded={!!depthEstimator}
         isRendererReady={isRendererReady}
+        // Props for 3D Zoom
         depthThreshold={depthThreshold} setDepthThreshold={setDepthThreshold}
         edgeHardness={edgeHardness} setEdgeHardness={setEdgeHardness}
         depthLevels={depthLevels} setDepthLevels={setDepthLevels}
         fogColor={fogColor} setFogColor={setFogColor}
         fogDensity={fogDensity} setFogDensity={setFogDensity}
         parallaxStrength={parallaxStrength} setParallaxStrength={setParallaxStrength}
+        // Props for 3D Parallax
         displacementScale={displacementScale} setDisplacementScale={setDisplacementScale}
         ambientLight={ambientLight} setAmbientLight={setAmbientLight}
         smoothness={smoothness} setSmoothness={setSmoothness}
@@ -231,6 +193,7 @@ function App() {
         rendererRef={rendererRef}
         mode={mode}
         onRendererReady={() => setIsRendererReady(true)}
+        // Props for 3D Zoom
         farthestPoint={farthestPoint}
         depthThreshold={depthThreshold}
         edgeHardness={edgeHardness}
