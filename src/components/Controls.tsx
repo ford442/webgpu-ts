@@ -37,6 +37,15 @@ const Controls: React.FC<ControlsProps> = ({
 }) => {
     return (
         <div className="controls">
+               <div className="control-group">
+                <button onClick={onLoadModel} disabled={isModelLoaded}>
+                    {isModelLoaded ? 'AI Model Loaded' : 'Load AI Model'}
+                </button>
+                {/* --- MODIFIED: Add the disabled attribute --- */}
+                <button onClick={onNewImage} disabled={!isRendererReady}>
+                    Load New Random Image
+                </button>
+            </div>
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
                 <select id="mode-select" value={props.mode} onChange={(e) => props.setMode(e.target.value as RenderMode)}>
