@@ -245,7 +245,7 @@ private createBindGroups(): void {
         this.depthTextureWrite = temp;
     }
 
-public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, mousePosition: { x: number, y: number }, mousePosition: { x: number, y: number }, isMouseDown: boolean): void {
+public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, mousePosition: { x: number, y: number }, isMouseDown: boolean): void {
     if (!this.device || !this.imageTexture) return;
     const currentTime = performance.now() / 1000.0;
 
