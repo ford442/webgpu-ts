@@ -275,6 +275,11 @@ export class Renderer {
         }
         this.device.queue.submit([commandEncoder.finish()]);
     }
+
+    
+    public getImageDimensions(): { width: number, height: number } {
+        return this.imageDimensions;
+    }
     
     public render(
         mode: RenderMode, 
