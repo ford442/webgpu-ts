@@ -25,6 +25,7 @@ function App() {
   const [parallaxStrength, setParallaxStrength] = useState(0.05);
   const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 });
   const [depthDimensions, setDepthDimensions] = useState({ width: 1, height: 1 });
+  const [isRendererReady, setIsRendererReady] = useState(false); // New state
   
   // State for 3D Parallax
   const [displacementScale, setDisplacementScale] = useState(0.3);
@@ -225,6 +226,8 @@ function App() {
         ambientLight={ambientLight} setAmbientLight={setAmbientLight}
         smoothness={smoothness} setSmoothness={setSmoothness}
         pointSize={pointSize} setPointSize={setPointSize}
+           setDepthLevels={setDepthLevels}
+        isRendererReady={isRendererReady} // Pass the new state
       />
       <WebGPUCanvas
         rendererRef={rendererRef}
@@ -239,6 +242,7 @@ function App() {
         fogColor={fogColor}
         fogDensity={fogDensity}
         parallaxStrength={parallaxStrength}
+        onRendererReady={() => setIsRendererReady(true)} // Pass a callback to be notified when ready
       />
       {depthMapResult && (
         <div className="debug-container">
