@@ -29,7 +29,7 @@ fn create_zooming_layer(
     
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
-    let parallax_offset = (repeating_uv - 0.5) * depth * 0.4;
+    let parallax_offset = 0.0; // (repeating_uv - 0.5) * depth * 0.4;
     let parallax_uv = repeating_uv + parallax_offset;
 
     // --- CHANGE #2: Fix texture tearing artifacts ---
