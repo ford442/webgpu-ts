@@ -27,8 +27,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
         if (dist_to_mouse < source_radius && is_source_object) {
             let glow_factor = 1.0 - smoothstep(0.0, source_radius, dist_to_mouse);
-            
-            // --- THIS IS THE CORRECTED LINE ---
             let mixed_rgb = mix(final_color.rgb, vec3(1.0, 0.9, 0.8), glow_factor * 0.7);
             final_color = vec4(mixed_rgb, final_color.a);
         }
@@ -40,23 +38,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             let light_occlusion = 1.0 - smoothstep(source_radius - 0.01, source_radius, dist_to_mouse);
             let final_falloff = falloff * light_occlusion;
 
-            final_color.rgb += vec3(1.0, 0.85, 0.7) * final_falloff * 0.8;
+            // --- CORRECTED THIS LINE ---
+            final_color = vec4(final_color.rgb + vec3(1.0, 0.85, 0.7) * final_falloff * 0.8, final_color.a);
         }
 
     } else {
-        // Standard lighting logic
+        // --- CORRECTED ALL LINES BELOW ---
         let top_light_factor = 1.0 - smoothstep(0.0, 0.25, depth);
-        final_color.rgb += vec3<f32>(0.2 * top_light_factor);
+        final_color = vec4(final_color.rgb + vec3<f32>(0.2 * top_light_factor), final_color.a);
 
         let shadow_factor = smoothstep(0.5, 0.8, depth);
-        final_color.rgb -= vec3<f32>(0.35 * shadow_factor);
+        final_color = vec4(final_color.rgb - vec3<f32>(0.35 * shadow_factor), final_color.a);
 
         if (u.mouse.x > 0.0) {
             let mouse_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, u.mouse.xy, 0.0).r;
             if (depth >= mouse_depth - 0.05) {
                 let dist_to_mouse = distance(uv, u.mouse.xy);
                 let falloff = smoothstep(0.2, 0.0, dist_to_mouse);
-                final_color.rgb += vec3<f32>(falloff * 0.6);
+                final_color = vec4(final_color.rgb + vec3<f32>(falloff * 0.6), final_color.a);
             }
         }
     }
