@@ -60,21 +60,40 @@ export class Renderer {
         return result ? [ parseInt(result[1], 16)/255, parseInt(result[2], 16)/255, parseInt(result[3], 16)/255 ] : [0,0,0];
     }
     
-    public async init(): Promise<boolean> {
-        if (!navigator.gpu) return false;
-        const adapter = await navigator.gpu.requestAdapter();
-        if (!adapter) return false;
-        const requiredFeatures: GPUFeatureName[] = [];
-        if (adapter.features.has('float32-filterable')) requiredFeatures.push('float32-filterable');
-        this.device = await adapter.requestDevice({ requiredFeatures });
-        this.context = this.canvas.getContext('webgpu')!;
-        this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-        this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
-        await this.fetchImageUrls();
-        await this.createResources();
-        await this.createPipelines();
-        return true;
+   public async init(): Promise<boolean> {
+    if (!navigator.gpu) return false;
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) return false;
+    
+    const requiredFeatures: GPUFeatureName[] = [];
+    if (adapter.features.has('float32-filterable')) {
+        requiredFeatures.push('float32-filterable');
     }
+    
+    this.device = await adapter.requestDevice({ requiredFeatures });
+
+    // --- NEW: Add device loss handling ---
+    this.device.lost.then((info) => {
+        console.error(`WebGPU device was lost: ${info.message}`);
+        // Trigger a re-initialization. You might want to show a UI message.
+        // A simple approach is to reload or re-initialize the renderer.
+        // For now, we'll just log it. A full implementation would re-create everything.
+    });
+
+    this.context = this.canvas.getContext('webgpu')!;
+    this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+    this.context.configure({ 
+        device: this.device, 
+        format: this.presentationFormat, 
+        alphaMode: 'premultiplied' 
+    });
+    
+    await this.fetchImageUrls();
+    await this.createResources();
+    await this.createPipelines();
+    
+    return true;
+}
 
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
@@ -248,14 +267,23 @@ export class Renderer {
         this.device.queue.submit([commandEncoder.finish()]);
     }
     
-    public render(
-        mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, 
-        imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}, 
-        fogColor: string, fogDensity: number, parallaxStrength: number
-    ): void {
-        if (!this.device || !this.context) return;
-        const commandEncoder = this.device.createCommandEncoder();
+  public render(
+    mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, 
+    imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}, 
+    fogColor: string, fogDensity: number, parallaxStrength: number
+): void {
+    if (!this.device || !this.context || this.device.lost) return; // <-- ADD THIS CHECK
 
+    const commandEncoder = this.device.createCommandEncoder();
+    let textureView: GPUTextureView;
+   try {
+        textureView = this.context.getCurrentTexture().createView();
+    } catch (e) {
+        console.error("Could not get texture from context:", e);
+        // If we fail here, we can't render this frame.
+        return;
+    }
+      
         if (mode === '3d-zoom') {
             const computePass = commandEncoder.beginComputePass();
             const bg = this.bindGroups.get('computeZoom');
