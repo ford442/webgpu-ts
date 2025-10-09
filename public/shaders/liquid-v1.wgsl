@@ -30,8 +30,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let moving_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, displaced_depth_uv, 0.0).r;
 
     // 2. Calculate a more subtle base motion for the color.
-    let bg_rate = 0.2;
-    let bg_strength = 0.013;
+    let bg_rate = 0.3;
+    let bg_strength = 0.005;
     let bg_freq = 10.0;
     let bg_time = time * bg_rate;
     let bg_d1 = sin(uv.y * bg_freq + bg_time) * bg_strength;
@@ -39,7 +39,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let background_displacement = vec2<f32>(bg_d1, bg_d2);
 
     // 3. Define a toned-down foreground motion.
-    let fg_rate = 0.5;
+    let fg_rate = 0.6;
     let fg_strength = 0.008;
     let fg_freq = 18.0;
     let fg_time = time * fg_rate;
