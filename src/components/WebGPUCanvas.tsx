@@ -9,11 +9,13 @@ interface WebGPUCanvasProps {
     panY: number;
     rendererRef: React.MutableRefObject<Renderer | null>;
     farthestPoint: { x: number; y: number };
-    mousePosition: { x: number; y: number }; // ADD THIS
-    setMousePosition: (pos: { x: number, y: number }) => void; // ADD THIS
+    mousePosition: { x: number; y: number };
+    setMousePosition: (pos: { x: number, y: number }) => void;
+    isMouseDown: boolean; // ADD THIS
+    setIsMouseDown: (down: boolean) => void; // ADD THIS
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
@@ -28,9 +30,9 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         (async () => {
             const success = await renderer.init();
             if (success) {
-                if (rendererRef && 'current' in rendererRef) {
-                    (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
-                }
+                 if (rendererRef.current && videoRef.current) {
+                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown); // Pass isMouseDown
+            }
                 videoRef.current = document.createElement('video');
                 videoRef.current.src = 'https://test.1ink.us/webgputs/big_buck_bunny_720p_surround.mp4';
                 videoRef.current.crossOrigin = 'anonymous';
@@ -42,7 +44,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
             }
         })();
         return () => cancelAnimationFrame(animationFrameId.current);
-    }, [rendererRef]); 
+    }, [rendererRef, mousePosition, isMouseDown]);
     
  useEffect(() => {
         let active = true;
@@ -89,7 +91,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
     };
 
     const handleMouseUp = () => setIsMouseDown(false);
-    const handleMouseLeave = () => setIsMouseDown(false);
 
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
                 updateMousePosition(event); // Always update mouse position
