@@ -24,7 +24,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var displacedUV = uv + vec2<f32>(d1, d2);
     
     var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
-
+/*
     // This is the unique logic for this shader that makes it different.
     if (((color.r + color.g + color.b) / 3.0) > 0.75) {
         let bright_time = u.time * 0.65;
@@ -41,6 +41,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let darkDisplacedUV = uv + vec2<f32>(d1, d2);
         color = mix(color, textureSampleLevel(readTexture, u_sampler, darkDisplacedUV, 0.0), 0.75);
     }
-
+*/
     textureStore(writeTexture, global_id.xy, color);
 }
