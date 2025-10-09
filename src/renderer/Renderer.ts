@@ -5,27 +5,21 @@ export class Renderer {
     private device!: GPUDevice;
     private context!: GPUCanvasContext;
     private presentationFormat!: GPUTextureFormat;
+    
     private pipelines = new Map<string, GPURenderPipeline | GPUComputePipeline>();
     private bindGroups = new Map<string, GPUBindGroup>();
     private sampler!: GPUSampler;
     private nonFilteringSampler!: GPUSampler;
     private imageUrls: string[] = [];
-    private v2ComputeUniformBuffer!: GPUBuffer;
+    private uniformBuffer!: GPUBuffer;
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
-    private imageDimensions = { width: 1, height: 1 }; // Add property to store dimensions
-
     private staticDepthTexture!: GPUTexture;
-    
- private hexToRgb(hex: string): [number, number, number] {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? [
-            parseInt(result[1], 16) / 255,
-            parseInt(result[2], 16) / 255,
-            parseInt(result[3], 16) / 255
-        ] : [0, 0, 0];
-    }
-    
+    public imageDimensions = { width: 1, height: 1 };
+    private maxTextureSize = 8192;
+
+    private isDeviceLost = false;
+
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
     public async init(): Promise<boolean> {
@@ -33,30 +27,33 @@ export class Renderer {
         const adapter = await navigator.gpu.requestAdapter();
         if (!adapter) return false;
 
-        // --- FIXED: Restore the feature request logic ---
         const requiredFeatures: GPUFeatureName[] = [];
         if (adapter.features.has('float32-filterable')) {
             requiredFeatures.push('float32-filterable');
-        } else {
-            console.warn("Device does not support 'float32-filterable'. Some effects may not work as intended.");
         }
-
+        
         this.device = await adapter.requestDevice({
             requiredFeatures,
+            requiredLimits: {
+                maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
+            },
         });
-        // --- End of fix ---
+
+        this.device.lost.then((info) => {
+            console.error(`WebGPU device was lost: ${info.message}`);
+            this.isDeviceLost = true;
+        });
 
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
-
+        
         await this.fetchImageUrls();
         await this.createResources();
         await this.createPipelines();
-
         return true;
     }
-
+    
     private async fetchImageUrls(): Promise<void> {
         const bucketName = 'my-sd35-space-images-2025';
         const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
@@ -210,8 +207,14 @@ export class Renderer {
         return this.imageDimensions;
     }
 
-public render(mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}, fogColor: string, fogDensity: number, parallaxStrength: number): void {
-        if (!this.device || !this.imageTexture) return;
+public render(
+        mode: RenderMode,
+        farthestPoint: { x: number, y: number },
+        imageDimensions: {width: number, height: number},
+        depthDimensions: {width: number, height: number},
+        parallaxStrength: number
+    ): void {
+    if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
         const commandEncoder = this.device.createCommandEncoder();
 
