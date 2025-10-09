@@ -176,7 +176,7 @@ private async createPipelines(): Promise<void> {
     this.pipelines.set('computeVortex', this.device.createComputePipeline({ layout: 'auto', compute: { module: vortexModule, entryPoint: 'main' } })); // ADD THIS
 }
 
- private createBindGroups(): void {
+private createBindGroups(): void {
     if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite) return;
 
     if (this.videoTexture) {
@@ -186,13 +186,17 @@ private async createPipelines(): Promise<void> {
 
     this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
     this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
+    
+    // --- MODIFIED: Start of changes ---
     this.bindGroups.set('computeV1', this.device.createBindGroup({ 
         layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0), 
         entries: [
             { binding: 0, resource: this.sampler }, 
             { binding: 1, resource: this.imageTexture.createView() }, 
             { binding: 2, resource: this.writeTexture.createView() },
-            { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } }
+            { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } },
+            { binding: 4, resource: this.depthTextureRead.createView() },
+            { binding: 5, resource: this.nonFilteringSampler },
         ] 
     }));
 
