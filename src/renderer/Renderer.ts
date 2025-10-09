@@ -16,32 +16,41 @@ export class Renderer {
     private writeTexture!: GPUTexture;
     private staticDepthTexture!: GPUTexture;
     public imageDimensions = { width: 1, height: 1 };
-    
+    private maxTextureSize = 8192; // A safe default
+
     private isDeviceLost = false;
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
-    public async init(): Promise<boolean> {
-        if (!navigator.gpu) return false;
-        const adapter = await navigator.gpu.requestAdapter();
-        if (!adapter) return false;
-        
-        this.device = await adapter.requestDevice();
+public async init(): Promise<boolean> {
+    if (!navigator.gpu) return false;
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) return false;
+    
+    // --- NEW: Get the max texture size from the adapter ---
+    this.maxTextureSize = adapter.limits.maxTextureDimension2D;
 
-        this.device.lost.then((info) => {
-            console.error(`WebGPU device was lost: ${info.message}`);
-            this.isDeviceLost = true;
-        });
+    // --- MODIFIED: Request a higher limit when creating the device ---
+    this.device = await adapter.requestDevice({
+        requiredLimits: {
+            maxTextureDimension2D: this.maxTextureSize,
+        },
+    });
 
-        this.context = this.canvas.getContext('webgpu')!;
-        this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-        this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
-        
-        await this.fetchImageUrls();
-        await this.createResources();
-        await this.createPipelines();
-        return true;
-    }
+    this.device.lost.then((info) => {
+        console.error(`WebGPU device was lost: ${info.message}`);
+        this.isDeviceLost = true;
+    });
+
+    this.context = this.canvas.getContext('webgpu')!;
+    this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+    this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
+    
+    await this.fetchImageUrls();
+    await this.createResources();
+    await this.createPipelines();
+    return true;
+}
 
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
@@ -136,28 +145,32 @@ export class Renderer {
         this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
     }
     
-    public handleResize(): void {
-        if (!this.device || this.isDeviceLost || !this.canvas.parentElement) return;
+   public handleResize(): void {
+    if (!this.device || this.isDeviceLost || !this.canvas.parentElement) return;
 
-        const newWidth = this.canvas.parentElement.clientWidth;
-        const newHeight = this.canvas.parentElement.clientHeight;
-        
-        if (newWidth === 0 || newHeight === 0) return;
-        
-        if (this.canvas.width !== newWidth || this.canvas.height !== newHeight) {
-            this.canvas.width = newWidth;
-            this.canvas.height = newHeight;
-            this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
+    let newWidth = this.canvas.parentElement.clientWidth;
+    let newHeight = this.canvas.parentElement.clientHeight;
+    
+    // --- NEW: Add a safeguard to clamp the size to the max limit ---
+    newWidth = Math.min(newWidth, this.maxTextureSize);
+    newHeight = Math.min(newHeight, this.maxTextureSize);
+    
+    if (newWidth === 0 || newHeight === 0) return;
+    
+    if (this.canvas.width !== newWidth || this.canvas.height !== newHeight) {
+        this.canvas.width = newWidth;
+        this.canvas.height = newHeight;
+        this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
 
-            this.writeTexture?.destroy();
-            this.writeTexture = this.device.createTexture({
-                size: [newWidth, newHeight],
-                format: 'rgba16float',
-                usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-            });
-            this.createBindGroups();
-        }
+        this.writeTexture?.destroy();
+        this.writeTexture = this.device.createTexture({
+            size: [newWidth, newHeight],
+            format: 'rgba16float',
+            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        this.createBindGroups();
     }
+}
     
     public async loadRandomImage(): Promise<string | undefined> {
         try {
