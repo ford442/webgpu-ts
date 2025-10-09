@@ -19,9 +19,22 @@ interface ControlsProps {
     ambientLight: number; setAmbientLight: (v: number) => void;
     smoothness: number; setSmoothness: (v: number) => void;
     pointSize: number; setPointSize: (v: number) => void;
+    setDepthLevels: (value: number) => void;
+    isRendererReady: boolean; // Add the new prop
 }
 
-const Controls: React.FC<ControlsProps> = (props) => {
+const Controls: React.FC<ControlsProps> = ({ 
+    mode, setMode, 
+    onNewImage,
+    onLoadModel, isModelLoaded,
+    depthThreshold, setDepthThreshold,
+    edgeHardness, setEdgeHardness,
+    depthLevels, setDepthLevels,
+    fogColor, setFogColor,
+    fogDensity, setFogDensity,
+    parallaxStrength, setParallaxStrength,
+    isRendererReady // Destructure the new prop
+}) => {
     return (
         <div className="controls">
             <div className="control-group">
