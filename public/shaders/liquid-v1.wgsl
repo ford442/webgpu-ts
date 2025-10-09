@@ -22,24 +22,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let mouse_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, u.mouse.xy, 0.0).r;
         let dist_to_mouse = distance(uv, u.mouse.xy);
         
-        // 1. Make the clicked object translucent and bright (the light source)
-        // Check if the current pixel is part of the object under the mouse.
-        let is_source_object = abs(depth - mouse_depth) < 0.05; // Is it at the same depth?
+        let is_source_object = abs(depth - mouse_depth) < 0.05;
         let source_radius = 0.1;
 
         if (dist_to_mouse < source_radius && is_source_object) {
             let glow_factor = 1.0 - smoothstep(0.0, source_radius, dist_to_mouse);
-            // Mix with a bright color to simulate translucency and light emission
-            final_color.rgb = mix(final_color.rgb, vec3(1.0, 0.9, 0.8), glow_factor * 0.7);
+            
+            // --- THIS IS THE CORRECTED LINE ---
+            let mixed_rgb = mix(final_color.rgb, vec3(1.0, 0.9, 0.8), glow_factor * 0.7);
+            final_color = vec4(mixed_rgb, final_color.a);
         }
 
-        // 2. Cast light from that source onto other objects
-        // Occlusion check: light shouldn't pass through closer objects.
         if (depth >= mouse_depth - 0.02) {
             let light_radius = 0.35;
             let falloff = smoothstep(light_radius, 0.0, dist_to_mouse);
             
-            // The light should only come from the source object itself
             let light_occlusion = 1.0 - smoothstep(source_radius - 0.01, source_radius, dist_to_mouse);
             let final_falloff = falloff * light_occlusion;
 
@@ -47,27 +44,22 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
 
     } else {
-        // --- This is the previous lighting logic for when the mouse is NOT clicked ---
+        // Standard lighting logic
         let top_light_factor = 1.0 - smoothstep(0.0, 0.25, depth);
-        let top_light_intensity = 0.2 * top_light_factor;
-        final_color.rgb += vec3<f32>(top_light_intensity);
+        final_color.rgb += vec3<f32>(0.2 * top_light_factor);
 
         let shadow_factor = smoothstep(0.5, 0.8, depth);
-        let shadow_intensity = 0.35 * shadow_factor;
-        final_color.rgb -= vec3<f32>(shadow_intensity);
+        final_color.rgb -= vec3<f32>(0.35 * shadow_factor);
 
         if (u.mouse.x > 0.0) {
             let mouse_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, u.mouse.xy, 0.0).r;
             if (depth >= mouse_depth - 0.05) {
                 let dist_to_mouse = distance(uv, u.mouse.xy);
-                let light_radius = 0.2;
-                let falloff = smoothstep(light_radius, 0.0, dist_to_mouse);
-                let light_intensity = falloff * 0.6;
-                final_color.rgb += vec3<f32>(light_intensity);
+                let falloff = smoothstep(0.2, 0.0, dist_to_mouse);
+                final_color.rgb += vec3<f32>(falloff * 0.6);
             }
         }
     }
-    // --- MODIFIED: End of Click Logic ---
     
     final_color.rgb = clamp(final_color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
     textureStore(writeTexture, global_id.xy, final_color);
