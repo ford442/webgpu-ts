@@ -172,7 +172,7 @@ export class Renderer {
         
         // --- ADDED: Guard against zero-size canvas ---
         if (containerWidth === 0 || containerHeight === 0) {
-            // Don't try to resize to a zero-sized canvas, which can invalidate the context
+            // Don't try to resize to a zero-sized canvas, which can invalidate the context.
             return;
         }
 
