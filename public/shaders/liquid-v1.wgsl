@@ -15,9 +15,7 @@ struct Uniforms {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let uv = vec2<f32>(global_id.xy) / u.resolution;
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
-    var final_color = textureSampleLevel(readTexture, u_sampler, uv);
-
-    // --- MODIFIED: Start of Click Logic ---
+    var final_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
 
     if (u.mouseDown > 0.5) {
         // We are clicking!
