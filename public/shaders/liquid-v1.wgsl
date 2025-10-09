@@ -18,10 +18,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var final_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
 
     if (u.mouseDown > 0.5) {
-        // We are clicking!
         let mouse_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, u.mouse.xy, 0.0).r;
         let dist_to_mouse = distance(uv, u.mouse.xy);
-        
         let is_source_object = abs(depth - mouse_depth) < 0.05;
         let source_radius = 0.1;
 
@@ -34,16 +32,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         if (depth >= mouse_depth - 0.02) {
             let light_radius = 0.35;
             let falloff = smoothstep(light_radius, 0.0, dist_to_mouse);
-            
             let light_occlusion = 1.0 - smoothstep(source_radius - 0.01, source_radius, dist_to_mouse);
             let final_falloff = falloff * light_occlusion;
-
-            // --- CORRECTED THIS LINE ---
             final_color = vec4(final_color.rgb + vec3(1.0, 0.85, 0.7) * final_falloff * 0.8, final_color.a);
         }
-
     } else {
-        // --- CORRECTED ALL LINES BELOW ---
         let top_light_factor = 1.0 - smoothstep(0.0, 0.25, depth);
         final_color = vec4(final_color.rgb + vec3<f32>(0.2 * top_light_factor), final_color.a);
 
@@ -60,6 +53,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
     }
     
-    final_color.rgb = clamp(final_color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    // --- THIS IS THE CORRECTED LINE ---
+    let clamped_rgb = clamp(final_color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    final_color = vec4(clamped_rgb, final_color.a);
+    
     textureStore(writeTexture, global_id.xy, final_color);
 }
