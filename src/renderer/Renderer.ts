@@ -10,6 +10,7 @@ export class Renderer {
     private pipelines = new Map<string, GPURenderPipeline | GPUComputePipeline>();
     private bindGroups = new Map<string, GPUBindGroup>();
     private sampler!: GPUSampler;
+    private blitSampler!: GPUSampler;
     private nonFilteringSampler!: GPUSampler;
     private imageUrls: string[] = [];
     private uniformBuffer!: GPUBuffer;
@@ -17,10 +18,10 @@ export class Renderer {
     private writeTexture!: GPUTexture;
     private staticDepthTexture!: GPUTexture;
     public imageDimensions = { width: 1, height: 1 };
-    
-    // --- NEW: Add a flag to track device state ---
-    private isDeviceLost = false;
 
+    // --- NEW: Add a flag to track the device state ---
+    private isDeviceLost = false;
+    
     // State for 3D Parallax Mode
     private mouseState = { x: 0.5, y: 0.5 };
     private cameraState = {
@@ -32,7 +33,7 @@ export class Renderer {
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
-    // --- METHODS FOR 3D PARALLAX CONTROL ---
+    // --- METHODS FOR 3D PARALLAX CONTROL (no changes) ---
     public updateParallaxParams(params: any) { this.parallaxParams = params; }
     public updateMouse(x: number, y: number, isDragging: boolean) {
         this.mouseState.x = x / this.canvas.width;
@@ -63,43 +64,35 @@ export class Renderer {
         return result ? [ parseInt(result[1], 16)/255, parseInt(result[2], 16)/255, parseInt(result[3], 16)/255 ] : [0,0,0];
     }
     
-   public async init(): Promise<boolean> {
-    if (!navigator.gpu) return false;
-    const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) return false;
-    
-    const requiredFeatures: GPUFeatureName[] = [];
-    if (adapter.features.has('float32-filterable')) {
-        requiredFeatures.push('float32-filterable');
-    }
-    
-   this.device = await adapter.requestDevice({ requiredFeatures });
+    public async init(): Promise<boolean> {
+        if (!navigator.gpu) return false;
+        const adapter = await navigator.gpu.requestAdapter();
+        if (!adapter) return false;
+        const requiredFeatures: GPUFeatureName[] = [];
+        if (adapter.features.has('float32-filterable')) requiredFeatures.push('float32-filterable');
+        this.device = await adapter.requestDevice({ requiredFeatures });
 
-        // --- MODIFIED: Set the flag when the device is lost ---
+        // --- NEW: Add device loss detection ---
+        // This listens for the device to be lost and sets our flag.
         this.device.lost.then((info) => {
             console.error(`WebGPU device was lost: ${info.message}`);
             this.isDeviceLost = true;
-            // In a real application, you'd want to trigger a UI update
-            // to inform the user that they need to reload the page.
+            // Optionally, you could show a message to the user here,
+            // telling them to refresh the page.
         });
 
-    this.context = this.canvas.getContext('webgpu')!;
-    this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-    this.context.configure({ 
-        device: this.device, 
-        format: this.presentationFormat, 
-        alphaMode: 'premultiplied' 
-    });
-    
-    await this.fetchImageUrls();
-    await this.createResources();
-    await this.createPipelines();
-    
-    return true;
-}
+        this.context = this.canvas.getContext('webgpu')!;
+        this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+        this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
+        await this.fetchImageUrls();
+        await this.createResources();
+        await this.createPipelines();
+        return true;
+    }
 
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
+        this.blitSampler = this.device.createSampler({ magFilter: 'linear' });
         this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
         this.uniformBuffer = this.device.createBuffer({
             size: 96,
@@ -270,12 +263,14 @@ export class Renderer {
         this.device.queue.submit([commandEncoder.finish()]);
     }
     
-   public render(
+  public render(
         mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, 
         imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}, 
         fogColor: string, fogDensity: number, parallaxStrength: number
     ): void {
+        // --- MODIFIED: Check the device loss flag at the start of every frame ---
         if (!this.device || !this.context || this.isDeviceLost) return;
+
 
    let textureView: GPUTextureView;
         try {
