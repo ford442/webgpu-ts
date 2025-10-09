@@ -26,14 +26,18 @@ public async init(): Promise<boolean> {
     if (!navigator.gpu) return false;
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) return false;
-    
-    // --- NEW: Get the max texture size from the adapter ---
-    this.maxTextureSize = adapter.limits.maxTextureDimension2D;
 
-    // --- MODIFIED: Request a higher limit when creating the device ---
+    // --- NEW: Check if the 'float32-filterable' feature is available ---
+    const requiredFeatures: GPUFeatureName[] = [];
+    if (adapter.features.has('float32-filterable')) {
+        requiredFeatures.push('float32-filterable');
+    }
+    
+    // --- MODIFIED: Request the feature when creating the device ---
     this.device = await adapter.requestDevice({
+        requiredFeatures, // Pass the requested features here
         requiredLimits: {
-            maxTextureDimension2D: this.maxTextureSize,
+            maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
         },
     });
 
