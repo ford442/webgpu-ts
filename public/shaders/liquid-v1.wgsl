@@ -40,7 +40,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // 4. Create a "foreground factor" to blend the two motions.
     // This will be 1.0 for the absolute foreground (depth < 0.1)
     // and smoothly decrease to 0.0 for the background.
-    let foreground_factor = 1.0 - smoothstep(0.1, 0.5, depth);
+    let foreground_factor = smoothstep(0.1, 0.5, depth);
     let final_displacement = mix(bg_displacement, fg_displacement, foreground_factor);
     
     var displacedUV = uv + final_displacement;
