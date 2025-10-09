@@ -10,7 +10,11 @@ interface WebGPUCanvasProps {
     edgeHardness: number;
     imageDimensions: { width: number; height: number };
     depthLevels: number;
-    depthDimensions: { width: number; height: number }; // Add the missing prop
+    depthDimensions: { width: number; height: number };
+    // --- FIXED: Add missing props and correct fogColor type ---
+    fogColor: string;
+    fogDensity: number;
+    parallaxStrength: number;
 }
 
 const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
@@ -21,7 +25,11 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
     edgeHardness,
     imageDimensions,
     depthLevels,
-    depthDimensions // Add to destructuring
+    depthDimensions,
+    // --- FIXED: Add missing props to destructuring ---
+    fogColor,
+    fogDensity,
+    parallaxStrength
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationFrameId = useRef<number>(0);
@@ -56,15 +64,15 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
         const animate = () => {
             if (!active) return;
             if (rendererRef.current) {
-                // Update the render call to include depthDimensions
-                rendererRef.current.render(mode, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels, depthDimensions);
+                // The render call now has all its arguments
+                rendererRef.current.render(mode, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels, depthDimensions, fogColor, fogDensity, parallaxStrength);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    // Update the dependency array
-    }, [mode, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels, depthDimensions, rendererRef]);
+    // The dependency array is now correct
+    }, [mode, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels, depthDimensions, fogColor, fogDensity, parallaxStrength, rendererRef]);
 
     return (
         <canvas ref={canvasRef} />
