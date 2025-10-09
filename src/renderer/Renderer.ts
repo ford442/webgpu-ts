@@ -197,6 +197,7 @@ private createBindGroups(): void {
             { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } },
             { binding: 4, resource: this.depthTextureRead.createView() },
             { binding: 5, resource: this.nonFilteringSampler },
+            { binding: 6, resource: this.depthTextureWrite.createView() }, // ADD THIS
         ] 
     }));
 
@@ -244,7 +245,7 @@ private createBindGroups(): void {
         this.depthTextureWrite = temp;
     }
 
- public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }): void {
+public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }): void {
     if (!this.device || !this.imageTexture) return;
     const currentTime = performance.now() / 1000.0;
 
@@ -267,7 +268,7 @@ private createBindGroups(): void {
         const computePerspectiveBG = this.bindGroups.get('computePerspective');
         const computeVortexBG = this.bindGroups.get('computeVortex');
 
-        if (mode === 'liquid-v1' && computeV1BG) {
+       if (mode === 'liquid-v1' && computeV1BG) {
             this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([currentTime, this.canvas.width, this.canvas.height]));
             computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
             computePass.setBindGroup(0, computeV1BG);
@@ -316,7 +317,7 @@ private createBindGroups(): void {
             computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
         }
         computePass.end();
-        if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex') {
+        if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex' || mode === 'liquid-v1') {
             this.swapDepthTextures();
         }
     }
