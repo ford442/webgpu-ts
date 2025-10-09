@@ -19,31 +19,32 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
     let time = u.time;
 
-    let bg_rate = 0.5;
-    let bg_strength = 0.02;
-    let bg_freq = 15.0;
+    // --- MODIFIED: Start of Changes ---
+
+    // 1. Define the base animation parameters.
+    let rate = 0.8;
+    let strength = 0.015;
+    let frequency = 25.0;
+
+    // 2. Calculate the foreground strength factor.
+    // It returns 1.0 at depth 0.0 (closest) and smoothly ramps down to 0.0 at depth 0.15.
+    // Any pixel with depth > 0.15 will have a strength of 0.
+    let foreground_strength = 1.0 - smoothstep(0.0, 0.15, depth);
+
+    // 3. Calculate the displacement vector.
+    let anim_time = time * rate;
+    let d1 = sin(uv.x * frequency + anim_time) * strength;
+    let d2 = cos(uv.y * frequency * 1.3 + anim_time) * strength;
+    let displacement = vec2<f32>(d1, d2);
+
+    // 4. Apply the strength factor to the final displacement.
+    // If foreground_strength is 0, the displacement will be zero.
+    let final_displacement = displacement * foreground_strength;
     
-    let fg_rate = 0.8;      // Faster time rate for foreground
-    let fg_strength = 0.01; // More subtle movement
-    let fg_freq = 25.0;     // Higher frequency for a different pattern
+    // --- MODIFIED: End of Changes ---
 
-    let bg_time = time * bg_rate;
-    let bg_d1 = sin(uv.y * bg_freq + bg_time) * bg_strength; // Swapped uv.x/y
-    let bg_d2 = cos(uv.x * bg_freq * 0.7 + bg_time) * bg_strength;
-    let bg_displacement = vec2<f32>(bg_d1, bg_d2);
-
-    let fg_time = time * fg_rate;
-    let fg_d1 = sin(uv.x * fg_freq + fg_time) * fg_strength;
-    let fg_d2 = cos(uv.y * fg_freq * 1.3 + fg_time) * fg_strength; // Changed multiplier
-    let fg_displacement = vec2<f32>(fg_d1, fg_d2);
-
-    // 4. Create a "foreground factor" to blend the two motions.
-    // This will be 1.0 for the absolute foreground (depth < 0.1)
-    // and smoothly decrease to 0.0 for the background.
-    let foreground_factor = smoothstep(0.1, 0.5, depth);
-    let final_displacement = mix(bg_displacement, fg_displacement, foreground_factor);
-    
     var displacedUV = uv + final_displacement;
+
     var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
     textureStore(writeTexture, global_id.xy, color);
 }
