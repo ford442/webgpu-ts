@@ -97,7 +97,7 @@ export class Renderer {
         await this.loadRandomImage();
     }
     
-    private async createPipelines(): Promise<void> {
+   private async createPipelines(): Promise<void> {
         const [zoomCode, textureCode, parallaxCode, blitCode] = await Promise.all([
             fetch('shaders/3d-zoom.wgsl').then(r => r.text()),
             fetch('shaders/texture.wgsl').then(r => r.text()),
@@ -124,10 +124,15 @@ export class Renderer {
             fragment: { module: parallaxModule, entryPoint: 'fs_main', targets: [{ format: this.presentationFormat }] },
             primitive: { topology: 'triangle-strip' }
         }));
+
         this.blitPipeline = this.device.createRenderPipeline({
             layout: 'auto',
             vertex: { module: blitModule, entryPoint: 'vs_main' },
-            fragment: { module: blitModule, entryPoint: 'fs_main', targets: [{ format: 'rgba16float' }] },
+            fragment: { 
+                module: blitModule, 
+                entryPoint: 'fs_main', 
+                targets: [{ format: 'rgba16float' as GPUTextureFormat }] 
+            },
             primitive: { topology: 'triangle-strip' },
         });
     }
