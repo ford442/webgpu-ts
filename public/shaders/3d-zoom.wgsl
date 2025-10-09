@@ -16,8 +16,6 @@ struct Uniforms {
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// The 'get_corrected_uvs' and 'create_layer' functions are correct and do not need changes.
-// [omitted for brevity]
 fn get_corrected_uvs(uv: vec2<f32>, canvas_res: vec2<f32>, texture_res: vec2<f32>) -> vec2<f32> {
     let canvas_aspect = canvas_res.x / canvas_res.y;
     let texture_aspect = texture_res.x / texture_res.y;
@@ -82,54 +80,48 @@ fn create_layer(
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-  let canvas_res = u.resolutions.xy;
-  let uv = vec2<f32>(global_id.xy) / canvas_res;
-  let zoom_time = u.time_zoom.x;
-  let zoom_center = u.time_zoom.yz;
+    let canvas_res = u.resolutions.xy;
+    let uv = vec2<f32>(global_id.xy) / canvas_res;
+    let zoom_time = u.time_zoom.x;
+    let zoom_center = u.time_zoom.yz;
 
-let horizon_depth = 0.3; // Horizon now covers the furthest 30% of the scene.
-let midground_depth = 0.6; // Mid-ground covers the next 30%.
+    // Define our depth slices
+    let static_horizon_max_depth = 0.01; // Anything below this is completely static
+    let horizon_depth = 0.1;
+    let midground_depth = 0.5;
 
-var final_color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
-  
-let slowest_speed = 0.025;
-let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
-let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
-let blended_horizon = mix(horizon1, horizon2, horizon2.a);
-final_color = mix(final_color, blended_horizon, blended_horizon.a);
+    // 1. --- NEW: The Truly Static Background ---
+    // Start with the original image color.
+    var final_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
+    // Get the depth at the current pixel.
+    let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy), 0.0).r;
+    // If this pixel is NOT part of the static background, make it transparent for now.
+    if (base_depth > static_horizon_max_depth) {
+        final_color.a = 0.0;
+    }
 
-// 2. The Mid-ground Layer (now starts from the new horizon_depth)
-let slow_speed = 0.05; // Slightly increase mid-ground speed as well
-let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
-let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
-let blended_midground = mix(mid1, mid2, mid2.a);
-final_color = mix(final_color, blended_midground, blended_midground.a);
+    // 2. The Slowest-Moving Horizon Layer
+    // This layer now animates the slice *between* the static background and the mid-ground.
+    let slowest_speed = 0.01;
+    let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, static_horizon_max_depth, horizon_depth);
+    let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, static_horizon_max_depth, horizon_depth);
+    let blended_horizon = mix(horizon1, horizon2, horizon2.a);
+    // Blend this layer over our static background.
+    final_color = mix(final_color, blended_horizon, blended_horizon.a);
 
-// 3. The Foreground Layer (starts from the new midground_depth)
-let fast_speed = 0.15;
-let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
-let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
-let blended_foreground = mix(fg1, fg2, fg2.a);
-final_color = mix(final_color, blended_foreground, blended_foreground.a);
-  // --- IMPROVEMENT 3: ATMOSPHERIC FOG ---
-  // We need a single depth value for the fog calculation. Let's use the static
-  // depth map at the original, un-zoomed UV as a baseline.
-let fog_depth_uv = get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy);
-let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fog_depth_uv, 0.0).r;
+    // 3. The Slow-Moving Mid-ground (no change to this logic)
+    let slow_speed = 0.03;
+    let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
+    let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
+    let blended_midground = mix(mid1, mid2, mid2.a);
+    final_color = mix(final_color, blended_midground, blended_midground.a);
 
-let fog_color = u.config.xyz;
-let fog_density = u.config.w;
-
-// The distance into the scene is 1.0 (far) - base_depth (near)
-let distance = 1.0 - base_depth; 
-
-// The standard exponential fog formula gives a much smoother, more natural falloff.
-let fog_amount = exp(-distance * fog_density);
-
-// CORRECTED LINE:
-let mixed_rgb = mix(fog_color, final_color.rgb, fog_amount);
-final_color = vec4<f32>(mixed_rgb, final_color.a);
-// --- END IMPROVEMENT 2 ---
-
-  textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
+    // 4. The Fast-Moving Foreground (no change to this logic)
+    let fast_speed = 0.15;
+    let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
+    let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
+    let blended_foreground = mix(fg1, fg2, fg2.a);
+    final_color = mix(final_color, blended_foreground, blended_foreground.a);
+    
+    textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
 }
