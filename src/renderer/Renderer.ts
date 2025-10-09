@@ -290,6 +290,46 @@ export class Renderer {
                 primitive: { topology: 'triangle-strip' },
             });
         }
+
+        const blitSampler = this.device.createSampler({
+            magFilter: 'linear',
+            minFilter: 'linear',
+        });
+
+        const commandEncoder = this.device.createCommandEncoder();
+        let srcView = texture.createView({ baseMipLevel: 0, mipLevelCount: 1 });
+
+        for (let i = 1; i < texture.mipLevelCount; i++) {
+            const dstView = texture.createView({ baseMipLevel: i, mipLevelCount: 1 });
+
+            // --- FIX IS HERE: Add type assertions for loadOp and storeOp ---
+            const passEncoder = commandEncoder.beginRenderPass({
+                colorAttachments: [{
+                    view: dstView,
+                    loadOp: 'clear' as GPULoadOp,
+                    storeOp: 'store' as GPUStoreOp,
+                    clearValue: [0, 0, 0, 0],
+                }],
+            });
+
+            const bindGroup = this.device.createBindGroup({
+                layout: this.blitPipeline.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: blitSampler },
+                    { binding: 1, resource: srcView },
+                ],
+            });
+
+            passEncoder.setPipeline(this.blitPipeline);
+            passEncoder.setBindGroup(0, bindGroup);
+            passEncoder.draw(4);
+            passEncoder.end();
+
+            srcView = dstView;
+        }
+
+        this.device.queue.submit([commandEncoder.finish()]);
+    }
     
     public getImageDimensions(): { width: number, height: number } {
         return this.imageDimensions;
