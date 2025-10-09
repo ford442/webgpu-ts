@@ -17,6 +17,9 @@ function App() {
   const [depthDimensions, setDepthDimensions] = useState({ width: 1, height: 1 }); // New state
     const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
     const [depthLevels, setDepthLevels] = useState(5); // Start with 5 levels
+  const [fogColor, setFogColor] = useState('#202025'); // Initial fog color (dark blue-gray)
+  const [fogDensity, setFogDensity] = useState(4.0);
+  const [parallaxStrength, setParallaxStrength] = useState(0.05);
 
     const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -201,6 +204,13 @@ function App() {
         setEdgeHardness={setEdgeHardness}
         depthLevels={depthLevels}
         setDepthLevels={setDepthLevels}
+        // --- PASS NEW PROPS ---
+        fogColor={fogColor}
+        setFogColor={setFogColor}
+        fogDensity={fogDensity}
+        setFogDensity={setFogDensity}
+        parallaxStrength={parallaxStrength}
+        setParallaxStrength={setParallaxStrength}
       />
       <WebGPUCanvas
         rendererRef={rendererRef}
@@ -208,9 +218,13 @@ function App() {
         farthestPoint={farthestPoint}
         depthThreshold={depthThreshold}
         edgeHardness={edgeHardness}
-        depthLevels={depthLevels}
         imageDimensions={imageDimensions}
         depthDimensions={depthDimensions} // Pass the new prop
+        depthLevels={depthLevels}
+        // --- PASS NEW PROPS ---
+        fogColor={fogColor}
+        fogDensity={fogDensity}
+        parallaxStrength={parallaxStrength}
       />
       {depthMapResult && (
            <div className="debug-container">
