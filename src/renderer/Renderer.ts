@@ -122,6 +122,15 @@ export class Renderer {
     }
 }
     
+    function hexToRgb(hex: string): [number, number, number] {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? [
+        parseInt(result[1], 16) / 255,
+        parseInt(result[2], 16) / 255,
+        parseInt(result[3], 16) / 255
+    ] : [0, 0, 0];
+}
+    
     public updateDepthMap(data: Float32Array, width: number, height: number): void {
         if (!this.device) return;
         if (this.staticDepthTexture && (this.staticDepthTexture.width !== width || this.staticDepthTexture.height !== height)) {
@@ -201,7 +210,7 @@ export class Renderer {
         return this.imageDimensions;
     }
 
-public render(mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}): void {
+public render(mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}, fogColor: string, fogDensity: number, parallaxStrength: number): void {
     if (!this.device || !this.imageTexture) return;
     const currentTime = performance.now() / 1000.0;
     const commandEncoder = this.device.createCommandEncoder();
@@ -220,6 +229,9 @@ public render(mode: RenderMode, farthestPoint: { x: number, y: number }, depthTh
             
             // vec4 2: Config values and the new depth map resolution
             uniformArray.set([depthThreshold, edgeHardness, depthLevels], 8);
+            
+            const parsedFogColor = hexToRgb(fogColor);
+            cleanUniforms.set([...parsedFogColor, fogDensity], 8);
             
             // Overwrite specific slots for the dedicated depth_map_res uniform
             // This is a bit of a hack to fit it in the existing buffer structure
@@ -249,17 +261,14 @@ cleanUniforms.set([depthDimensions.width, depthDimensions.height], 12);
 cleanUniforms.set([imageDimensions.width, imageDimensions.height], 16);
 
 // vec4 5 (Offset 20): effect_params (parallax_strength.x) - ALSO NEW
-const parallaxStrength = 0.05; // A good starting value for parallax
 cleanUniforms.set([parallaxStrength], 20);
 
 
 this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, cleanUniforms);
 
-
-
-            computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
-            computePass.setBindGroup(0, computeZoomBG);
-            computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+ computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
+  computePass.setBindGroup(0, computeZoomBG);
+    computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
         }
         computePass.end();
         }
