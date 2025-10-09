@@ -245,7 +245,7 @@ private createBindGroups(): void {
         this.depthTextureWrite = temp;
     }
 
-public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, mousePosition: { x: number, y: number }): void {
+public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, mousePosition: { x: number, y: number }, mousePosition: { x: number, y: number }, isMouseDown: boolean): void {
     if (!this.device || !this.imageTexture) return;
     const currentTime = performance.now() / 1000.0;
 
@@ -273,6 +273,7 @@ public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, pa
                 this.canvas.width, this.canvas.height,
                 mousePosition.x, mousePosition.y
             ]));
+            this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 12, new Float32Array([isMouseDown ? 1.0 : 0.0])); // Write mouseDown state
            computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
             computePass.setBindGroup(0, computeV1BG);
             computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
