@@ -57,15 +57,12 @@ fn create_layer(
   let parallax_offset = view_dir * (parallax_depth * parallax_strength) / fg_scale;
   let final_uv = repeating_uv - parallax_offset;
   
-  // --- FIX: APPLY ASPECT CORRECTION TO THE FINAL COLOR UV ---
   // Before sampling the color texture, convert final_uv to the color texture's coordinate space.
   let color_uv = get_corrected_uvs(final_uv, canvas_res, color_res);
-  // --- END FIX ---
   
   // Use the corrected color_uv for the texture sample
   let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(color_uv), 0.0);
 
-  // --- The rest of the function remains the same ---
   let fade_in_duration = 0.25;
   var final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
 
@@ -76,8 +73,7 @@ fn create_layer(
   let gradient_y = abs(depth_y - parallax_depth);
   let edge_gradient = (gradient_x + gradient_y) * 1.5;
 
-  let cutout_alpha = smoothstep(min_depth - edge_gradient, min_depth + edge_gradient, parallax_depth) *
-                   (1.0 - smoothstep(max_depth - edge_gradient, max_depth + edge_gradient, parallax_depth));
+  let cutout_alpha = smoothstep(min_depth - edge_gradient, min_depth + edge_gradient, parallax_depth) * (1.0 - smoothstep(max_depth - edge_gradient, max_depth + edge_gradient, parallax_depth));
 
   final_alpha = final_alpha * cutout_alpha;
 
@@ -118,7 +114,7 @@ final_color = mix(final_color, blended_foreground, blended_foreground.a);
   // --- IMPROVEMENT 3: ATMOSPHERIC FOG ---
   // We need a single depth value for the fog calculation. Let's use the static
   // depth map at the original, un-zoomed UV as a baseline.
-  let fog_depth_uv = get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy);
+let fog_depth_uv = get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy);
 let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fog_depth_uv, 0.0).r;
 
 let fog_color = u.config.xyz;
