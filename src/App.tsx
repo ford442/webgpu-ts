@@ -17,7 +17,8 @@ function App() {
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
   const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
-  const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 }); // ADD THIS
+  const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 });
+  const [isMouseDown, setIsMouseDown] = useState(false); // ADD THIS
 
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,8 +46,6 @@ function App() {
       const result = await depthEstimator(imageUrl);
       const { data, dims } = result.predicted_depth;
       const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
-
-      // --- MODIFIED: Start of changes ---
       let min = Infinity, max = -Infinity;
       let minIndex = 0; // Keep track of the index of the minimum depth value
       data.forEach((v: number, i: number) => {
@@ -56,23 +55,17 @@ function App() {
         }
         if (v > max) max = v;
       });
-
       // Calculate the UV coordinates of the farthest point
       const farthestY = Math.floor(minIndex / width);
       const farthestX = minIndex % width;
       setFarthestPoint({ x: farthestX / width, y: farthestY / height });
-      // --- MODIFIED: End of changes ---
-      
       const range = max - min;
       const normalizedData = new Float32Array(data.length);
-      
       for (let i = 0; i < data.length; ++i) {
         normalizedData[i] = 1.0 - ((data[i] - min) / range);
       }
-      
       setStatus('Updating depth map on GPU...');
       rendererRef.current.updateDepthMap(normalizedData, width, height);
-      
       setDepthMapResult(result);
       setStatus('Ready.');
     } catch (e: any) {
@@ -88,7 +81,6 @@ function App() {
     }
     setStatus('Loading random image...');
     const newImageUrl = await rendererRef.current.loadRandomImage();
-    
     if (newImageUrl) {
         if (depthEstimator) {
             await runDepthAnalysis(newImageUrl);
@@ -119,11 +111,9 @@ function App() {
       const canvas = debugCanvasRef.current;
       const context = canvas.getContext('2d');
       if (!width || !height || !context) return;
-      
       canvas.width = width;
       canvas.height = height;
       const imageData = context.createImageData(width, height);
-
       let min = Infinity, max = -Infinity;
       data.forEach((v: number) => {
         if (v < min) min = v;
@@ -165,8 +155,10 @@ function App() {
         panX={panX}
         panY={panY}
         farthestPoint={farthestPoint}
-        mousePosition={mousePosition} // ADD THIS
-        setMousePosition={setMousePosition} // ADD THIS
+        mousePosition={mousePosition}
+        setMousePosition={setMousePosition}
+        isMouseDown={isMouseDown} // ADD THIS
+        setIsMouseDown={setIsMouseDown} // ADD THIS
       />
       {depthMapResult && (
         <div className="debug-container">
