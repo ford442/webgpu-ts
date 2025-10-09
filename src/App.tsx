@@ -7,23 +7,31 @@ import { pipeline } from '@huggingface/transformers';
 import './style.css';
 
 function App() {
-  const [mode, setMode] = useState<RenderMode>('3d-zoom');
+  const [mode, setMode] = useState<RenderMode>('3d-zoom'); // Re-introduce mode state
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
-  const [depthMapResult, setDepthMapResult] = useState<any>(null);
-    const [depthThreshold, setDepthThreshold] = useState(0.5);
-    const [edgeHardness, setEdgeHardness] = useState(0.5);
- const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 });
-  const [depthDimensions, setDepthDimensions] = useState({ width: 1, height: 1 }); // New state
-    const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
-    const [depthLevels, setDepthLevels] = useState(5); // Start with 5 levels
-  const [fogColor, setFogColor] = useState('#202025'); // Initial fog color (dark blue-gray)
-  const [fogDensity, setFogDensity] = useState(4.0);
+  const rendererRef = useRef<Renderer | null>(null);
+  const [isRendererReady, setIsRendererReady] = useState(false);
+  
+  // State for 3D Zoom
+  const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
   const [parallaxStrength, setParallaxStrength] = useState(0.05);
-
-    const rendererRef = useRef<Renderer | null>(null);
+  const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 });
+  const [depthDimensions, setDepthDimensions] = useState({ width: 1, height: 1 });
+  
+  // --- ADDED: State for 3D Parallax controls ---
+  const [displacementScale, setDisplacementScale] = useState(0.3);
+  const [ambientLight, setAmbientLight] = useState(0.2);
+  const [smoothness, setSmoothness] = useState(1.0);
+  const [pointSize, setPointSize] = useState(3.0);
+    
+  const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
   
+    useEffect(() => {
+    // rendererRef.current?.updateParallaxParams({ displacementScale, ambient: ambientLight, smoothness, pointSize });
+  }, [displacementScale, ambientLight, smoothness, pointSize]);
+
   const loadModel = async () => {
     if (depthEstimator) {
       setStatus('AI model is already loaded.');
@@ -189,49 +197,34 @@ function App() {
     }
   }, [depthMapResult]);
 
+
   return (
     <div id="app-container">
-      <h1>WebGPU Liquid + Depth Effect</h1>
+      <h1>WebGPU Depth Effects</h1>
       <p><strong>Status:</strong> {status}</p>
       <Controls
-        mode={mode} setMode={setMode}
+        mode={mode}
+        setMode={setMode}
         onNewImage={handleNewImage}
         onLoadModel={loadModel}
         isModelLoaded={!!depthEstimator}
-        depthThreshold={depthThreshold}
-        setDepthThreshold={setDepthThreshold}
-        edgeHardness={edgeHardness}
-        setEdgeHardness={setEdgeHardness}
-        depthLevels={depthLevels}
-        setDepthLevels={setDepthLevels}
-        // --- PASS NEW PROPS ---
-        fogColor={fogColor}
-        setFogColor={setFogColor}
-        fogDensity={fogDensity}
-        setFogDensity={setFogDensity}
-        parallaxStrength={parallaxStrength}
-        setParallaxStrength={setParallaxStrength}
+        isRendererReady={isRendererReady}
+        // Pass all slider props for both modes
+        parallaxStrength={parallaxStrength} setParallaxStrength={setParallaxStrength}
+        displacementScale={displacementScale} setDisplacementScale={setDisplacementScale}
+        ambientLight={ambientLight} setAmbientLight={setAmbientLight}
+        smoothness={smoothness} setSmoothness={setSmoothness}
+        pointSize={pointSize} setPointSize={setPointSize}
       />
       <WebGPUCanvas
         rendererRef={rendererRef}
         mode={mode}
+        onRendererReady={() => setIsRendererReady(true)}
         farthestPoint={farthestPoint}
-        depthThreshold={depthThreshold}
-        edgeHardness={edgeHardness}
         imageDimensions={imageDimensions}
-        depthDimensions={depthDimensions} // Pass the new prop
-        depthLevels={depthLevels}
-        // --- PASS NEW PROPS ---
-        fogColor={fogColor}
-        fogDensity={fogDensity}
+        depthDimensions={depthDimensions}
         parallaxStrength={parallaxStrength}
       />
-      {depthMapResult && (
-           <div className="debug-container">
-          <h2>AI Model Output (Debug Depth Map)</h2>
-          <canvas ref={debugCanvasRef} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
-        </div>
-      )}
     </div>
   );
 }
