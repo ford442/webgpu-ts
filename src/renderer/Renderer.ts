@@ -18,6 +18,9 @@ export class Renderer {
     private staticDepthTexture!: GPUTexture;
     public imageDimensions = { width: 1, height: 1 };
     
+    // --- NEW: Add a flag to track device state ---
+    private isDeviceLost = false;
+
     // State for 3D Parallax Mode
     private mouseState = { x: 0.5, y: 0.5 };
     private cameraState = {
@@ -70,15 +73,15 @@ export class Renderer {
         requiredFeatures.push('float32-filterable');
     }
     
-    this.device = await adapter.requestDevice({ requiredFeatures });
+   this.device = await adapter.requestDevice({ requiredFeatures });
 
-    // --- NEW: Add device loss handling ---
-    this.device.lost.then((info) => {
-        console.error(`WebGPU device was lost: ${info.message}`);
-        // Trigger a re-initialization. You might want to show a UI message.
-        // A simple approach is to reload or re-initialize the renderer.
-        // For now, we'll just log it. A full implementation would re-create everything.
-    });
+        // --- MODIFIED: Set the flag when the device is lost ---
+        this.device.lost.then((info) => {
+            console.error(`WebGPU device was lost: ${info.message}`);
+            this.isDeviceLost = true;
+            // In a real application, you'd want to trigger a UI update
+            // to inform the user that they need to reload the page.
+        });
 
     this.context = this.canvas.getContext('webgpu')!;
     this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
@@ -267,24 +270,23 @@ export class Renderer {
         this.device.queue.submit([commandEncoder.finish()]);
     }
     
-  public render(
-    mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, 
-    imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}, 
-    fogColor: string, fogDensity: number, parallaxStrength: number
-): void {
-    if (!this.device || !this.context || this.device.lost) return; // <-- ADD THIS CHECK
+   public render(
+        mode: RenderMode, farthestPoint: { x: number, y: number }, depthThreshold: number, edgeHardness: number, 
+        imageDimensions: {width: number, height: number}, depthLevels: number, depthDimensions: {width: number, height: number}, 
+        fogColor: string, fogDensity: number, parallaxStrength: number
+    ): void {
+        if (!this.device || !this.context || this.isDeviceLost) return;
 
+   let textureView: GPUTextureView;
+        try {
+            textureView = this.context.getCurrentTexture().createView();
+        } catch (e) {
+            console.error("Failed to get current texture: ", e);
+            return; // Exit the render loop for this frame
+        }
     const commandEncoder = this.device.createCommandEncoder();
-    let textureView: GPUTextureView;
-   try {
-        textureView = this.context.getCurrentTexture().createView();
-    } catch (e) {
-        console.error("Could not get texture from context:", e);
-        // If we fail here, we can't render this frame.
-        return;
-    }
-      
-        if (mode === '3d-zoom') {
+
+     if (mode === '3d-zoom') {
             const computePass = commandEncoder.beginComputePass();
             const bg = this.bindGroups.get('computeZoom');
             if (bg) {
@@ -304,8 +306,6 @@ export class Renderer {
             }
             computePass.end();
 
-            const textureView = this.context.getCurrentTexture().createView();
-            // --- FIX IS HERE: Add type assertions to the main render pass ---
             const passEncoder = commandEncoder.beginRenderPass({
                 colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: [0,0,0,1] }]
             });
@@ -318,7 +318,6 @@ export class Renderer {
             passEncoder.end();
 
         } else if (mode === '3d-parallax') {
-            const textureView = this.context.getCurrentTexture().createView();
             const passEncoder = commandEncoder.beginRenderPass({ colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: [0.1, 0.1, 0.1, 1] }] });
             const parallaxBG = this.bindGroups.get('3d-parallax');
             if (parallaxBG) {
