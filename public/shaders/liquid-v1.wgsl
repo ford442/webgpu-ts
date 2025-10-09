@@ -19,8 +19,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
     let time = u.time;
 
-    // --- MODIFIED: Start of Changes ---
-
     // 1. Define a slower, more subtle background motion.
     let bg_rate = 0.25;      // Slower
     let bg_strength = 0.003; // More subtle
@@ -41,7 +39,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // 3. Widen the blend range for the foreground effect to be "looser".
     // The effect now covers the nearest 40% of the depth map instead of just 15%.
-    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.4, depth);
+    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.6, depth);
 
     // 4. Combine the displacements.
     let final_displacement = background_displacement + (foreground_displacement * foreground_mix_factor);
