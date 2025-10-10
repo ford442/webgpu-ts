@@ -19,7 +19,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let time = u.time;
 
     // 1. Define a slower, more subtle background motion.
-    let bg_rate = 0.25;
+    let bg_rate = 0.35;
     let bg_strength = 0.003;
     let bg_freq = 15.0;
     let bg_time = time * bg_rate;
@@ -37,7 +37,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let foreground_displacement = vec2<f32>(fg_d1, fg_d2);
 
     // 3. Widen the blend range to have a "looser" selection.
-    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.4, depth);
+    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.2, depth);
 
     // 4. Combine the displacements.
     let final_displacement = background_displacement + (foreground_displacement * foreground_mix_factor);
