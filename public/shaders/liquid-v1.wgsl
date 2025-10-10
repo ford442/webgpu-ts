@@ -41,16 +41,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var displacedUV = uv + final_displacement;
     let dynamic_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV, 0.0).r;
     var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
+    // --- START: New Foreground Fog Logic ---
+    // 2. Foreground Fog: A light, additive haze around closer objects.
+    let foreground_fog_color = vec3<f32>(0.6, 0.6, 0.7); // A light, cool grey
+    // This targets the mid-to-near ground (depth 0.1 to 0.6).
+    let foreground_fog_intensity = smoothstep(0.1, 0.6, 1.0 - dynamic_depth) * 0.2;
+    color.rgb = color.rgb + (foreground_fog_color * foreground_fog_intensity);
+    // --- END: New Foreground Fog Logic ---
 
-    // --- Fog and Spotlight Logic ---
-    let fog_color = vec4<f32>(0.1, 0.1, 0.1, 1.0);
-    // --- CHANGE #1: Increased fog intensity ---
-    let fog_intensity = smoothstep(0.7, 0.95, dynamic_depth) * 0.55; // Upped from 0.4
-    color = mix(color, fog_color, fog_intensity);
-
+    // 3. Spotlight: The dynamic light that illuminates the foreground.
     let light_pos = vec2<f32>(sin(u.time * 0.5) * 0.5 + 0.5, cos(u.time * 0.3) * 0.5 + 0.5);
-    // --- CHANGE #2: Made the light bigger and softer ---
-    let light_radius = 0.45; // Upped from 0.3
+    let light_radius = 0.45;
     let dist_to_light = distance(uv, light_pos);
     
     // By starting the smoothstep at 0.05, we create a soft core instead of a hard point.
