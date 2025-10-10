@@ -1,3 +1,5 @@
+// src/App.tsx
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
@@ -139,6 +141,8 @@ function App() {
             <h1>WebGPU Liquid + Depth Effect</h1>
             <p><strong>Status:</strong> {status}</p>
             <Controls
+                mode={mode} // ADD THIS LINE
+                setMode={setMode} // ADD THIS LINE
                 zoom={zoom} setZoom={setZoom}
                 panX={panX} setPanX={setPanX}
                 panY={panY} setPanY={setPanY}
