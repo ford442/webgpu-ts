@@ -19,7 +19,6 @@ export class Renderer {
     private activeMode: IRenderMode | null = null;
     private activeModeName: RenderMode | null = null;
     private isModeReady: boolean = false;
-    private isLoading: boolean = false; // --- THIS DECLARATION WAS MISSING ---
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
@@ -56,7 +55,7 @@ export class Renderer {
             size: 24,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
-        this.imageTexture = this.device.createTexture({ size: [1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+        this.imageTexture = this.device.createTexture({ size: [1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
         this.writeTexture = this.device.createTexture({ size: [this.canvas.width, this.canvas.height], format: 'rgba16float', usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
         this.depthTextureRead = this.device.createTexture({ size: [1, 1], format: 'r32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING });
     }
@@ -86,12 +85,13 @@ export class Renderer {
     }
     
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, mousePosition: { x: number, y: number }, isMouseDown: boolean): void {
-        if (this.isLoading || !this.device || !this.activeMode || !this.isModeReady || mode !== this.activeModeName) return;
+        if (!this.device || !this.activeMode || !this.isModeReady || mode !== this.activeModeName) return;
         const commandEncoder = this.device.createCommandEncoder();
         const uniformData = new Float32Array([
             this.canvas.width, this.canvas.height,
             mousePosition.x, mousePosition.y,
             isMouseDown ? 1.0 : 0.0,
+            0 // Padding
         ]);
         this.activeMode.render(commandEncoder, uniformData);
         const textureView = this.context.getCurrentTexture().createView();
@@ -126,9 +126,8 @@ export class Renderer {
     }
     
     public async loadRandomImage(): Promise<string | undefined> {
-        this.isLoading = true; // PAUSE the render loop
         try {
-            if (this.imageUrls.length === 0) return;
+            if (this.imageUrls.length === 0) return undefined;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
@@ -150,13 +149,10 @@ export class Renderer {
         } catch (e) {
             console.error("Failed to load image:", e);
             return undefined;
-        } finally {
-            this.isLoading = false; // RESUME the render loop
         }
     }
 
     public async updateDepthMap(data: Float32Array, width: number, height: number): Promise<void> {
-        this.isLoading = true; // PAUSE the render loop
         if (!this.device) return;
         const oldTexture = this.depthTextureRead;
         this.depthTextureRead = this.device.createTexture({
@@ -165,12 +161,12 @@ export class Renderer {
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
         });
         this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4 }, [width, height]);
+        await this.device.queue.onSubmittedWorkDone();
         if (oldTexture) {
             oldTexture.destroy();
         }
         if (this.activeModeName) {
             await this.setMode(this.activeModeName);
         }
-        this.isLoading = false; // RESUME the render loop
     }
 }
