@@ -22,12 +22,12 @@ export class LightingMode implements IRenderMode {
         const lightingModule = this.device.createShaderModule({ code: lightingCode });
         const bindGroupLayout = this.device.createBindGroupLayout({
             entries: [
-                { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'filtering' } },
-                { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: {} },
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'filtering' as GPUSamplerBindingType } },
+                { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } },
                 { binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { format: 'rgba16float' as GPUTextureFormat } },
                 { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' as GPUBufferBindingType } },
                 { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float' as GPUTextureSampleType } },
-                { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' } },
+                { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' as GPUSamplerBindingType } },
             ]
         });
         const pipelineLayout = this.device.createPipelineLayout({
