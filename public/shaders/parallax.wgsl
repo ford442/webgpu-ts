@@ -116,7 +116,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     let textureColor = textureSample(sourceImage, u_sampler, in.fragUV).rgb;
-    let light_pos_3d = vec3<f32>( (u.lightPos.x * 2.0 - 1.0), -(u.lightPos.y * 2.0 - 1.0), -0.5);
+    let light_pos_3d = vec3<f32>( (u.lightPos.x * 2.0 - 1.0), (u.lightPos.y * 2.0 - 1.0), -0.5);
     let light_dir = normalize(light_pos_3d - in.worldPos);
     let normal = normalize(in.worldNormal);
     let diffuse = max(dot(normal, light_dir), 0.0) * 0.8;
