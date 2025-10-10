@@ -134,7 +134,7 @@ export class Renderer {
         try {
             if (this.imageUrls.length === 0) return undefined;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
-            const response = await fetch(imageUrl);
+            const response = await fetch(imageUrl, { mode: 'cors' }); 
             const imageBitmap = await createImageBitmap(await response.blob());
             const oldTexture = this.imageTexture;
             this.imageTexture = this.device.createTexture({
@@ -142,7 +142,7 @@ export class Renderer {
                 format: 'rgba16float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
             });
-            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, image<em></em>.height]);
             await this.device.queue.onSubmittedWorkDone();
             if (oldTexture) {
                 oldTexture.destroy();
