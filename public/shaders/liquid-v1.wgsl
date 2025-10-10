@@ -49,8 +49,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // 5. Add fog to the background.
     let fog_color = vec4<f32>(0.1, 0.1, 0.1, 1.0); // Dark grey fog
-    // --- THIS IS THE CORRECTED LINE ---
-    let fog_intensity = smoothstep(0.1, 0.8, depth); // Use 'depth' directly
+    // --- THIS IS THE MODIFIED LINE ---
+    let fog_intensity = smoothstep(0.7, 0.95, depth) * 0.6;
     color = mix(color, fog_color, fog_intensity);
 
     // 6. Add a moving spotlight to the foreground.
