@@ -50,12 +50,18 @@ const [isMouseDown, setIsMouseDown] = useState(false);
             setStatus('AI model is already loaded.');
             return;
         }
-        try {
+       try {
             setStatus('Loading AI model (this may take a minute)...');
+            
+            // --- THIS IS THE CORRECTED CODE ---
+            // The 'quantized' option is replaced with 'dtype'.
+            // We select the data type based on the user's choice.
+            const dtype = modelQuantized ? 'q8' : 'fp32';
+
             const estimator = await pipeline(
                 'depth-estimation', 
                 'Xenova/dpt-hybrid-midas',
-                { quantized: modelQuantized } // Use the state here
+                { dtype: dtype } // Use the new dtype option
             );
             setDepthEstimator(() => estimator);
             setStatus('AI Model Loaded. New images will now have depth effects.');
