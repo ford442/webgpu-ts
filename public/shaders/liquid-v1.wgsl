@@ -55,7 +55,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let fg_d1 = sin(uv.x * fg_freq + fg_time);
   let fg_d2 = cos(uv.y * fg_freq * 1.3 + fg_time);
   let base_foreground_motion = vec2<f32>(fg_d1, fg_d2);
-  let motion_gradient = pow(1.0 - smoothstep(0.0, 0.42, static_depth_for_motion), 2.5);
+  let motion_gradient = pow(1.0 - smoothstep(0.0, 0.32, static_depth_for_motion), 2.5);
   var final_displacement = background_displacement + (base_foreground_motion * base_fg_strength * motion_gradient);
   let border_thickness = 0.1;
   let fade_start = 0.5 - border_thickness;
