@@ -170,16 +170,18 @@ export class Renderer {
         this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
         this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
         this.bindGroups.set('computeV1', this.device.createBindGroup({
-            layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0),
-            entries: [
-            { binding: 0, resource: this.sampler },
-            { binding: 1, resource: this.imageTexture.createView() },
-            { binding: 2, resource: this.writeTexture.createView() },
-            { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } },
-            { binding: 4, resource: this.depthTextureRead.createView() },
-            { binding: 5, resource: this.nonFilteringSampler },
-        ]
-    }));
+    layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0),
+    entries: [
+        { binding: 0, resource: this.sampler },
+        { binding: 1, resource: this.imageTexture.createView() },
+        { binding: 2, resource: this.writeTexture.createView() },
+        { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } },
+        { binding: 4, resource: this.depthTextureRead.createView() },
+        { binding: 5, resource: this.nonFilteringSampler },
+        // This new entry allows the shader to write to the next depth texture
+        { binding: 6, resource: this.depthTextureWrite.createView() },
+    ]
+}));
         const computeLayout = this.pipelines.get('compute')!.getBindGroupLayout(0);
         const computeEntries = [
             { binding: 0, resource: this.sampler },
