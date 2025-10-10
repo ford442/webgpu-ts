@@ -21,6 +21,6 @@ export interface IRenderMode {
         uniformData: Float32Array
     ): void;
 
-    // Optional: Called when the mode is switched away from, to clean up resources
+    onPointerDown?(x: number, y: number): void;
     destroy?(): void;
 }
