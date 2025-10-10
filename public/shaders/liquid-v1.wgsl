@@ -30,7 +30,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let background_displacement = motion * base_ambient_strength;
 
     let fg_rate = 0.9;
-    let base_fg_strength = 0.015;
+    let base_fg_strength = 0.01;
     let fg_freq = 25.0;
     let fg_time = u.time * fg_rate;
     let fg_d1 = sin(uv.x * fg_freq + fg_time);
