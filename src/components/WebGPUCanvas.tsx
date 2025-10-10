@@ -52,7 +52,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
             canvas.removeEventListener('wheel', handleWheel);
         };
     }, [rendererRef]);
-    // -----------------------------------------------------------------
 
     const handleMouseDown = () => {
         isDragging.current = true;
@@ -78,8 +77,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
     return (
         <canvas 
             ref={canvasRef} 
-            width="1024"
-            height="1024"
+            width="1536"
+            height="1536"
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onMouseMove={handleMouseMove} 
