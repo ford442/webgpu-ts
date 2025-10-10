@@ -9,6 +9,7 @@ struct Uniforms {
   resolutionX: f32,
   resolutionY: f32,
 };
+
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 // A common and effective approximation of the ACES filmic tone mapping curve.
@@ -75,13 +76,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let bg_shadow_color = vec4<f32>(0.12, 0.12, 0.15, 1.0);  
   let bg_shadow_intensity = smoothstep(0.4, 0.9, aa_visual_depth) * 0.85;
   color = mix(color, bg_shadow_color, bg_shadow_intensity);
-  
-  // FIXED: The line causing the error is changed here.
   let foreground_fog_color = vec3<f32>(0.6, 0.6, 0.7);
   let foreground_fog_intensity = smoothstep(0.2, 0.8, 1.0 - aa_visual_depth) * 0.18;
   let new_rgb_with_fog = color.rgb + (foreground_fog_color * foreground_fog_intensity);
   color = vec4<f32>(new_rgb_with_fog, color.a);
-  
   let foreground_shadow_color = vec4<f32>(0.05, 0.05, 0.1, 1.0);
   let foreground_shadow_intensity = smoothstep(0.4, 0.0, aa_visual_depth) * 0.85;
 
@@ -110,8 +108,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let sunlit_color = mix(shadowed_foreground_color, lit_foreground_color, total_sunray_intensity);
   var final_rgb = mix(color.rgb, sunlit_color, foreground_shadow_intensity);
   final_rgb += sunray_specular * sunray_color;
-  
-  
+    
   // --- Roaming Spotlights ---
   let light_core_radius = 0.02;
   let light_falloff_intensity = 0.15;
@@ -143,14 +140,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   
   final_rgb += (light1_color * spotlight1_brightness) + (light2_color * spotlight2_brightness);
   let exposure = 1.0;
-  
-  // 1. Apply exposure to our HDR color.
   let exposed_rgb = final_rgb * exposure;
   
-  // 2. Apply the ACES tone mapping function to compress the HDR result into a displayable LDR range.
   let tonemapped_rgb = aces_tonemap(exposed_rgb);
 
-  // --- Final Output ---
   color = vec4<f32>(tonemapped_rgb, color.a);
   textureStore(writeTexture, global_id.xy, color);
 }
