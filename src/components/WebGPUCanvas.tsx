@@ -7,7 +7,6 @@ interface WebGPUCanvasProps {
 
 const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const isDragging = useRef(false);
 
     // This useEffect handles the main renderer setup
     useEffect(() => {
@@ -54,7 +53,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
     }, [rendererRef]);
 
     const handleMouseDown = () => {
-        isDragging.current = true;
+        rendererRef.current?.toggleBacklight();
     };
 
     const handleMouseUp = () => {
@@ -69,7 +68,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
             rendererRef.current.updateMouse(
                 event.clientX - rect.left,
                 event.clientY - rect.top,
-                isDragging.current
             );
         }
     };
@@ -80,9 +78,9 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
             width="1536"
             height="1536"
             onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
+            // onMouseUp={handleMouseUp} // No longer needed
             onMouseMove={handleMouseMove} 
-            onMouseLeave={handleMouseUp}
+            // onMouseLeave={handleMouseUp} // No longer needed
             // onWheel is now handled by the useEffect hook
         />
     );
