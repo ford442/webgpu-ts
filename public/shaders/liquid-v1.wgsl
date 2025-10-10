@@ -17,17 +17,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let uv = vec2<f32>(global_id.xy) / resolution;
     
     // --- Motion Calculation ---
-    let bg_rate = 0.75;
-    let bg_strength = 0.013;
-    let bg_freq = 13.0;
+    let bg_rate = 0.55;
+    let bg_strength = 0.007;
+    let bg_freq = 15.0;
     let bg_time = u.time * bg_rate;
     let bg_d1 = sin(uv.y * bg_freq + bg_time) * bg_strength;
     let bg_d2 = cos(uv.x * bg_freq * 0.7 + bg_time) * bg_strength;
     let background_displacement = vec2<f32>(bg_d1, bg_d2);
 
-    let fg_rate = 0.9;
-    let fg_strength = 0.017;
-    let fg_freq = 25.0;
+    let fg_rate = 0.77;
+    let fg_strength = 0.012;
+    let fg_freq = 20.0;
     let fg_time = u.time * fg_rate;
     let fg_d1 = sin(uv.x * fg_freq + fg_time) * fg_strength;
     let fg_d2 = cos(uv.y * fg_freq * 1.3 + fg_time) * fg_strength;
@@ -35,7 +35,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // --- Depth Sampling and Displacement ---
     let original_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
-    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.2, original_depth);
+    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.25, original_depth);
     let final_displacement = background_displacement + (foreground_displacement * foreground_mix_factor);
     
     var displacedUV = uv + final_displacement;
