@@ -39,7 +39,7 @@ export class Renderer {
         console.log("Backlight state:", this.backlightOn);
     }
     
-    public stopMouseDrag() { this.cameraState.isDragging = false; }
+    // public stopMouseDrag() { this.cameraState.isDragging = false; }
     
     public updateZoom(deltaY: number) {
         this.cameraState.zoom += deltaY * 0.001;
