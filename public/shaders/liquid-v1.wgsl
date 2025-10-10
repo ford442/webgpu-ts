@@ -19,9 +19,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let time = u.time;
 
     // 1. Define a slower, more subtle background motion.
-    let bg_rate = 0.35;
-    let bg_strength = 0.003;
-    let bg_freq = 15.0;
+    let bg_rate = 0.75;
+    let bg_strength = 0.013;
+    let bg_freq = 13.0;
     let bg_time = time * bg_rate;
     let bg_d1 = sin(uv.y * bg_freq + bg_time) * bg_strength;
     let bg_d2 = cos(uv.x * bg_freq * 0.7 + bg_time) * bg_strength;
@@ -29,7 +29,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // 2. Define the additional "foreground" motion.
     let fg_rate = 0.9;
-    let fg_strength = 0.015;
+    let fg_strength = 0.017;
     let fg_freq = 25.0;
     let fg_time = time * fg_rate;
     let fg_d1 = sin(uv.x * fg_freq + fg_time) * fg_strength;
