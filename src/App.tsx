@@ -20,8 +20,9 @@ function App() {
 env.allowLocalModels = false;
 env.backends.onnx.executionProviders = ['webgpu'];
 env.backends.onnx.logLevel = 'warning'; // Less verbose logging
-const model_loc = 'https://test.1ink.us/webgputs/models/model.onnx'
-    
+// const model_loc = 'https://test.1ink.us/webgputs/models/model.onnx'
+const model_loc = 'Xenova/dpt-hybrid-midas/resolve/main/onnx/model.onnx'
+
     useEffect(() => {
         rendererRef.current?.updateParams({
             displacementScale: displacementScale, 
