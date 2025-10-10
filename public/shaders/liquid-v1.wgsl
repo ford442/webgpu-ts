@@ -27,9 +27,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
   // --- Parallax Logic (Unchanged) ---
   let static_depth_for_motion = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
-  let time = u.time;
-  let pixelSize = 1.0 / resolution;
-
+  let time = u.time * 0.5;
   let base_ambient_strength = 0.004;
   let ambient_freq = 15.0;
   let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
@@ -70,6 +68,16 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let foreground_shadow_intensity = smoothstep(0.4, 0.0, aa_visual_depth) * 0.7; // USE AA
   color = mix(color, foreground_shadow_color, foreground_shadow_intensity);
 
+
+  // --- Shared Calculations for Lights ---
+  
+  // Specular sheen MUST use the sharp depth to detect edges properly.
+  let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(pixelSize.x, 0.0), 0.0).r;
+  let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(0.0, pixelSize.y), 0.0).r;
+  let normal_factor = abs(sharp_visual_depth - depth_right) + abs(sharp_visual_depth - depth_up); // USE SHARP
+  let specular_sheen = smoothstep(0.01, 0.05, normal_factor) * 1.5;
+
+
   // --- Sunray Logic (Unchanged) ---
   let sunray_pos = vec2<f32>(0.5 + sin(u.time * 0.25) * 0.4, 1.3);
   let sunray_color = vec3<f32>(1.0, 0.95, 0.85);
@@ -84,16 +92,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   
   // --- Shared edge detection (Unchanged) ---
   let texel_size = 1.0 / resolution;
-  let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(pixelSize.x, 0.0), 0.0).r;
-  let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(0.0, pixelSize.y), 0.0).r;
-  let normal_factor = abs(sharp_visual_depth - depth_right) + abs(sharp_visual_depth - depth_up); // USE SHARP
+  let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(texel_size.x, 0.0), 0.0).r;
+  let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(0.0, texel_size.y), 0.0).r;
+  let normal_factor = abs(visual_depth - depth_right) + abs(visual_depth - depth_up);
   let specular_sheen = smoothstep(0.01, 0.05, normal_factor) * 1.5;
-
   let sunray_brightness = base_sunray + (specular_sheen * base_sunray * 1.5);
-
-  let light_core_radius = 0.02; // Very small, bright center.
-  let light_falloff_intensity = 0.15; // The large glow is only 15% as bright as the core.
-
+  
   
   // --- MODIFICATION START: Give Spotlights Their Own Depth ---
 
@@ -101,43 +105,34 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let depth_fade_margin = 0.05;
 
   // --- Spotlight 1 (Blue) ---
-  let light1_pos = vec2<f32>(sin(time * 0.5) * 0.5 + 0.5, cos(time * 0.3) * 0.5 + 0.5);
-  let light1_falloff_radius = 0.35; // This is the old radius, now used for the outer glow.
-  let light1_depth = (cos(time * 0.45) * 0.5 + 0.5);
-  let light1_depth_occlusion = smoothstep(aa_visual_depth + depth_fade_margin, aa_visual_depth - depth_fade_margin, light1_depth);
+  let light1_pos = vec2<f32>(sin(u.time * 0.5) * 0.5 + 0.5, cos(u.time * 0.3) * 0.5 + 0.5);
+  let light1_radius = 0.35;
+  // NEW: Give this light its own animated depth value from 0.0 to 1.0
+  let light1_depth = (cos(u.time * 0.45) * 0.5 + 0.5); // Using a different time multiplier for unique motion
   
-  let dist_to_light1 = distance(uv, light1_pos);
+  // NEW: Calculate occlusion based on comparing the light's depth to the scene's depth.
+  // This smoothly fades the light to 0 if it's behind a pixel.
+  let light1_depth_occlusion = smoothstep(aa_visual_depth + depth_fade_margin, aa_visual_depth - depth_fade_margin, light1_depth); // USE AA
 
-  // NEW: Calculate the two parts of the light.
-  // 1. A small, fully bright core.
-  let core1 = 1.0 - smoothstep(light_core_radius * 0.5, light_core_radius, dist_to_light1);
-  // 2. A large, dim falloff area.
-  let falloff1 = (1.0 - smoothstep(light_core_radius, light1_falloff_radius, dist_to_light1)) * light_falloff_intensity;
-  
-  // MODIFIED: Combine them and apply depth occlusion.
-  let base_spotlight1 = (core1 + falloff1) * light1_depth_occlusion;
-  
-  var spotlight1_brightness = base_spotlight1 + (specular_sheen * base_spotlight1);
-  spotlight1_brightness *= (1.0 + caustic_boost * light_caustic_strength * 0.5);
+  let dist_to_light1 = distance(uv, light1_pos);
+  // MODIFIED: Use the new depth occlusion logic.
+  let base_spotlight1 = (1.0 - smoothstep(0.05, light1_radius, dist_to_light1)) * light1_depth_occlusion;
+  let spotlight1_brightness = base_spotlight1 + (specular_sheen * base_spotlight1);
   let light1_color = vec3<f32>(0.2, 0.5, 1.0);
 
   // --- Spotlight 2 (Warm) ---
-  let light2_pos = vec2<f32>(cos(time * -0.4) * 0.5 + 0.5, sin(time * 0.6) * 0.5 + 0.5);
-  let light2_falloff_radius = 0.3; // This light is slightly smaller.
-  let light2_depth = (sin(time * -0.38) * 0.5 + 0.5);
-  let light2_depth_occlusion = smoothstep(aa_visual_depth + depth_fade_margin, aa_visual_depth - depth_fade_margin, light2_depth);
+  let light2_pos = vec2<f32>(cos(u.time * -0.4) * 0.5 + 0.5, sin(u.time * 0.6) * 0.5 + 0.5);
+  let light2_radius = 0.3;
+  // NEW: Give this light its own, different animated depth.
+  let light2_depth = (sin(u.time * -0.38) * 0.5 + 0.5);
+  
+  // NEW: Calculate its occlusion the same way.
+  let light2_depth_occlusion = smoothstep(aa_visual_depth + depth_fade_margin, aa_visual_depth - depth_fade_margin, light2_depth); // USE AA
   
   let dist_to_light2 = distance(uv, light2_pos);
-
-  // NEW: Calculate the two parts for this light as well.
-  let core2 = 1.0 - smoothstep(light_core_radius * 0.5, light_core_radius, dist_to_light2);
-  let falloff2 = (1.0 - smoothstep(light_core_radius, light2_falloff_radius, dist_to_light2)) * light_falloff_intensity;
-
-  // MODIFIED: Combine them and apply depth occlusion.
-  let base_spotlight2 = (core2 + falloff2) * light2_depth_occlusion;
-  
-  var spotlight2_brightness = base_spotlight2 + (specular_sheen * base_spotlight2);
-  spotlight2_brightness *= (1.0 + caustic_boost * light_caustic_strength * 0.5);
+  // MODIFIED: Use the new depth occlusion logic.
+  let base_spotlight2 = (1.0 - smoothstep(0.05, light2_radius, dist_to_light2)) * light2_depth_occlusion;
+  let spotlight2_brightness = base_spotlight2 + (specular_sheen * base_spotlight2);
   let light2_color = vec3<f32>(1.0, 0.7, 0.2);
 
   // -- Combine ALL three lights (Logic Unchanged) ---
