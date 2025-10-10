@@ -132,21 +132,19 @@ export class Renderer {
     
     public async loadRandomImage(): Promise<string | undefined> {
         try {
-            if (this.imageUrls.length === 0) return undefined;
+            if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
-            const response = await fetch(imageUrl, { mode: 'cors' }); 
+            const response = await fetch(imageUrl); // No change here!
             const imageBitmap = await createImageBitmap(await response.blob());
-            const oldTexture = this.imageTexture;
+            if (this.imageTexture) {
+                this.imageTexture.destroy();
+            }
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba16float',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
-            await this.device.queue.onSubmittedWorkDone();
-            if (oldTexture) {
-                oldTexture.destroy();
-            }
             if (this.activeModeName) {
                 await this.setMode(this.activeModeName);
             }
