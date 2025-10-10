@@ -57,6 +57,7 @@ export class Renderer {
         }
         this.device.queue.writeTexture({ texture: this.depthTexture }, data, { bytesPerRow: width * 4 }, [width, height]);
     }
+    
     public async fetchImageUrls(): Promise<void> {
         const bucketName = 'my-sd35-space-images-2025';
         const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
@@ -70,6 +71,7 @@ export class Renderer {
             this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
         }
     }
+    
     public async loadRandomImage(): Promise<string | null> {
         this.isReady = false;
         try {
