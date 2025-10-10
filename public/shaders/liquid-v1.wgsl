@@ -3,7 +3,6 @@
 @group(0) @binding(2) var writeTexture: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(4) var readDepthTexture: texture_2d<f32>;
 @group(0) @binding(5) var non_filtering_sampler: sampler;
-// --- ADD THIS LINE ---
 @group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
 
 struct Uniforms {
@@ -28,8 +27,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
     let background_displacement = motion * base_ambient_strength;
 
-    let fg_rate = 0.9;
-    let base_fg_strength = 0.015;
+    let fg_rate = 0.79;
+    let base_fg_strength = 0.01;
     let fg_freq = 25.0;
     let fg_time = u.time * fg_rate;
     let fg_d1 = sin(uv.x * fg_freq + fg_time);
