@@ -84,6 +84,7 @@ function App() {
         }
         setStatus('Loading random image...');
         const newImageUrl = await rendererRef.current.loadRandomImage();
+
         if (newImageUrl) {
             if (depthEstimator) {
                 await runDepthAnalysis(newImageUrl);
@@ -111,9 +112,11 @@ function App() {
             const canvas = debugCanvasRef.current;
             const context = canvas.getContext('2d');
             if (!width || !height || !context) return;
+
             canvas.width = width;
             canvas.height = height;
             const imageData = context.createImageData(width, height);
+
             let min = Infinity, max = -Infinity;
             data.forEach((v: number) => {
                 if (v < min) min = v;
@@ -136,8 +139,6 @@ function App() {
             <h1>WebGPU Liquid + Depth Effect</h1>
             <p><strong>Status:</strong> {status}</p>
             <Controls
-                mode={mode}
-                setMode={setMode}
                 zoom={zoom} setZoom={setZoom}
                 panX={panX} setPanX={setPanX}
                 panY={panY} setPanY={setPanY}
@@ -156,10 +157,6 @@ function App() {
                 panX={panX}
                 panY={panY}
                 farthestPoint={farthestPoint}
-                mousePosition={mousePosition}
-                setMousePosition={setMousePosition}
-                isMouseDown={isMouseDown}
-                setIsMouseDown={setIsMouseDown}
             />
             {depthMapResult && (
                 <div className="debug-container">
