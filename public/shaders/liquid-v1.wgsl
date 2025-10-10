@@ -9,6 +9,7 @@ struct Uniforms {
     resolutionX: f32,
     resolutionY: f32,
 };
+
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 @compute @workgroup_size(8, 8, 1)
@@ -61,7 +62,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let spotlight_brightness = (1.0 - smoothstep(0.0, light_radius, dist_to_light)) * (1.0 - depth);
     
     // Apply the spotlight as an additive effect.
-    color.rgb += vec3<f32>(spotlight_brightness * 0.4);
+    color.rgb = color.rgb + vec3<f32>(spotlight_brightness * 0.4);
 
     // --- END: New Fog and Spotlight Logic ---
 
