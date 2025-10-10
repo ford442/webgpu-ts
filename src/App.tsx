@@ -24,9 +24,7 @@ function App() {
 env.allowLocalModels = false;
 env.backends.onnx.executionProviders = ['webgpu'];
 env.backends.onnx.logLevel = 'warning'; // Less verbose logging
-env.dtype = 'fp32'; 
-// --- END OF FIX ---
-
+const model_loc = 'https://huggingface.co/Xenova/dpt-hybrid-midas/resolve/main/onnx/model.onnx'
     
     useEffect(() => {
         rendererRef.current?.updateParams({
@@ -70,7 +68,7 @@ env.dtype = 'fp32';
         if (depthEstimator) { setStatus('Model already loaded.'); return; }
         try {
             setStatus('Loading model...');
-            const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas', {
+            const estimator = await pipeline('depth-estimation', model_loc, {
                 progress_callback: (progress) => {
                     setStatus(`Loading model... ${(progress.progress).toFixed(2)}%`);
                 }
