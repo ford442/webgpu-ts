@@ -11,6 +11,20 @@ struct Uniforms {
 };
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
+// A common and effective approximation of the ACES filmic tone mapping curve.
+// It takes an HDR color (with components > 1.0) and maps it to a visually
+// pleasing LDR color (in the [0.0, 1.0] range) for display.
+fn aces_tonemap(color: vec3<f32>) -> vec3<f32> {
+    // A, B, C, D, and E are constants that define the shape of the ACES curve.
+    let A = 2.51;
+    let B = 0.03;
+    let C = 2.43;
+    let D = 0.59;
+    let E = 0.14;
+    let hdr_color = color * (A * color + B);
+    return clamp(hdr_color / (color * (C * color + D) + E), vec3(0.0), vec3(1.0));
+}
+
 fn antialias_depth_sample(tex: texture_2d<f32>, samp: sampler, uv: vec2<f32>, texel_size: vec2<f32>) -> f32 {
   let offset = texel_size * 0.5;
   let s0 = textureSampleLevel(tex, samp, uv - offset, 0.0).r;
@@ -98,6 +112,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   var final_rgb = mix(color.rgb, sunlit_color, foreground_shadow_intensity);
   final_rgb += sunray_specular * sunray_color;
   
+  
   // --- Roaming Spotlights ---
   let light_core_radius = 0.02;
   let light_falloff_intensity = 0.15;
@@ -128,8 +143,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let light2_color = vec3<f32>(1.0, 0.7, 0.2);
   
   final_rgb += (light1_color * spotlight1_brightness) + (light2_color * spotlight2_brightness);
+  let exposure = 1.0;
   
+  // 1. Apply exposure to our HDR color.
+  let exposed_rgb = final_rgb * exposure;
+  
+  // 2. Apply the ACES tone mapping function to compress the HDR result into a displayable LDR range.
+  let tonemapped_rgb = aces_tonemap(exposed_rgb);
+
   // --- Final Output ---
-  color = vec4<f32>(final_rgb, color.a);
+  color = vec4<f32>(tonemapped_rgb, color.a);
   textureStore(writeTexture, global_id.xy, color);
 }
