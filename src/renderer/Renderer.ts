@@ -43,7 +43,7 @@ export class Renderer {
     // public stopMouseDrag() { this.cameraState.isDragging = false; }
 
     public updateZoom(deltaY: number) {
-        this.cameraState.zoom += deltaY * 0.001;
+        this.cameraState.zoom -= deltaY * 0.001;
         this.cameraState.zoom = Math.max(0.2, Math.min(5.0, this.cameraState.zoom));
     }
     
@@ -267,17 +267,16 @@ export class Renderer {
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
             new Float32Array([
-                // A new, cleaner layout for our uniforms
                 rotationX, rotationY,
                 this.mouseState.x, this.mouseState.y,
-                zoom,
+                this.cameraState.zoom, // Use manual zoom
                 this.params.displacementScale,
                 this.params.ambient,
                 this.params.smoothness,
                 this.params.pointSize,
                 this.backlightOn ? 1.0 : 0.0,
-                (now - this.startTime) / 1000.0, // Pass time in seconds for other effects
-                0.0 // Padding
+                (now - this.startTime) / 1000.0,
+                0.0
             ])
         );
         passEncoder.setPipeline(this.pipelines.get('depth')!);
