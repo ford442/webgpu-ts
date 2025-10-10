@@ -30,7 +30,16 @@ struct VertexOutput {
 const GRID_SIZE = 1024u;
 
 fn sample_depth(uv: vec2<f32>) -> f32 {
-    // ... (no changes in this function)
+    var smoothedDepth = 0.0;
+    let texelSize = 1.0 / vec2<f32>(textureDimensions(depthMap));
+    let sampleRadius = texelSize * u.smoothness;
+    for (var i = -1; i <= 1; i = i + 1) {
+        for (var j = -1; j <= 1; j = j + 1) {
+            let offset = vec2<f32>(f32(i), f32(j)) * sampleRadius;
+            smoothedDepth += textureSampleLevel(depthMap, u_sampler, uv + offset, 0.0).r;
+        }
+    }
+    return smoothedDepth / 9.0;
 }
 
 @vertex
