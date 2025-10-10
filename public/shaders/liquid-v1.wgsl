@@ -101,14 +101,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let depth_fade_margin = 0.05;
 
   // --- Spotlight 1 (Blue) ---
-  let light1_pos = vec2<f32>(sin(u.time * 0.5) * 0.5 + 0.5, cos(u.time * 0.3) * 0.5 + 0.5);
-  let light1_radius = 0.35;
-  // NEW: Give this light its own animated depth value from 0.0 to 1.0
-  let light1_depth = (cos(u.time * 0.45) * 0.5 + 0.5); // Using a different time multiplier for unique motion
-  
-  // NEW: Calculate occlusion based on comparing the light's depth to the scene's depth.
-  // This smoothly fades the light to 0 if it's behind a pixel.
-    let light1_depth_occlusion = smoothstep(aa_visual_depth + depth_fade_margin, aa_visual_depth - depth_fade_margin, light1_depth);
+  let light1_pos = vec2<f32>(sin(time * 0.5) * 0.5 + 0.5, cos(time * 0.3) * 0.5 + 0.5);
+  let light1_falloff_radius = 0.35; // This is the old radius, now used for the outer glow.
+  let light1_depth = (cos(time * 0.45) * 0.5 + 0.5);
+  let light1_depth_occlusion = smoothstep(aa_visual_depth + depth_fade_margin, aa_visual_depth - depth_fade_margin, light1_depth);
   
   let dist_to_light1 = distance(uv, light1_pos);
 
