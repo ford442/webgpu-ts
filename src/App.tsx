@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
-import Controls from './components/Controls';
+import Controls, { ModelDType } from './components/Controls';
 import { Renderer } from './renderer/Renderer';
 import { RenderMode } from './renderer/types';
 import { pipeline } from '@huggingface/transformers';
-import Controls, { ModelDType } from './components/Controls';
 
 import './style.css';
 
