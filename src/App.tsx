@@ -15,7 +15,7 @@ function App() {
     const [displacementScale, setDisplacementScale] = useState(0.3);
     const [ambientLight, setAmbientLight] = useState(0.2);
     const [smoothness, setSmoothness] = useState(1.0);
-    const [pointSize, setPointSize] = useState(3.0); // New state
+    const [pointSize, setPointSize] = useState(1.0); // New state
     
     useEffect(() => {
         rendererRef.current?.updateParams({
@@ -26,7 +26,6 @@ function App() {
         });
     }, [displacementScale, ambientLight, smoothness, pointSize]);
 
-    // ... (rest of the App.tsx file remains the same, no other changes needed) ...
     useEffect(() => {
         if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
             // This debug canvas logic is already correct, as it normalizes for display.
@@ -60,7 +59,14 @@ function App() {
         if (depthEstimator) { setStatus('Model already loaded.'); return; }
         try {
             setStatus('Loading model...');
-            const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
+            const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas', {
+                device: 'webgpu', // Use the GPU for faster processing
+                dtype: 'fp32',    // Use half-precision for less memory usage
+                progress_callback: (progress) => {
+                    // Update the status with the loading progress percentage
+                    setStatus(`Loading model... ${(progress.progress).toFixed(2)}%`);
+                }
+            });
             setDepthEstimator(() => estimator);
             setStatus('Model Loaded. Processing initial image...');
         } catch (e: any) {
