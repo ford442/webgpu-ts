@@ -1,7 +1,6 @@
 import React from 'react';
 import { RenderMode } from '../renderer/types';
 
-
 interface ControlsProps {
     mode: RenderMode;
     setMode: (mode: RenderMode) => void;
