@@ -16,8 +16,10 @@ interface ControlsProps {
     setAutoChangeEnabled: (enabled: boolean) => void;
     autoChangeDelay: number;
     setAutoChangeDelay: (delay: number) => void;
-    onLoadModel: () => void;
+      onLoadModel: () => void;
     isModelLoaded: boolean;
+    modelQuantized: boolean; // NEW
+    setModelQuantized: (quantized: boolean) => void; // NEW
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
@@ -28,12 +30,25 @@ const Controls: React.FC<ControlsProps> = ({
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
-    onLoadModel, isModelLoaded // NEW
+    onLoadModel, isModelLoaded,
+    modelQuantized, setModelQuantized // NEW
 }) => {
     const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple';
 
     return (
         <div className="controls">
+<div className="control-group">
+                <label htmlFor="model-type-select">AI Model Type:</label>
+                <select 
+                    id="model-type-select" 
+                    value={modelQuantized.toString()} 
+                    onChange={(e) => setModelQuantized(e.target.value === 'true')}
+                    disabled={isModelLoaded}
+                >
+                    <option value="false">Default (FP16/FP32)</option>
+                    <option value="true">Quantized (INT8 - Faster)</option>
+                </select>
+            </div>
 
             <div className="control-group">
         <button onClick={onLoadModel} disabled={isModelLoaded}>
