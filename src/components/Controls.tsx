@@ -1,6 +1,8 @@
 import React from 'react';
 import { RenderMode } from '../renderer/types';
 
+export type ModelDType = 'fp32' | 'q8' | 'q4';
+
 interface ControlsProps {
     mode: RenderMode;
     setMode: (mode: RenderMode) => void;
@@ -17,8 +19,8 @@ interface ControlsProps {
     setAutoChangeDelay: (delay: number) => void;
     onLoadModel: () => void;
     isModelLoaded: boolean;
-    modelQuantized: boolean; // NEW
-    setModelQuantized: (quantized: boolean) => void; // NEW
+    modelDtype: ModelDType; // MODIFIED
+    setModelDtype: (dtype: ModelDType) => void; // MODIFIED
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
@@ -30,7 +32,7 @@ const Controls: React.FC<ControlsProps> = ({
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
     onLoadModel, isModelLoaded,
-    modelQuantized, setModelQuantized // NEW
+    modelDtype, setModelDtype // MODIFIED
 }) => {
     const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple';
 
@@ -40,12 +42,13 @@ const Controls: React.FC<ControlsProps> = ({
                 <label htmlFor="model-type-select">AI Model Type:</label>
                 <select 
                     id="model-type-select" 
-                    value={modelQuantized.toString()} 
-                    onChange={(e) => setModelQuantized(e.target.value === 'true')}
+                    value={modelDtype} 
+                    onChange={(e) => setModelDtype(e.target.value as ModelDType)}
                     disabled={isModelLoaded}
                 >
-                    <option value="false">Default (FP16/FP32)</option>
-                    <option value="true">Quantized (INT8 - Faster)</option>
+                    <option value="fp32">Default (FP32)</option>
+                    <option value="q8">Quantized (INT8)</option>
+                    <option value="q4">Quantized (INT4)</option>
                 </select>
             </div>
             <div className="control-group">
