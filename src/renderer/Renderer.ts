@@ -56,7 +56,6 @@ export class Renderer {
             size: 24,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
-
         this.imageTexture = this.device.createTexture({ size: [1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
         this.writeTexture = this.device.createTexture({ size: [this.canvas.width, this.canvas.height], format: 'rgba16float', usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
         this.depthTextureRead = this.device.createTexture({ size: [1, 1], format: 'r32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING });
@@ -112,8 +111,20 @@ export class Renderer {
         this.device.queue.submit([commandEncoder.finish()]);
     }
     
-    private async fetchImageUrls(): Promise<void> { /* ... existing code ... */ }
-
+    private async fetchImageUrls(): Promise<void> {
+        const bucketName = 'my-sd35-space-images-2025';
+        const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            const data = await response.json();
+            this.imageUrls = data.items ? data.items.map((item: { name: string }) => `https://storage.googleapis.com/${bucketName}/${item.name}`) : [];
+        } catch (e) {
+            console.error("Failed to fetch image list:", e);
+            this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
+        }
+    }
+    
     public async loadRandomImage(): Promise<string | undefined> {
         this.isLoading = true;
         try {
@@ -121,24 +132,19 @@ export class Renderer {
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
-
             const oldTexture = this.imageTexture;
-
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba16float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
-
             if (oldTexture) {
                 oldTexture.destroy();
             }
-
             if (this.activeModeName) {
                 await this.setMode(this.activeModeName);
             }
-            
             return imageUrl;
         } catch (e) {
             console.error("Failed to load image:", e);
@@ -154,20 +160,16 @@ export class Renderer {
             this.isLoading = false;
             return;
         }
-
         const oldTexture = this.depthTextureRead;
-
         this.depthTextureRead = this.device.createTexture({
             size: [width, height],
             format: 'r32float',
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
         });
         this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4 }, [width, height]);
-        
         if (oldTexture) {
             oldTexture.destroy();
         }
-
         if (this.activeModeName) {
             await this.setMode(this.activeModeName);
         }
