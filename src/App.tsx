@@ -19,7 +19,7 @@ function App() {
   const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
   const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 });
   const [isMouseDown, setIsMouseDown] = useState(false);
-  const [modelQuantized, setModelQuantized] = useState(false); // NEW STATE
+  const [modelDtype, setModelDtype] = useState<ModelDType>('fp32'); // MODIFIED STATE
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -42,28 +42,28 @@ function App() {
             return;
         }
        try {
-            setStatus('Loading AI model (this may take a minute)...');
-            const dtype = modelQuantized ? 'q8' : 'fp32';
-
+            setStatus(`Loading AI model (${modelDtype})...`);
+            
+            // --- MODIFIED: The dtype is now passed directly from state ---
             const estimator = await pipeline(
                 'depth-estimation', 
                 'Xenova/dpt-hybrid-midas',
-                { dtype: dtype }
+                { dtype: modelDtype } 
             );
             setDepthEstimator(() => estimator);
-            setStatus('AI Model Loaded. New images will now have depth effects.');
+            setStatus(`AI Model Loaded (${modelDtype}). New images will have depth effects.`);
         } catch (e: any) {
             console.error(e);
             setStatus(`Failed to load AI model: ${e.message}`);
         }
     };
 
-   const handleSetModelQuantized = (quantized: boolean) => {
+    const handleSetModelDtype = (dtype: ModelDType) => {
         if (depthEstimator) {
             setDepthEstimator(null); // Unload the current model
             setStatus('Model type changed. Please click "Load AI Model" again.');
         }
-        setModelQuantized(quantized);
+        setModelDtype(dtype);
     };
   
   const runDepthAnalysis = useCallback(async (imageUrl: string) => {
@@ -170,8 +170,8 @@ function App() {
         setAutoChangeDelay={setAutoChangeDelay}
         onLoadModel={loadModel}
                 isModelLoaded={!!depthEstimator}
-                modelQuantized={modelQuantized} // Pass new state down
-                setModelQuantized={handleSetModelQuantized} // Pass new handler down
+                modelDtype={modelDtype} // Pass new state down
+                setModelDtype={handleSetModelDtype} // Pass new handler down
             />
        <WebGPUCanvas
         rendererRef={rendererRef}
