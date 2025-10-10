@@ -56,4 +56,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // By starting the smoothstep at 0.05, we create a soft core instead of a hard point.
     let spotlight_brightness = (1.0 - smoothstep(0.05, light_radius, dist_to_light)) * (1.0 - dynamic_depth);
     
-    let light_color = vec3<f32>(0.2, 0.5, 1.
+    let light_color = vec3<f32>(0.2, 0.5, 1.0);
+    let new_rgb = color.rgb + (light_color * spotlight_brightness);
+    color = vec4<f32>(new_rgb, color.a);
+
+    textureStore(writeTexture, global_id.xy, color);
+}
