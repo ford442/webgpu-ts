@@ -43,13 +43,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
   // --- Parallax Logic ---
   let static_depth_for_motion = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
-  let parallax_time = time * 0.5;
-  let base_ambient_strength = 0.004;
+  let parallax_time = time * 0.555;
+  let base_ambient_strength = 0.0077;
   let ambient_freq = 15.0;
   let motion = vec2<f32>(sin(uv.y * ambient_freq + parallax_time * 1.2), cos(uv.x * ambient_freq + parallax_time));
   let background_displacement = motion * base_ambient_strength;
-  let fg_rate = 0.79;
-  let base_fg_strength = 0.007;
+  let fg_rate = 0.85;
+  let base_fg_strength = 0.013;
   let fg_freq = 25.0;
   let fg_time = time * fg_rate;
   let fg_d1 = sin(uv.x * fg_freq + fg_time);
