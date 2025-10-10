@@ -60,11 +60,9 @@ const Controls: React.FC<ControlsProps> = ({
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
                 <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
-                    <option value="liquid-v1">Dynamic Lighting</option>
-                    {/* TODO: As you convert other shaders (like liquid.wgsl) into their own 
-                      mode modules, you will add their options back here.
-                    */}
-                </select>
+    <option value="liquid-v1">Dynamic Lighting</option>
+    <option value="liquid">Interactive Liquid</option> {/* ADD THIS OPTION */}
+</select>
             </div>
         </div>
     );
