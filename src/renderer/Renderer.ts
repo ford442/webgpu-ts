@@ -21,6 +21,7 @@ export class Renderer {
         zoom: 1.0,
     };
     private backlightOn = false;
+    private startTime = 0;
     private params = { displacementScale: 0.3, ambient: 0.3, smoothness: 1.0, pointSize: 1.0 };
     public isReady = false;
     private imageUrls: string[] = [];
@@ -40,11 +41,13 @@ export class Renderer {
     }
     
     // public stopMouseDrag() { this.cameraState.isDragging = false; }
-    
+    /*
     public updateZoom(deltaY: number) {
         this.cameraState.zoom += deltaY * 0.001;
         this.cameraState.zoom = Math.max(0.2, Math.min(5.0, this.cameraState.zoom));
     }
+    */
+    
     public updateDepthMap(data: Float32Array, width: number, height: number) {
         if (!this.device || !width || !height) return;
         if (!this.depthTexture || this.depthTexture.width !== width || this.depthTexture.height !== height) {
@@ -112,6 +115,7 @@ export class Renderer {
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied', usage: GPUTextureUsage.RENDER_ATTACHMENT });
+        this.startTime = performance.now(); // Start the animation timer
         await this.fetchImageUrls();
         await this.createResources();
         await this.createPipelines();
@@ -211,10 +215,11 @@ export class Renderer {
         // 5. Submit all recorded commands at once
         this.device.queue.submit([commandEncoder.finish()]);
     }
+    
     private async createResources(): Promise<void> {
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
         this.uniformBuffer = this.device.createBuffer({
-            size: 52, 
+            size: 64, // Increased size for new uniforms and alignment
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
     }
@@ -254,17 +259,26 @@ export class Renderer {
         const passEncoder = commandEncoder.beginRenderPass({
             colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1 } }]
         });
-            this.device.queue.writeBuffer(
+        const now = performance.now();
+        const time = (now - this.startTime) / 5000.0; // Slow down the animation
+        const rotationX = Math.sin(time * 0.5) * 0.25;
+        const rotationY = Math.cos(time * 0.3) * 0.35;
+        const zoom = 1.2 + Math.sin(time * 0.2) * 0.2;
+
+        this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
             new Float32Array([
-                this.cameraState.rotationX, this.cameraState.rotationY,
-                this.cameraState.zoom,
+                // A new, cleaner layout for our uniforms
+                rotationX, rotationY,
+                this.mouseState.x, this.mouseState.y,
+                zoom,
                 this.params.displacementScale,
                 this.params.ambient,
                 this.params.smoothness,
-                this.mouseState.x, this.mouseState.y,
                 this.params.pointSize,
-                this.backlightOn ? 1.0 : 0.0, 0.0, 0.0 // Padding
+                this.backlightOn ? 1.0 : 0.0,
+                (now - this.startTime) / 1000.0, // Pass time in seconds for other effects
+                0.0 // Padding
             ])
         );
         passEncoder.setPipeline(this.pipelines.get('depth')!);
