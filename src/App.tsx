@@ -7,148 +7,149 @@ import { pipeline } from '@huggingface/transformers';
 import './style.css';
 
 function App() {
-  const [mode, setMode] = useState<RenderMode>('liquid');
-  const [zoom, setZoom] = useState(1.0);
-  const [panX, setPanX] = useState(0.5);
-  const [panY, setPanY] = useState(0.5);
-  const [autoChangeEnabled, setAutoChangeEnabled] = useState(false);
-  const [autoChangeDelay, setAutoChangeDelay] = useState(10);
-  const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
-  const [depthEstimator, setDepthEstimator] = useState<any>(null);
-  const [depthMapResult, setDepthMapResult] = useState<any>(null);
-  const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
-  const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 });
-  const [isMouseDown, setIsMouseDown] = useState(false); // ADD THIS
+    const [mode, setMode] = useState<RenderMode>('liquid-perspective');
+    const [zoom, setZoom] = useState(1.0);
+    const [panX, setPanX] = useState(0.5);
+    const [panY, setPanY] = useState(0.5);
+    const [autoChangeEnabled, setAutoChangeEnabled] = useState(false);
+    const [autoChangeDelay, setAutoChangeDelay] = useState(10);
+    const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
+    const [depthEstimator, setDepthEstimator] = useState<any>(null);
+    const [depthMapResult, setDepthMapResult] = useState<any>(null);
+    const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
 
-  const rendererRef = useRef<Renderer | null>(null);
-  const debugCanvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const loadModel = async () => {
-    if (depthEstimator) {
-      setStatus('AI model is already loaded.');
-      return;
-    }
-    try {
-      setStatus('Loading AI model (this may take a minute)...');
-      const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
-      setDepthEstimator(() => estimator);
-      setStatus('AI Model Loaded. New images will now have depth effects.');
-    } catch (e: any) {
-      console.error(e);
-      setStatus(`Failed to load AI model: ${e.message}`);
-    }
-  };
+    const rendererRef = useRef<Renderer | null>(null);
+    const debugCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  const runDepthAnalysis = useCallback(async (imageUrl: string) => {
-    if (!depthEstimator || !rendererRef.current) return;
-    setStatus('Analyzing image with AI model...');
-    try {
-      const result = await depthEstimator(imageUrl);
-      const { data, dims } = result.predicted_depth;
-      const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
-      let min = Infinity, max = -Infinity;
-      let minIndex = 0; // Keep track of the index of the minimum depth value
-      data.forEach((v: number, i: number) => {
-        if (v < min) {
-          min = v;
-          minIndex = i; // Found a new minimum, store its index
-        }
-        if (v > max) max = v;
-      });
-      // Calculate the UV coordinates of the farthest point
-      const farthestY = Math.floor(minIndex / width);
-      const farthestX = minIndex % width;
-      setFarthestPoint({ x: farthestX / width, y: farthestY / height });
-      const range = max - min;
-      const normalizedData = new Float32Array(data.length);
-      for (let i = 0; i < data.length; ++i) {
-        normalizedData[i] = 1.0 - ((data[i] - min) / range);
-      }
-      setStatus('Updating depth map on GPU...');
-      rendererRef.current.updateDepthMap(normalizedData, width, height);
-      setDepthMapResult(result);
-      setStatus('Ready.');
-    } catch (e: any) {
-      console.error("Error during analysis:", e);
-      setStatus(`Failed to analyze image: ${e.message}`);
-    }
-  }, [depthEstimator]);
-
-  const handleNewImage = useCallback(async () => {
-    if (!rendererRef.current) {
-        console.warn("Renderer not ready yet.");
-        return;
-    }
-    setStatus('Loading random image...');
-    const newImageUrl = await rendererRef.current.loadRandomImage();
-    if (newImageUrl) {
+    const loadModel = async () => {
         if (depthEstimator) {
-            await runDepthAnalysis(newImageUrl);
-        } else {
-            // --- MODIFIED: Start of changes ---
-            // Reset farthest point if not using AI model
-            setFarthestPoint({ x: 0.5, y: 0.5 });
-            // --- MODIFIED: End of changes ---
-            setStatus('Ready. Load AI model to add depth effects.');
+            setStatus('AI model is already loaded.');
+            return;
         }
-    } else {
-        setStatus('Failed to load a random image.');
-    }
-  }, [depthEstimator, runDepthAnalysis]);
+        try {
+            setStatus('Loading AI model (this may take a minute)...');
+            const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
+            setDepthEstimator(() => estimator);
+            setStatus('AI Model Loaded. New images will now have depth effects.');
+        } catch (e: any) {
+            console.error(e);
+            setStatus(`Failed to load AI model: ${e.message}`);
+        }
+    };
 
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-    if (autoChangeEnabled && (mode.startsWith('liquid') || mode === 'image' || mode === 'ripple')) {
-      intervalId = setInterval(handleNewImage, autoChangeDelay * 1000);
-    }
-    return () => { if (intervalId) clearInterval(intervalId); };
-  }, [autoChangeEnabled, autoChangeDelay, mode, handleNewImage]);
+    const runDepthAnalysis = useCallback(async (imageUrl: string) => {
+        if (!depthEstimator || !rendererRef.current) return;
+        setStatus('Analyzing image with AI model...');
+        try {
+            const result = await depthEstimator(imageUrl);
+            const { data, dims } = result.predicted_depth;
+            const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
 
-  useEffect(() => {
-    if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
-      const { data, dims } = depthMapResult.predicted_depth;
-      const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
-      const canvas = debugCanvasRef.current;
-      const context = canvas.getContext('2d');
-      if (!width || !height || !context) return;
-      canvas.width = width;
-      canvas.height = height;
-      const imageData = context.createImageData(width, height);
-      let min = Infinity, max = -Infinity;
-      data.forEach((v: number) => {
-        if (v < min) min = v;
-        if (v > max) max = v;
-      });
-      const range = max - min;
-      for (let i = 0; i < data.length; ++i) {
-        const value = Math.round(((data[i] - min) / range) * 255);
-        imageData.data[i * 4 + 0] = value;
-        imageData.data[i * 4 + 1] = value;
-        imageData.data[i * 4 + 2] = value;
-        imageData.data[i * 4 + 3] = 255;
-      }
-      context.putImageData(imageData, 0, 0);
-    }
-  }, [depthMapResult]);
+            let min = Infinity, max = -Infinity;
+            let minIndex = 0;
+            data.forEach((v: number, i: number) => {
+                if (v < min) {
+                    min = v;
+                    minIndex = i;
+                }
+                if (v > max) max = v;
+            });
+
+            const farthestY = Math.floor(minIndex / width);
+            const farthestX = minIndex % width;
+            setFarthestPoint({ x: farthestX / width, y: farthestY / height });
+
+            const range = max - min;
+            const normalizedData = new Float32Array(data.length);
+
+            for (let i = 0; i < data.length; ++i) {
+                normalizedData[i] = 1.0 - ((data[i] - min) / range);
+            }
+
+            setStatus('Updating depth map on GPU...');
+            rendererRef.current.updateDepthMap(normalizedData, width, height);
+
+            setDepthMapResult(result);
+            setStatus('Ready.');
+        } catch (e: any) {
+            console.error("Error during analysis:", e);
+            setStatus(`Failed to analyze image: ${e.message}`);
+        }
+    }, [depthEstimator]);
+
+    const handleNewImage = useCallback(async () => {
+        if (!rendererRef.current) {
+            console.warn("Renderer not ready yet.");
+            return;
+        }
+        setStatus('Loading random image...');
+        const newImageUrl = await rendererRef.current.loadRandomImage();
+
+        if (newImageUrl) {
+            if (depthEstimator) {
+                await runDepthAnalysis(newImageUrl);
+            } else {
+                setFarthestPoint({ x: 0.5, y: 0.5 });
+                setStatus('Ready. Load AI model to add depth effects.');
+            }
+        } else {
+            setStatus('Failed to load a random image.');
+        }
+    }, [depthEstimator, runDepthAnalysis]);
+
+    useEffect(() => {
+        let intervalId: NodeJS.Timeout | null = null;
+        if (autoChangeEnabled) {
+            intervalId = setInterval(handleNewImage, autoChangeDelay * 1000);
+        }
+        return () => { if (intervalId) clearInterval(intervalId); };
+    }, [autoChangeEnabled, autoChangeDelay, handleNewImage]);
+
+    useEffect(() => {
+        if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
+            const { data, dims } = depthMapResult.predicted_depth;
+            const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
+            const canvas = debugCanvasRef.current;
+            const context = canvas.getContext('2d');
+            if (!width || !height || !context) return;
+
+            canvas.width = width;
+            canvas.height = height;
+            const imageData = context.createImageData(width, height);
+
+            let min = Infinity, max = -Infinity;
+            data.forEach((v: number) => {
+                if (v < min) min = v;
+                if (v > max) max = v;
+            });
+            const range = max - min;
+            for (let i = 0; i < data.length; ++i) {
+                const value = Math.round(((data[i] - min) / range) * 255);
+                imageData.data[i * 4 + 0] = value;
+                imageData.data[i * 4 + 1] = value;
+                imageData.data[i * 4 + 2] = value;
+                imageData.data[i * 4 + 3] = 255;
+            }
+            context.putImageData(imageData, 0, 0);
+        }
+    }, [depthMapResult]);
 
     return (
         <div id="app-container">
             <h1>WebGPU Liquid + Depth Effect</h1>
             <p><strong>Status:</strong> {status}</p>
             <Controls
-              mode={mode} // ADD THIS LINE
-              setMode={setMode} // ADD THIS LINE
-              zoom={zoom} setZoom={setZoom}
-              panX={panX} setPanX={setPanX}
-              panY={panY} setPanY={setPanY}
-              onNewImage={handleNewImage}
-              autoChangeEnabled={autoChangeEnabled}
-              setAutoChangeEnabled={setAutoChangeEnabled}
-              autoChangeDelay={autoChangeDelay}
-              setAutoChangeDelay={setAutoChangeDelay}
-              onLoadModel={loadModel}
-              isModelLoaded={!!depthEstimator}
-          />
+                zoom={zoom} setZoom={setZoom}
+                panX={panX} setPanX={setPanX}
+                panY={panY} setPanY={setPanY}
+                onNewImage={handleNewImage}
+                autoChangeEnabled={autoChangeEnabled}
+                setAutoChangeEnabled={setAutoChangeEnabled}
+                autoChangeDelay={autoChangeDelay}
+                setAutoChangeDelay={setAutoChangeDelay}
+                onLoadModel={loadModel}
+                isModelLoaded={!!depthEstimator}
+            />
             <WebGPUCanvas
                 rendererRef={rendererRef}
                 mode={mode}
