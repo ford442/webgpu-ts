@@ -35,8 +35,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
         };
     }, [rendererRef]); 
 
-    // --- FIX IS HERE: Manually add wheel listener with passive: false ---
-    useEffect(() => {
+   useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
