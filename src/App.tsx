@@ -23,7 +23,8 @@ function App() {
   const [modelDtype, setModelDtype] = useState<ModelDType>('fp32'); // MODIFIED STATE
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
-  
+  const [isLoading, setIsLoading] = useState(true); // App now controls loading
+
   const setMode = useCallback((newMode: RenderMode) => {
     _setMode(newMode);
     if (rendererRef.current) {
@@ -69,54 +70,44 @@ function App() {
   
   const runDepthAnalysis = useCallback(async (imageUrl: string) => {
     if (!depthEstimator || !rendererRef.current) return;
-    setStatus('Analyzing image with AI model...');
+    setIsLoading(true); // PAUSE RENDER
+    setStatus('Analyzing image with AI...');
     try {
       const result = await depthEstimator(imageUrl);
       const { data, dims } = result.predicted_depth;
       const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
-      let min = Infinity, max = -Infinity;
-      let minIndex = 0; // Keep track of the index of the minimum depth value
-      data.forEach((v: number, i: number) => {
-        if (v < min) {
-          min = v;
-          minIndex = i; // Found a new minimum, store its index
-        }
-        if (v > max) max = v;
-      });
-      const farthestY = Math.floor(minIndex / width);
-      const farthestX = minIndex % width;
-      setFarthestPoint({ x: farthestX / width, y: farthestY / height });
-      const range = max - min;
-      const normalizedData = new Float32Array(data.length);
-      for (let i = 0; i < data.length; ++i) {
-        normalizedData[i] = 1.0 - ((data[i] - min) / range);
-      }
-      setStatus('Updating depth map on GPU...');
-      rendererRef.current.updateDepthMap(normalizedData, width, height);
-      setDepthMapResult(result);
+      const range = Math.max(...data) - Math.min(...data);
+      const normalizedData = new Float32Array(data.map((v: number) => 1.0 - ((v - Math.min(...data)) / range)));
+      setStatus('Updating depth map...');
+      await rendererRef.current.updateDepthMap(normalizedData, width, height);
       setStatus('Ready.');
     } catch (e: any) {
       console.error("Error during analysis:", e);
       setStatus(`Failed to analyze image: ${e.message}`);
+    } finally {
+      setIsLoading(false); // RESUME RENDER
     }
   }, [depthEstimator]);
 
   const handleNewImage = useCallback(async () => {
-    if (!rendererRef.current) {
-        console.warn("Renderer not ready yet.");
-        return;
-    }
+    if (!rendererRef.current) return;
+    setIsLoading(true); // PAUSE RENDER
     setStatus('Loading random image...');
-    const newImageUrl = await rendererRef.current.loadRandomImage();
-    if (newImageUrl) {
-        if (depthEstimator) {
-            await runDepthAnalysis(newImageUrl);
+    try {
+        const newImageUrl = await rendererRef.current.loadRandomImage();
+        if (newImageUrl && depthEstimator) {
+            // runDepthAnalysis will set loading to false when it's done
+            await runDepthAnalysis(newImageUrl); 
+        } else if (newImageUrl) {
+            setStatus('Ready.');
+            setIsLoading(false); // RESUME RENDER
         } else {
-            setFarthestPoint({ x: 0.5, y: 0.5 });
-            setStatus('Ready. Load AI model to add depth effects.');
+            setStatus('Failed to load a random image.');
+            setIsLoading(false); // RESUME RENDER
         }
-    } else {
-        setStatus('Failed to load a random image.');
+    } catch (e) {
+        setStatus('Failed to load image.');
+        setIsLoading(false); // RESUME RENDER
     }
   }, [depthEstimator, runDepthAnalysis]);
 
@@ -170,9 +161,9 @@ function App() {
         autoChangeDelay={autoChangeDelay}
         setAutoChangeDelay={setAutoChangeDelay}
         onLoadModel={loadModel}
-                isModelLoaded={!!depthEstimator}
-                modelDtype={modelDtype} // Pass new state down
-                setModelDtype={handleSetModelDtype} // Pass new handler down
+        isModelLoaded={!!depthEstimator}
+        modelDtype={modelDtype}
+        setModelDtype={handleSetModelDtype}
             />
        <WebGPUCanvas
         rendererRef={rendererRef}
@@ -185,6 +176,8 @@ function App() {
         setMousePosition={setMousePosition}
         isMouseDown={isMouseDown}
         setIsMouseDown={setIsMouseDown}
+        isLoading={isLoading} // Pass loading state down
+        onReady={() => setIsLoading(false)} // Callback to resume render after init
       />
       {depthMapResult && (
         <div className="debug-container">
