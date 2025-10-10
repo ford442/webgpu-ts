@@ -132,16 +132,28 @@ export class Renderer {
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
-            if (this.imageTexture) this.imageTexture.destroy();
+
+            // 1. Store the old texture in a temporary variable.
+            const oldTexture = this.imageTexture;
+
+            // 2. Create the new texture and assign it.
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba16float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
+
+            // 3. Destroy the old texture *after* the new one is created.
+            if (oldTexture) {
+                oldTexture.destroy();
+            }
+
+            // 4. Re-initialize the active mode to update its bind groups with the new texture.
             if (this.activeModeName) {
                 await this.setMode(this.activeModeName);
             }
+            
             return imageUrl;
         } catch (e) {
             console.error("Failed to load image:", e);
@@ -151,13 +163,24 @@ export class Renderer {
 
     public async updateDepthMap(data: Float32Array, width: number, height: number): Promise<void> {
         if (!this.device) return;
-        if (this.depthTextureRead) this.depthTextureRead.destroy();
+
+        // 1. Store the old texture.
+        const oldTexture = this.depthTextureRead;
+
+        // 2. Create and assign the new texture.
         this.depthTextureRead = this.device.createTexture({
             size: [width, height],
             format: 'r32float',
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
         });
         this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4 }, [width, height]);
+        
+        // 3. Destroy the old texture.
+        if (oldTexture) {
+            oldTexture.destroy();
+        }
+
+        // 4. Re-initialize the active mode to update its bind groups.
         if (this.activeModeName) {
             await this.setMode(this.activeModeName);
         }
