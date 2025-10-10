@@ -71,14 +71,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
   // --- Atmospheric Effects ---
   let bg_shadow_color = vec4<f32>(0.12, 0.12, 0.15, 1.0);  
-  let bg_shadow_intensity = smoothstep(0.4, 0.9, aa_visual_depth) * 0.85;
+  // MODIFIED: Reduced the background shadow intensity from 0.85 to 0.65
+  let bg_shadow_intensity = smoothstep(0.4, 0.9, aa_visual_depth) * 0.65;
   color = mix(color, bg_shadow_color, bg_shadow_intensity);
   let foreground_fog_color = vec3<f32>(0.6, 0.6, 0.7);
   let foreground_fog_intensity = smoothstep(0.2, 0.8, 1.0 - aa_visual_depth) * 0.18;
   let new_rgb_with_fog = color.rgb + (foreground_fog_color * foreground_fog_intensity);
   color = vec4<f32>(new_rgb_with_fog, color.a);
   
-  // MODIFIED: Make foreground shadows deeper
   let foreground_shadow_color = vec4<f32>(0.02, 0.02, 0.05, 1.0);
   let foreground_shadow_intensity = smoothstep(0.4, 0.0, aa_visual_depth) * 0.95;
 
@@ -88,7 +88,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let normal_factor = abs(sharp_visual_depth - depth_right) + abs(sharp_visual_depth - depth_up);
   let specular_sheen = smoothstep(0.01, 0.05, normal_factor) * 1.5;
 
-  // --- Two Sunrays and New Lighting Model ---
+  // --- Two Sunrays and New Lighting Model (Unchanged) ---
   let sunray1_pos = vec2<f32>(0.5 + sin(time * 0.25) * 0.4, 1.3);
   let ray_stretch_factor1 = vec2<f32>(1.0, 0.15);
   let dist_to_sunray1 = distance(uv * ray_stretch_factor1, sunray1_pos * ray_stretch_factor1);
@@ -98,12 +98,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let dist_to_sunray2 = distance(uv * ray_stretch_factor2, sunray2_pos * ray_stretch_factor2);
   let base_sunray2 = (1.0 - smoothstep(0.0, 0.15, dist_to_sunray2)) * pow(1.0 - aa_visual_depth, 2.5);
   
-  // MODIFIED: Sunrays are more powerful
   let total_sunray_intensity = clamp(base_sunray1 * 1.5 + base_sunray2 * 1.3, 0.0, 1.0);
   let sunray_specular = specular_sheen * total_sunray_intensity * 1.5;
   let sunray_color = vec3<f32>(1.0, 0.95, 0.85);
 
-  // MODIFIED: The fully-lit state is much brighter for higher contrast
   let FOREGROUND_LIT_MULTIPLIER = 2.2;
   let shadowed_foreground_color = mix(color.rgb, foreground_shadow_color.rgb, foreground_shadow_intensity);
   let lit_foreground_color = color.rgb * FOREGROUND_LIT_MULTIPLIER;
