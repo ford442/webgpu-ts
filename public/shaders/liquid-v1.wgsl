@@ -2,7 +2,7 @@
 @group(0) @binding(1) var readTexture: texture_2d<f32>;
 // NOTE: I've changed the format back to rgba16float as rgba32float is often overkill
 // and can be slower. You can change it back if you have a specific need for 32-bit.
-@group(0) @binding(2) var writeTexture: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(2) var writeTexture: texture_storage_2d<rgba32float, write>;
 @group(0) @binding(4) var readDepthTexture: texture_2d<f32>;
 @group(0) @binding(5) var non_filtering_sampler: sampler;
 
