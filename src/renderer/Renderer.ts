@@ -1,4 +1,3 @@
-// (This is the full file for clarity)
 export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid' | 'depth';
 
 const GRID_SIZE = 1024;
@@ -17,14 +16,12 @@ export class Renderer {
 
     private mouseState = { x: 0.5, y: 0.5 };
     private cameraState = {
-        rotationX: 0.5,
+        rotationX: 0.2,
         rotationY: 0,
         zoom: 1.0,
-        isDragging: false,
-        lastMouseX: 0,
-        lastMouseY: 0,
     };
-    private params = { displacementScale: 0.3, ambient: 0.3, smoothness: 1.0, pointSize: 3.0 };
+    private backlightOn = false;
+    private params = { displacementScale: 0.3, ambient: 0.3, smoothness: 1.0, pointSize: 1.0 };
     public isReady = false;
     private imageUrls: string[] = [];
 
@@ -32,28 +29,18 @@ export class Renderer {
 
     public updateParams(params: any) { this.params = params; }
 
-    public updateMouse(x: number, y: number, isDragging: boolean) {
+    public updateMouse(x: number, y: number) {
         this.mouseState.x = x / this.canvas.width;
         this.mouseState.y = y / this.canvas.height;
-        
-        if (isDragging) {
-            if (!this.cameraState.isDragging) {
-                this.cameraState.isDragging = true;
-                this.cameraState.lastMouseX = x;
-                this.cameraState.lastMouseY = y;
-            } else {
-                const dx = x - this.cameraState.lastMouseX;
-                const dy = y - this.cameraState.lastMouseY;
-                this.cameraState.rotationY += dx * 0.01;
-                this.cameraState.rotationX += dy * 0.01;
-                this.cameraState.rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.cameraState.rotationX));
-                this.cameraState.lastMouseX = x;
-                this.cameraState.lastMouseY = y;
-            }
-        }
     }
-
+    
+    public toggleBacklight() {
+        this.backlightOn = !this.backlightOn;
+        console.log("Backlight state:", this.backlightOn);
+    }
+    
     public stopMouseDrag() { this.cameraState.isDragging = false; }
+    
     public updateZoom(deltaY: number) {
         this.cameraState.zoom += deltaY * 0.001;
         this.cameraState.zoom = Math.max(0.2, Math.min(5.0, this.cameraState.zoom));
@@ -223,13 +210,13 @@ export class Renderer {
         this.device.queue.submit([commandEncoder.finish()]);
     }
     private async createResources(): Promise<void> {
-        // Now with mipmapping support
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
         this.uniformBuffer = this.device.createBuffer({
-            size: 48, // Now holds rotation, zoom, displace, ambient, smooth, light, pointsize
+            size: 52, 
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
     }
+    
     private async createPipelines(): Promise<void> {
         try {
             const displacementCode = await fetch('shaders/parallax.wgsl').then(res => res.text());
@@ -242,6 +229,7 @@ export class Renderer {
             }));
         } catch(e) { console.error("Pipeline creation failed:", e); }
     }
+    
     public createBindGroups(): void {
         this.isReady = false;
         if (!this.imageTexture || !this.depthTexture || !this.pipelines.has('depth')) return;
@@ -256,6 +244,7 @@ export class Renderer {
         }));
         this.isReady = true;
     }
+    
     public render(): void {
         if (!this.isReady || !this.device || !this.context) return;
         const commandEncoder = this.device.createCommandEncoder();
@@ -265,6 +254,8 @@ export class Renderer {
         });
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
+            this.device.queue.writeBuffer(
+            this.uniformBuffer, 0,
             new Float32Array([
                 this.cameraState.rotationX, this.cameraState.rotationY,
                 this.cameraState.zoom,
@@ -272,7 +263,9 @@ export class Renderer {
                 this.params.ambient,
                 this.params.smoothness,
                 this.mouseState.x, this.mouseState.y,
-                this.params.pointSize
+                this.params.pointSize,
+                this.backlightOn ? 1.0 : 0.0, // The new backlight flag
+                0.0, 0.0 // Padding
             ])
         );
         passEncoder.setPipeline(this.pipelines.get('depth')!);
