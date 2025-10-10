@@ -80,7 +80,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   color = vec4<f32>(new_rgb_with_fog, color.a);
   
   let foreground_shadow_color = vec4<f32>(0.02, 0.02, 0.05, 1.0);
-  let foreground_shadow_intensity = smoothstep(0.4, 0.0, aa_visual_depth) * 0.95;
+  let foreground_shadow_intensity = smoothstep(0.6, 0.0, aa_visual_depth) * 0.95;
 
   // --- Shared Light Calculations (Unchanged) ---
   let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(pixelSize.x, 0.0), 0.0).r;
