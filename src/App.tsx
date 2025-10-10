@@ -136,17 +136,19 @@ function App() {
             <h1>WebGPU Liquid + Depth Effect</h1>
             <p><strong>Status:</strong> {status}</p>
             <Controls
-                zoom={zoom} setZoom={setZoom}
-                panX={panX} setPanX={setPanX}
-                panY={panY} setPanY={setPanY}
-                onNewImage={handleNewImage}
-                autoChangeEnabled={autoChangeEnabled}
-                setAutoChangeEnabled={setAutoChangeEnabled}
-                autoChangeDelay={autoChangeDelay}
-                setAutoChangeDelay={setAutoChangeDelay}
-                onLoadModel={loadModel}
-                isModelLoaded={!!depthEstimator}
-            />
+              mode={mode} // ADD THIS LINE
+              setMode={setMode} // ADD THIS LINE
+              zoom={zoom} setZoom={setZoom}
+              panX={panX} setPanX={setPanX}
+              panY={panY} setPanY={setPanY}
+              onNewImage={handleNewImage}
+              autoChangeEnabled={autoChangeEnabled}
+              setAutoChangeEnabled={setAutoChangeEnabled}
+              autoChangeDelay={autoChangeDelay}
+              setAutoChangeDelay={setAutoChangeDelay}
+              onLoadModel={loadModel}
+              isModelLoaded={!!depthEstimator}
+          />
             <WebGPUCanvas
                 rendererRef={rendererRef}
                 mode={mode}
