@@ -2,10 +2,9 @@
 @group(0) @binding(1) var sourceImage: texture_2d<f32>;
 @group(0) @binding(2) var depthMap: texture_2d<f32>;
 
-// Updated uniform structure to match the new layout in Renderer.ts
 struct Uniforms {
     rotation: vec2<f32>,
-    lightPos: vec2<f32>, // Was mouse position, now used for light
+    lightPos: vec2<f32>,
     zoom: f32,
     displacementScale: f32,
     ambientLight: f32,
@@ -115,59 +114,54 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let textureColor = textureSample(sourceImage, u_sampler, in.fragUV).rgb;
     let normal = normalize(in.worldNormal);
     
-    var finalColor = vec3<f32>(0.0);
+    // --- MODIFICATION START ---
+    
+    // 1. Always calculate the standard front lighting as the base color.
+    let front_light_pos = vec3<f32>( (u.lightPos.x * 2.0 - 1.0), (1.0 - u.lightPos.y) * 2.0 - 1.0, -1.0);
+    let front_light_dir = normalize(front_light_pos - in.worldPos);
+    let front_diffuse = max(dot(normal, front_light_dir), 0.0) * 0.8;
+    let front_lighting = u.ambientLight + front_diffuse;
+    var finalColor = textureColor * front_lighting;
 
+    // 2. If the backlight is on, calculate its effects and ADD them to the base color.
     if (u.backlightOn > 0.5) {
-        // --- MODIFICATION START ---
-        // --- New Additive Backlight Logic ---
         let backlightColor = vec3<f32>(1.0, 0.85, 0.7);
-        let backlightIntensity = 2.0;
+        let backlightIntensity = 2.5;
 
-        // --- Light and view vectors ---
-        let light_pos_3d = vec3<f32>((u.lightPos.x * 2.0 - 1.0), (1.0 - u.lightPos.y) * 2.0 - 1.0, 1.5);
-        let light_dir = normalize(light_pos_3d - in.worldPos);
-        let view_dir = normalize(-in.worldPos); // Assuming camera is at origin
+        // Light and view vectors for backlight effects
+        let back_light_pos = vec3<f32>((u.lightPos.x * 2.0 - 1.0), (1.0 - u.lightPos.y) * 2.0 - 1.0, 1.5);
+        let back_light_dir = normalize(back_light_pos - in.worldPos);
+        let view_dir = normalize(-in.worldPos);
 
-        // 1. Start with the texture color in some ambient light
-        let ambient_color = textureColor * u.ambientLight * 0.8;
-
-        // 2. Add the "shine-through" light based on image brightness
+        // Calculate "shine-through" light based on image brightness
         let luminance = dot(textureColor, vec3<f32>(0.299, 0.587, 0.114));
-        let through_light = backlightColor * pow(luminance, 3.0) * backlightIntensity;
+        let through_light = backlightColor * pow(luminance, 4.0) * backlightIntensity;
         
-        // 3. Add a rim light for definition
-        let diffuse = max(dot(normal, light_dir), 0.0);
+        // Calculate rim light for definition
+        let back_diffuse = max(dot(normal, back_light_dir), 0.0);
         let rim_dot = pow(1.0 - max(dot(view_dir, normal), 0.0), 2.0);
-        let rim_light = backlightColor * rim_dot * diffuse * backlightIntensity;
+        let rim_light = backlightColor * rim_dot * back_diffuse * backlightIntensity;
 
-        // 4. Add the glow from bright neighbors (unchanged)
+        // Calculate glow from bright neighbors
         var glow = vec3<f32>(0.0);
         let texelSize = 1.0 / vec2<f32>(textureDimensions(sourceImage));
-        let glowRadius = 4.0;
+        let glowRadius = 3.0;
         for (var i = -2; i <= 2; i = i + 1) {
             for (var j = -2; j <= 2; j = j + 1) {
                 if (i == 0 && j == 0) { continue; }
                 let offset = vec2<f32>(f32(i), f32(j)) * texelSize * glowRadius;
                 let neighborColor = textureSample(sourceImage, u_sampler, in.fragUV + offset).rgb;
                 let neighborLuminance = dot(neighborColor, vec3<f32>(0.299, 0.587, 0.114));
-                if (neighborLuminance > 0.7) {
-                    glow += backlightColor * pow(neighborLuminance, 5.0) * 0.05;
+                if (neighborLuminance > 0.6) {
+                    glow += backlightColor * pow(neighborLuminance, 5.0) * 0.04;
                 }
             }
         }
 
-        // 5. Combine all the light components
-        finalColor = ambient_color + through_light + rim_light + glow;
-        // --- MODIFICATION END ---
-
-    } else {
-        // --- Original Front Light Logic ---
-        let light_pos_3d = vec3<f32>( (u.lightPos.x * 2.0 - 1.0), (1.0 - u.lightPos.y) * 2.0 - 1.0, -1.0);
-        let light_dir = normalize(light_pos_3d - in.worldPos);
-        let diffuse = max(dot(normal, light_dir), 0.0) * 0.8;
-        let lighting = u.ambientLight + diffuse;
-        finalColor = textureColor * lighting;
+        // Add the backlight effects to the final color
+        finalColor += through_light + rim_light + glow;
     }
+    // --- MODIFICATION END ---
     
     return vec4<f32>(finalColor, 1.0);
 }
