@@ -286,7 +286,7 @@ export class Renderer {
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
             }
             computePass.end();
-            if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex' || mode === 'liquid-v1') {
+if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex') {
                 this.swapDepthTextures();
             }
         }
