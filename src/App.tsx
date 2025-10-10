@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
 import './style.css';
-import { pipeline } from '@xenova/transformers';
+import { pipeline, env } from '@xenova/transformers';
 
 function App() {
     const [status, setStatus] = useState('Click "Load Model" to start.');
@@ -16,6 +16,17 @@ function App() {
     const [ambientLight, setAmbientLight] = useState(0.2);
     const [smoothness, setSmoothness] = useState(1.0);
     const [pointSize, setPointSize] = useState(1.0); // New state
+
+    
+    // --- FIX IS HERE ---
+// 2. Configure the environment to use WebGPU and 16-bit floats.
+// This tells the library to use the GPU for all subsequent model operations.
+env.allowLocalModels = false;
+env.backends.onnx.executionProviders = ['webgpu'];
+env.backends.onnx.logLevel = 'warning'; // Less verbose logging
+env.dtype = 'fp32'; 
+// --- END OF FIX ---
+
     
     useEffect(() => {
         rendererRef.current?.updateParams({
@@ -60,10 +71,7 @@ function App() {
         try {
             setStatus('Loading model...');
             const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas', {
-                device: 'webgpu', // Use the GPU for faster processing
-                dtype: 'fp32',    // Use half-precision for less memory usage
                 progress_callback: (progress) => {
-                    // Update the status with the loading progress percentage
                     setStatus(`Loading model... ${(progress.progress).toFixed(2)}%`);
                 }
             });
