@@ -7,7 +7,6 @@ import { pipeline } from '@huggingface/transformers';
 import './style.css';
 
 function App() {
-  // Use _setMode for the raw state setter
   const [mode, _setMode] = useState<RenderMode>('liquid-v1');
   const [zoom, setZoom] = useState(1.0);
   const [panX, setPanX] = useState(0.5);
@@ -19,31 +18,23 @@ function App() {
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
   const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
   const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 });
-const [isMouseDown, setIsMouseDown] = useState(false);
-    const [modelQuantized, setModelQuantized] = useState(false); // NEW STATE
-
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const [modelQuantized, setModelQuantized] = useState(false); // NEW STATE
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
   
-  // --- MODIFIED: Create a new setMode function ---
-  // This function updates the React state AND tells the renderer to load the new mode module.
   const setMode = useCallback((newMode: RenderMode) => {
     _setMode(newMode);
     if (rendererRef.current) {
         rendererRef.current.setMode(newMode);
     }
-  }, []); // rendererRef is stable, so no dependencies needed
+  }, []);
 
-  // --- MODIFIED: useEffect to initialize the first mode ---
-  // This effect runs once when the renderer is ready.
   useEffect(() => {
-    // Check if the renderer has been initialized in WebGPUCanvas
     if (rendererRef.current) {
-        // Set the initial mode
         setMode(mode);
     }
   }, [rendererRef.current]); // Dependency on the renderer being assigned
-
 
   const loadModel = async () => {
         if (depthEstimator) {
@@ -52,16 +43,12 @@ const [isMouseDown, setIsMouseDown] = useState(false);
         }
        try {
             setStatus('Loading AI model (this may take a minute)...');
-            
-            // --- THIS IS THE CORRECTED CODE ---
-            // The 'quantized' option is replaced with 'dtype'.
-            // We select the data type based on the user's choice.
             const dtype = modelQuantized ? 'q8' : 'fp32';
 
             const estimator = await pipeline(
                 'depth-estimation', 
                 'Xenova/dpt-hybrid-midas',
-                { dtype: dtype } // Use the new dtype option
+                { dtype: dtype }
             );
             setDepthEstimator(() => estimator);
             setStatus('AI Model Loaded. New images will now have depth effects.');
@@ -95,7 +82,6 @@ const [isMouseDown, setIsMouseDown] = useState(false);
         }
         if (v > max) max = v;
       });
-      // Calculate the UV coordinates of the farthest point
       const farthestY = Math.floor(minIndex / width);
       const farthestX = minIndex % width;
       setFarthestPoint({ x: farthestX / width, y: farthestY / height });
@@ -125,10 +111,7 @@ const [isMouseDown, setIsMouseDown] = useState(false);
         if (depthEstimator) {
             await runDepthAnalysis(newImageUrl);
         } else {
-            // --- MODIFIED: Start of changes ---
-            // Reset farthest point if not using AI model
             setFarthestPoint({ x: 0.5, y: 0.5 });
-            // --- MODIFIED: End of changes ---
             setStatus('Ready. Load AI model to add depth effects.');
         }
     } else {
