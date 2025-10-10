@@ -126,7 +126,7 @@ export class Renderer {
     }
     
     public async loadRandomImage(): Promise<string | undefined> {
-        this.isLoading = true;
+        this.isLoading = true; // PAUSE the render loop
         try {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
@@ -136,7 +136,7 @@ export class Renderer {
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba16float',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
             if (oldTexture) {
@@ -150,16 +150,13 @@ export class Renderer {
             console.error("Failed to load image:", e);
             return undefined;
         } finally {
-            this.isLoading = false;
+            this.isLoading = false; // RESUME the render loop
         }
     }
 
     public async updateDepthMap(data: Float32Array, width: number, height: number): Promise<void> {
-        this.isLoading = true;
-        if (!this.device) {
-            this.isLoading = false;
-            return;
-        }
+        this.isLoading = true; // PAUSE the render loop
+        if (!this.device) return;
         const oldTexture = this.depthTextureRead;
         this.depthTextureRead = this.device.createTexture({
             size: [width, height],
@@ -173,6 +170,6 @@ export class Renderer {
         if (this.activeModeName) {
             await this.setMode(this.activeModeName);
         }
-        this.isLoading = false;
+        this.isLoading = false; // RESUME the render loop
     }
 }
