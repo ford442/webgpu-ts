@@ -24,7 +24,6 @@ struct VertexOutput {
 const GRID_SIZE = 1024u;
 
 fn sample_depth(uv: vec2<f32>) -> f32 {
-    // ... (This helper function is unchanged)
     var smoothedDepth = 0.0;
     let texelSize = 1.0 / vec2<f32>(textureDimensions(depthMap));
     let sampleRadius = texelSize * u.smoothness;
@@ -39,15 +38,24 @@ fn sample_depth(uv: vec2<f32>) -> f32 {
 
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
-    // Decode which point and which corner of the quad we're processing
-    let point_index = in_vertex_index / 4u;
-    let corner_index = in_vertex_index % 4u;
+    let point_index = in_vertex_index / 6u;
+    let vertex_in_quad = in_vertex_index % 6u;
+
+    let corner_offsets = array<vec2<f32>, 4>(
+        vec2<f32>(-1.0, 1.0), // 0: Top-left
+        vec2<f32>(1.0, 1.0),  // 1: Top-right
+        vec2<f32>(-1.0, -1.0), // 2: Bottom-left
+        vec2<f32>(1.0, -1.0)  // 3: Bottom-right
+    );
+
+    let triangle_indices = array<u32, 6>(0u, 1u, 2u, 2u, 1u, 3u);
+    let corner_index = triangle_indices[vertex_in_quad];
+    let chosen_offset = corner_offsets[corner_index];
 
     let x = point_index % GRID_SIZE;
     let y = point_index / GRID_SIZE;
     let uv = vec2<f32>(f32(x) / f32(GRID_SIZE - 1u), f32(y) / f32(GRID_SIZE - 1u));
     
-    // --- Calculate base position, normal, etc. just like before ---
     let texelSize = 1.0 / vec2<f32>(f32(GRID_SIZE - 1u));
     let hL = sample_depth(uv - vec2<f32>(texelSize.x, 0.0));
     let hR = sample_depth(uv + vec2<f32>(texelSize.x, 0.0));
@@ -60,7 +68,6 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     let projectedY = (uv.y * 2.0 - 1.0);
     var center_pos = vec3<f32>(projectedX, projectedY, zDisplacement - 0.5);
 
-    // --- Rotate the center point and its normal ---
     let angleX = u.rotation.x;
     let angleY = u.rotation.y;
     let cosX = cos(angleX); let sinX = sin(angleX);
@@ -71,33 +78,26 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     rotatedNormal = vec3<f32>(rotatedNormal.x * cosY - rotatedNormal.z * sinY, rotatedNormal.y, rotatedNormal.x * sinY + rotatedNormal.z * cosY);
     rotatedNormal = vec3<f32>(rotatedNormal.x, rotatedNormal.y * cosX - rotatedNormal.z * sinX, rotatedNormal.y * sinX + rotatedNormal.z * cosX);
 
-    // --- Billboard Calculation: Create a camera-facing quad ---
-    let corner_offsets = array<vec2<f32>, 4>(
-        vec2<f32>(-1.0, 1.0), vec2<f32>(1.0, 1.0),
-        vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0)
-    );
-    let particle_uv = (corner_offsets[corner_index] + 1.0) * 0.5;
+    let particle_uv = (chosen_offset + 1.0) * 0.5;
 
-    // To make a camera-facing quad, we need camera's right and up vectors.
-    // We can derive them by "un-rotating" the world axes.
     let cam_right = vec3<f32>(cosY, 0.0, -sinY);
     let cam_up_rotated = vec3<f32>(sinY * sinX, cosX, cosY * sinX);
     
     let size = u.pointSize * 0.005;
     var final_pos = center_pos 
-        + (cam_right * corner_offsets[corner_index].x * size) 
-        + (cam_up_rotated * corner_offsets[corner_index].y * size);
+        + (cam_right * chosen_offset.x * size) 
+        + (cam_up_rotated * chosen_offset.y * size);
 
     var output: VertexOutput;
-    output.worldPos = center_pos; // Use center for lighting
+    output.worldPos = center_pos;
     output.worldNormal = normalize(rotatedNormal);
-    output.fragUV = uv; // Original texture UV
-    output.particleUV = particle_uv; // UV for the circle
+    output.fragUV = uv;
+    output.particleUV = particle_uv;
     
     final_pos.z += 2.0;
-    final_pos.x *= u.zoom; // Only apply zoom to x and y, not z
-    final_pos.y *= u.zoom; // Only apply zoom to x and y, not z
-    output.position = vec4<f32>(final_pos.x, -final_pos.y, final_pos.z, 2.0);
+    final_pos.x *= u.zoom;
+    final_pos.y *= u.zoom;
+    output.position = vec4<f32>(final_pos.x, -final_pos.y, final_pos.z, 1.0);
     return output;
 }
 
