@@ -68,16 +68,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let foreground_shadow_intensity = smoothstep(0.4, 0.0, aa_visual_depth) * 0.7; // USE AA
   color = mix(color, foreground_shadow_color, foreground_shadow_intensity);
 
-
-  // --- Shared Calculations for Lights ---
-  
-  // Specular sheen MUST use the sharp depth to detect edges properly.
-  let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(pixelSize.x, 0.0), 0.0).r;
-  let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(0.0, pixelSize.y), 0.0).r;
-  let normal_factor = abs(sharp_visual_depth - depth_right) + abs(sharp_visual_depth - depth_up); // USE SHARP
-  let specular_sheen = smoothstep(0.01, 0.05, normal_factor) * 1.5;
-
-
   // --- Sunray Logic (Unchanged) ---
   let sunray_pos = vec2<f32>(0.5 + sin(u.time * 0.25) * 0.4, 1.3);
   let sunray_color = vec3<f32>(1.0, 0.95, 0.85);
@@ -92,10 +82,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   
   // --- Shared edge detection (Unchanged) ---
   let texel_size = 1.0 / resolution;
-  let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(texel_size.x, 0.0), 0.0).r;
-  let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(0.0, texel_size.y), 0.0).r;
-  let normal_factor = abs(visual_depth - depth_right) + abs(visual_depth - depth_up);
+  let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(pixelSize.x, 0.0), 0.0).r;
+  let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(0.0, pixelSize.y), 0.0).r;
+  let normal_factor = abs(sharp_visual_depth - depth_right) + abs(sharp_visual_depth - depth_up); // USE SHARP
   let specular_sheen = smoothstep(0.01, 0.05, normal_factor) * 1.5;
+
   let sunray_brightness = base_sunray + (specular_sheen * base_sunray * 1.5);
   
   
