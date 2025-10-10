@@ -2,6 +2,7 @@
 @group(0) @binding(1) var sourceImage: texture_2d<f32>;
 @group(0) @binding(2) var depthMap: texture_2d<f32>;
 
+// Updated uniform structure to match the new layout in Renderer.ts
 struct Uniforms {
     rotation: vec2<f32>,
     lightPos: vec2<f32>, // Was mouse position, now used for light
@@ -24,7 +25,7 @@ struct VertexOutput {
     @location(3) particleUV: vec2<f32>,
 };
 
-const GRID_SIZE = 1536u;
+const GRID_SIZE = 1024u;
 
 fn sample_depth(uv: vec2<f32>) -> f32 {
     var smoothedDepth = 0.0;
@@ -45,10 +46,10 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     let vertex_in_quad = in_vertex_index % 6u;
 
     let corner_offsets = array<vec2<f32>, 4>(
-        vec2<f32>(-1.0, 1.0), // 0: Top-left
-        vec2<f32>(1.0, 1.0),  // 1: Top-right
-        vec2<f32>(-1.0, -1.0), // 2: Bottom-left
-        vec2<f32>(1.0, -1.0)  // 3: Bottom-right
+        vec2<f32>(-1.0, 1.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(1.0, -1.0)
     );
 
     let triangle_indices = array<u32, 6>(0u, 1u, 2u, 2u, 1u, 3u);
@@ -92,7 +93,6 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
         + (cam_up_rotated * chosen_offset.y * size);
 
     let perspective_factor = 2.5;
-    // Apply the perspective projection to X and Y, and then apply user zoom.
     let finalX = (final_pos.x / perspective_factor) * u.zoom;
     let finalY = (final_pos.y / perspective_factor) * u.zoom;
 
@@ -101,7 +101,6 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     output.worldNormal = normalize(rotatedNormal);
     output.fragUV = uv;
     output.particleUV = particle_uv;
-    
     output.position = vec4<f32>(finalX, -finalY, zDisplacement, 1.0);
     return output;
 }
@@ -120,20 +119,28 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     if (u.backlightOn > 0.5) {
         // --- MODIFICATION START ---
-        // --- Backlight Logic with Mouse Direction and Glow ---
-        let backlightColor = vec3<f32>(1.0, 0.9, 0.7);
-        let backlightIntensity = 2.5;
+        // --- New Additive Backlight Logic ---
+        let backlightColor = vec3<f32>(1.0, 0.85, 0.7);
+        let backlightIntensity = 2.0;
 
-        // Use mouse position to direct the light from behind
-        let light_pos_3d = vec3<f32>((u.lightPos.x * 2.0 - 1.0), (u.lightPos.y * 2.0 - 1.0), 1.0);
-        let light_dir = normalize(in.worldPos - light_pos_3d);
+        // --- Light and view vectors ---
+        let light_pos_3d = vec3<f32>((u.lightPos.x * 2.0 - 1.0), (1.0 - u.lightPos.y) * 2.0 - 1.0, 1.5);
+        let light_dir = normalize(light_pos_3d - in.worldPos);
+        let view_dir = normalize(-in.worldPos); // Assuming camera is at origin
 
+        // 1. Start with the texture color in some ambient light
+        let ambient_color = textureColor * u.ambientLight * 0.8;
+
+        // 2. Add the "shine-through" light based on image brightness
         let luminance = dot(textureColor, vec3<f32>(0.299, 0.587, 0.114));
-        let diffuse = max(dot(normal, light_dir), 0.0);
-
-        let through_light = backlightColor * pow(luminance, 4.0) * backlightIntensity * diffuse;
+        let through_light = backlightColor * pow(luminance, 3.0) * backlightIntensity;
         
-        // --- Simple Glow Effect ---
+        // 3. Add a rim light for definition
+        let diffuse = max(dot(normal, light_dir), 0.0);
+        let rim_dot = pow(1.0 - max(dot(view_dir, normal), 0.0), 2.0);
+        let rim_light = backlightColor * rim_dot * diffuse * backlightIntensity;
+
+        // 4. Add the glow from bright neighbors (unchanged)
         var glow = vec3<f32>(0.0);
         let texelSize = 1.0 / vec2<f32>(textureDimensions(sourceImage));
         let glowRadius = 4.0;
@@ -143,18 +150,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 let offset = vec2<f32>(f32(i), f32(j)) * texelSize * glowRadius;
                 let neighborColor = textureSample(sourceImage, u_sampler, in.fragUV + offset).rgb;
                 let neighborLuminance = dot(neighborColor, vec3<f32>(0.299, 0.587, 0.114));
-                if (neighborLuminance > 0.7) { // Only glow from very bright neighbors
+                if (neighborLuminance > 0.7) {
                     glow += backlightColor * pow(neighborLuminance, 5.0) * 0.05;
                 }
             }
         }
-        
-        finalColor = through_light + glow;
+
+        // 5. Combine all the light components
+        finalColor = ambient_color + through_light + rim_light + glow;
         // --- MODIFICATION END ---
 
     } else {
         // --- Original Front Light Logic ---
-        let light_pos_3d = vec3<f32>( (u.lightPos.x * 2.0 - 1.0), (u.lightPos.y * 2.0 - 1.0), -0.5);
+        let light_pos_3d = vec3<f32>( (u.lightPos.x * 2.0 - 1.0), (1.0 - u.lightPos.y) * 2.0 - 1.0, -1.0);
         let light_dir = normalize(light_pos_3d - in.worldPos);
         let diffuse = max(dot(normal, light_dir), 0.0) * 0.8;
         let lighting = u.ambientLight + diffuse;
