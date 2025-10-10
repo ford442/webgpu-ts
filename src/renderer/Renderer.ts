@@ -86,7 +86,7 @@ export class Renderer {
     }
     
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, mousePosition: { x: number, y: number }, isMouseDown: boolean): void {
-        if (!this.device || !this.activeMode || mode !== this.activeModeName) return;
+        if (this.isLoading || !this.device || !this.activeMode || !this.isModeReady || mode !== this.activeModeName) return;
         const commandEncoder = this.device.createCommandEncoder();
         const uniformData = new Float32Array([
         this.canvas.width, this.canvas.height,
@@ -127,29 +127,26 @@ export class Renderer {
     }
 
     public async loadRandomImage(): Promise<string | undefined> {
+        this.isLoading = true; // PAUSE the render loop
         try {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
 
-            // 1. Store the old texture in a temporary variable.
             const oldTexture = this.imageTexture;
 
-            // 2. Create the new texture and assign it.
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba16float',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
-            // 3. Destroy the old texture *after* the new one is created.
             if (oldTexture) {
                 oldTexture.destroy();
             }
 
-            // 4. Re-initialize the active mode to update its bind groups with the new texture.
             if (this.activeModeName) {
                 await this.setMode(this.activeModeName);
             }
@@ -158,16 +155,17 @@ export class Renderer {
         } catch (e) {
             console.error("Failed to load image:", e);
             return undefined;
+        } finally {
+            this.isLoading = false; // RESUME the render loop
         }
     }
 
     public async updateDepthMap(data: Float32Array, width: number, height: number): Promise<void> {
+        this.isLoading = true; // PAUSE the render loop
         if (!this.device) return;
 
-        // 1. Store the old texture.
         const oldTexture = this.depthTextureRead;
 
-        // 2. Create and assign the new texture.
         this.depthTextureRead = this.device.createTexture({
             size: [width, height],
             format: 'r32float',
@@ -175,14 +173,13 @@ export class Renderer {
         });
         this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4 }, [width, height]);
         
-        // 3. Destroy the old texture.
         if (oldTexture) {
             oldTexture.destroy();
         }
 
-        // 4. Re-initialize the active mode to update its bind groups.
         if (this.activeModeName) {
             await this.setMode(this.activeModeName);
         }
+        this.isLoading = false; // RESUME the render loop
     }
 }
