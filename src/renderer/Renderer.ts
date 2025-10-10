@@ -111,7 +111,7 @@ export class Renderer {
         this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 24, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
@@ -243,10 +243,9 @@ export class Renderer {
             const computePerspectiveBG = this.bindGroups.get('computePerspective');
             const computeVortexBG = this.bindGroups.get('computeVortex');
             if (mode === 'liquid-v1' && computeV1BG) {
-                this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([
-                    this.canvas.width, this.canvas.height,
-                    mousePosition.x, mousePosition.y
-                ]));
+                 this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([
+                currentTime, this.canvas.width, this.canvas.height
+            ]));
                 this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 12, new Float32Array([isMouseDown ? 1.0 : 0.0])); // Write mouseDown state
                 computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
                 computePass.setBindGroup(0, computeV1BG);
