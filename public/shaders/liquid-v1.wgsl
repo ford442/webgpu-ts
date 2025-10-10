@@ -16,40 +16,33 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = vec2<f32>(u.resolutionX, u.resolutionY);
     let uv = vec2<f32>(global_id.xy) / resolution;
     
-    // Sample original depth first, as it will drive the motion gradient.
     let original_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
-    // --- START: New Gradient-Based Motion Logic ---
+    // --- START: New Motion Logic ---
 
-    // 1. Background Motion (slower, constant).
-    let bg_rate = 0.5;
-    let bg_strength = 0.01;
-    let bg_time = u.time * bg_rate;
-    let bg_d1 = sin(uv.y * 10.0 + bg_time) * bg_strength;
-    let bg_d2 = cos(uv.x * 10.0 * 0.7 + bg_time) * bg_strength;
-    let background_displacement = vec2<f32>(bg_d1, bg_d2);
+    // 1. Background Motion: Using the preferred complex ambient motion.
+    let time = u.time * 0.5;
+    let base_ambient_strength = 0.004;
+    let ambient_freq = 15.0;
+    let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
+    let background_displacement = motion * base_ambient_strength;
 
-    // 2. Foreground Motion (faster, more complex).
+    // 2. Foreground Motion: Lowered the max strength.
     let fg_rate = 0.9;
-    let base_fg_strength = 0.02; // The maximum possible strength.
+    let base_fg_strength = 0.015; // Lowered from 0.02
     let fg_freq = 25.0;
     let fg_time = u.time * fg_rate;
     let fg_d1 = sin(uv.x * fg_freq + fg_time);
     let fg_d2 = cos(uv.y * fg_freq * 1.3 + fg_time);
     let base_foreground_motion = vec2<f32>(fg_d1, fg_d2);
 
-    // 3. Create the Motion Gradient.
-    // This creates a smooth falloff from foreground (1.0) to background (0.0).
-    // The pow(..., 2.5) makes the effect strongest on the absolute closest points (depth=0)
-    // and fade out quickly, helping to "pin" the edges.
-    let motion_gradient = pow(1.0 - smoothstep(0.0, 0.7, original_depth), 2.5);
+    // 3. Motion Gradient: Tightened the range of the effect.
+    let motion_gradient = pow(1.0 - smoothstep(0.0, 0.5, original_depth), 2.5); // Range lowered from 0.7
     
     // 4. Combine Motions.
-    // The final displacement is the background motion plus the foreground motion,
-    // which has been scaled by our gradient and its max strength.
     let final_displacement = background_displacement + (base_foreground_motion * base_fg_strength * motion_gradient);
 
-    // --- END: New Gradient-Based Motion Logic ---
+    // --- END: New Motion Logic ---
 
     var displacedUV = uv + final_displacement;
     let dynamic_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV, 0.0).r;
