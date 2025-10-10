@@ -41,7 +41,6 @@ fn sample_depth(uv: vec2<f32>) -> f32 {
 
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     let point_index = in_vertex_index / 6u;
     let vertex_in_quad = in_vertex_index % 6u;
 
