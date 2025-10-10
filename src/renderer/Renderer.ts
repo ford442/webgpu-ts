@@ -238,7 +238,7 @@ export class Renderer {
                 layout: 'auto',
                 vertex: { module, entryPoint: 'vs_main' },
                 fragment: { module, entryPoint: 'fs_main', targets: [{ format: this.presentationFormat }] },
-                primitive: { topology: 'triangle-strip' } // Back to triangle-strip
+                primitive: { topology: 'triangle-list' }
             }));
         } catch(e) { console.error("Pipeline creation failed:", e); }
     }
@@ -278,7 +278,7 @@ export class Renderer {
         passEncoder.setPipeline(this.pipelines.get('depth')!);
         passEncoder.setBindGroup(0, this.bindGroups.get('depth')!);
         // We now draw 4 vertices for each point to make a quad
-        passEncoder.draw(GRID_SIZE * GRID_SIZE * 4);
+        passEncoder.draw(GRID_SIZE * GRID_SIZE * 6);
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
     }
