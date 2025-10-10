@@ -131,43 +131,38 @@ function App() {
     }
   }, [depthMapResult]);
 
-  return (
-    <div id="app-container">
-      <h1>WebGPU Liquid + Depth Effect</h1>
-      <p><strong>Status:</strong> {status}</p>
-      <Controls
-        mode={mode} setMode={setMode}
-        zoom={zoom} setZoom={setZoom}
-        panX={panX} setPanX={setPanX}
-        panY={panY} setPanY={setPanY}
-        onNewImage={handleNewImage}
-        autoChangeEnabled={autoChangeEnabled}
-        setAutoChangeEnabled={setAutoChangeEnabled}
-        autoChangeDelay={autoChangeDelay}
-        setAutoChangeDelay={setAutoChangeDelay}
-        onLoadModel={loadModel}
-        isModelLoaded={!!depthEstimator}
-      />
-       <WebGPUCanvas
-        rendererRef={rendererRef}
-        mode={mode}
-        zoom={zoom}
-        panX={panX}
-        panY={panY}
-        farthestPoint={farthestPoint}
-        mousePosition={mousePosition}
-        setMousePosition={setMousePosition}
-        isMouseDown={isMouseDown} // ADD THIS
-        setIsMouseDown={setIsMouseDown} // ADD THIS
-      />
-      {depthMapResult && (
-        <div className="debug-container">
-          <h2>AI Model Output (Debug Depth Map)</h2>
-          <canvas ref={debugCanvasRef} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
+    return (
+        <div id="app-container">
+            <h1>WebGPU Liquid + Depth Effect</h1>
+            <p><strong>Status:</strong> {status}</p>
+            <Controls
+                zoom={zoom} setZoom={setZoom}
+                panX={panX} setPanX={setPanX}
+                panY={panY} setPanY={setPanY}
+                onNewImage={handleNewImage}
+                autoChangeEnabled={autoChangeEnabled}
+                setAutoChangeEnabled={setAutoChangeEnabled}
+                autoChangeDelay={autoChangeDelay}
+                setAutoChangeDelay={setAutoChangeDelay}
+                onLoadModel={loadModel}
+                isModelLoaded={!!depthEstimator}
+            />
+            <WebGPUCanvas
+                rendererRef={rendererRef}
+                mode={mode}
+                zoom={zoom}
+                panX={panX}
+                panY={panY}
+                farthestPoint={farthestPoint}
+            />
+            {depthMapResult && (
+                <div className="debug-container">
+                    <h2>AI Model Output (Debug Depth Map)</h2>
+                    <canvas ref={debugCanvasRef} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
 }
 
 export default App;
