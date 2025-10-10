@@ -59,24 +59,42 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let new_rgb_with_fog = color.rgb + (foreground_fog_color * foreground_fog_intensity);
     color = vec4<f32>(new_rgb_with_fog, color.a);
     
-    let light_pos = vec2<f32>(sin(u.time * 0.5) * 0.5 + 0.5, cos(u.time * 0.3) * 0.5 + 0.5);
-    let light_radius = 0.45;
-    let dist_to_light = distance(uv, light_pos);
+    // --- MODIFICATION START: Adding a second spotlight ---
+
+    // --- Spotlight 1 (Original blue light) ---
+    let light1_pos = vec2<f32>(sin(u.time * 0.5) * 0.5 + 0.5, cos(u.time * 0.3) * 0.5 + 0.5);
+    let light1_radius = 0.45;
+    let dist_to_light1 = distance(uv, light1_pos);
+    let base_spotlight1 = (1.0 - smoothstep(0.05, light1_radius, dist_to_light1)) * (1.0 - visual_depth);
     
-    let base_spotlight = (1.0 - smoothstep(0.05, light_radius, dist_to_light)) * (1.0 - visual_depth);
-    
+    // --- Shared edge detection for specular highlights ---
     let texel_size = 1.0 / resolution;
     let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(texel_size.x, 0.0), 0.0).r;
     let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(0.0, texel_size.y), 0.0).r;
-    
     let normal_factor = abs(visual_depth - depth_right) + abs(visual_depth - depth_up);
     let specular_sheen = smoothstep(0.01, 0.05, normal_factor) * 1.5;
 
-    let spotlight_brightness = base_spotlight + (specular_sheen * base_spotlight);
+    let spotlight1_brightness = base_spotlight1 + (specular_sheen * base_spotlight1);
+    let light1_color = vec3<f32>(0.2, 0.5, 1.0); // Blueish color
+
+    // -- NEW: Spotlight 2 (New warm light) ---
+    // We use different time multipliers and trig functions to give it a separate path.
+    let light2_pos = vec2<f32>(cos(u.time * -0.4) * 0.5 + 0.5, sin(u.time * 0.6) * 0.5 + 0.5);
+    let light2_radius = 0.4; // Make it slightly smaller
+    let dist_to_light2 = distance(uv, light2_pos);
+    // It also gets blocked by the foreground (using visual_depth)
+    let base_spotlight2 = (1.0 - smoothstep(0.05, light2_radius, dist_to_light2)) * (1.0 - visual_depth);
     
-    let light_color = vec3<f32>(0.2, 0.5, 1.0);
-    let final_rgb = color.rgb + (light_color * spotlight_brightness);
+    // It also gets the same specular sheen highlights on edges.
+    let spotlight2_brightness = base_spotlight2 + (specular_sheen * base_spotlight2);
+    let light2_color = vec3<f32>(1.0, 0.7, 0.2); // Golden/warm color
+
+    // -- NEW: Combine the lights ---
+    // We add the color contributions of both lights to the original pixel color.
+    let final_rgb = color.rgb + (light1_color * spotlight1_brightness) + (light2_color * spotlight2_brightness);
     color = vec4<f32>(final_rgb, color.a);
+
+    // --- MODIFICATION END ---
 
     textureStore(writeTexture, global_id.xy, color);
     // NOTE: We no longer store the displaced depth.
