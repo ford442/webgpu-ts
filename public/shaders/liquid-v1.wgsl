@@ -1,8 +1,6 @@
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(1) var readTexture: texture_2d<f32>;
-// NOTE: I've changed the format back to rgba16float as rgba32float is often overkill
-// and can be slower. You can change it back if you have a specific need for 32-bit.
-@group(0) @binding(2) var writeTexture: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(2) var writeTexture: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(4) var readDepthTexture: texture_2d<f32>;
 @group(0) @binding(5) var non_filtering_sampler: sampler;
 
@@ -26,13 +24,12 @@ fn antialias_depth_sample(tex: texture_2d<f32>, samp: sampler, uv: vec2<f32>, te
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let resolution = vec2<f32>(u.resolutionX, u.resolutionY);
   let uv = vec2<f32>(global_id.xy) / resolution;
-  // FIXED: Define pixelSize and time at the top for everyone to use.
   let pixelSize = 1.0 / resolution;
   let time = u.time;
     
   // --- Parallax Logic ---
   let static_depth_for_motion = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
-  let parallax_time = time * 0.5; // Use a local time variable for this specific motion
+  let parallax_time = time * 0.5;
   let base_ambient_strength = 0.004;
   let ambient_freq = 15.0;
   let motion = vec2<f32>(sin(uv.y * ambient_freq + parallax_time * 1.2), cos(uv.x * ambient_freq + parallax_time));
@@ -56,24 +53,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   final_displacement *= edge_fade;
   var displacedUV = uv + final_displacement;
 
-  // --- Final Sampling with Anti-Aliasing ---
+  // --- Sampling & AA ---
   let sharp_visual_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV, 0.0).r;
   let aa_visual_depth = antialias_depth_sample(readDepthTexture, non_filtering_sampler, displacedUV, pixelSize);
   var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
 
- // --- Atmospheric Effects ---
-  // Background Shadow & Fog (Unchanged)
+  // --- Atmospheric Effects ---
   let bg_shadow_color = vec4<f32>(0.12, 0.12, 0.15, 1.0);  
   let bg_shadow_intensity = smoothstep(0.4, 0.9, aa_visual_depth) * 0.85;
   color = mix(color, bg_shadow_color, bg_shadow_intensity);
+  
+  // FIXED: The line causing the error is changed here.
   let foreground_fog_color = vec3<f32>(0.6, 0.6, 0.7);
   let foreground_fog_intensity = smoothstep(0.2, 0.8, 1.0 - aa_visual_depth) * 0.18;
-  color.rgb += (foreground_fog_color * foreground_fog_intensity);
+  let new_rgb_with_fog = color.rgb + (foreground_fog_color * foreground_fog_intensity);
+  color = vec4<f32>(new_rgb_with_fog, color.a);
   
-  // MODIFIED: Deeper Foreground Shadow
-  let foreground_shadow_color = vec4<f32>(0.05, 0.05, 0.1, 1.0); // Made it darker
-  let foreground_shadow_intensity = smoothstep(0.4, 0.0, aa_visual_depth) * 0.85; // Made it stronger (was 0.7)
-
+  let foreground_shadow_color = vec4<f32>(0.05, 0.05, 0.1, 1.0);
+  let foreground_shadow_intensity = smoothstep(0.4, 0.0, aa_visual_depth) * 0.85;
 
   // --- Shared Light Calculations ---
   let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(pixelSize.x, 0.0), 0.0).r;
@@ -81,48 +78,27 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let normal_factor = abs(sharp_visual_depth - depth_right) + abs(sharp_visual_depth - depth_up);
   let specular_sheen = smoothstep(0.01, 0.05, normal_factor) * 1.5;
 
-
-  // --- MODIFICATION START: Two Sunrays and New Lighting Model ---
-
-  // --- Sunray 1 ---
+  // --- Two Sunrays and New Lighting Model ---
   let sunray1_pos = vec2<f32>(0.5 + sin(time * 0.25) * 0.4, 1.3);
   let ray_stretch_factor1 = vec2<f32>(1.0, 0.15);
   let dist_to_sunray1 = distance(uv * ray_stretch_factor1, sunray1_pos * ray_stretch_factor1);
   let base_sunray1 = (1.0 - smoothstep(0.0, 0.18, dist_to_sunray1)) * pow(1.0 - aa_visual_depth, 2.5);
-
-  // --- NEW: Sunray 2 ---
-  let sunray2_pos = vec2<f32>(0.5 + cos(time * -0.2) * 0.5, 1.35); // Different path
-  let ray_stretch_factor2 = vec2<f32>(1.0, 0.2); // Slightly different beam shape
+  let sunray2_pos = vec2<f32>(0.5 + cos(time * -0.2) * 0.5, 1.35);
+  let ray_stretch_factor2 = vec2<f32>(1.0, 0.2);
   let dist_to_sunray2 = distance(uv * ray_stretch_factor2, sunray2_pos * ray_stretch_factor2);
   let base_sunray2 = (1.0 - smoothstep(0.0, 0.15, dist_to_sunray2)) * pow(1.0 - aa_visual_depth, 2.5);
-
-  // Combine the sunrays' intensities and calculate their shared specular highlight
   let total_sunray_intensity = clamp(base_sunray1 * 1.3 + base_sunray2 * 1.1, 0.0, 1.0);
   let sunray_specular = specular_sheen * total_sunray_intensity * 1.5;
   let sunray_color = vec3<f32>(1.0, 0.95, 0.85);
 
-  
-  // --- NEW: Contrast-Preserving Foreground Lighting Model ---
-  // This model prevents bright lights from "washing out" the texture on the foreground.
-  
-  // This multiplier defines how bright a fully-lit foreground object becomes.
   let FOREGROUND_LIT_MULTIPLIER = 1.8;
-  
-  // 1. Define the two states: shadowed and fully lit.
   let shadowed_foreground_color = mix(color.rgb, foreground_shadow_color.rgb, foreground_shadow_intensity);
   let lit_foreground_color = color.rgb * FOREGROUND_LIT_MULTIPLIER;
-  
-  // 2. Blend between the shadowed and lit states based on the sunray intensity.
   let sunlit_color = mix(shadowed_foreground_color, lit_foreground_color, total_sunray_intensity);
-  
-  // 3. Apply this new lighting model only to the foreground, using the shadow intensity as a mask.
-  // The background (where shadow intensity is 0) remains unaffected.
   var final_rgb = mix(color.rgb, sunlit_color, foreground_shadow_intensity);
-  
-  // 4. Additively apply the bright specular highlights from the sunrays on top.
   final_rgb += sunray_specular * sunray_color;
   
-  // --- Roaming Spotlights (Now added on top of the new base) ---
+  // --- Roaming Spotlights ---
   let light_core_radius = 0.02;
   let light_falloff_intensity = 0.15;
   let depth_fade_margin = 0.05;
@@ -151,10 +127,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let spotlight2_brightness = base_spotlight2 + (specular_sheen * base_spotlight2);
   let light2_color = vec3<f32>(1.0, 0.7, 0.2);
   
-  // 5. Additively apply the small roaming lights over everything.
   final_rgb += (light1_color * spotlight1_brightness) + (light2_color * spotlight2_brightness);
   
+  // --- Final Output ---
   color = vec4<f32>(final_rgb, color.a);
-
   textureStore(writeTexture, global_id.xy, color);
 }
