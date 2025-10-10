@@ -12,26 +12,23 @@ struct Uniforms {
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// A common and effective approximation of the ACES filmic tone mapping curve.
-// It takes an HDR color (with components > 1.0) and maps it to a visually
-// pleasing LDR color (in the [0.0, 1.0] range) for display.
 fn aces_tonemap(color: vec3<f32>) -> vec3<f32> {
-    let A = 2.5101;
-    let B = 0.03;
-    let C = 2.43;
-    let D = 0.59;
-    let E = 0.14;
-    let hdr_color = color * (A * color + B);
-    return clamp(hdr_color / (color * (C * color + D) + E), vec3(0.0), vec3(1.0));
+  let A = 2.51;
+  let B = 0.03;
+  let C = 2.43;
+  let D = 0.59;
+  let E = 0.14;
+  let hdr_color = color * (A * color + B);
+  return clamp(hdr_color / (color * (C * color + D) + E), vec3(0.0), vec3(1.0));
 }
 
 fn antialias_depth_sample(tex: texture_2d<f32>, samp: sampler, uv: vec2<f32>, texel_size: vec2<f32>) -> f32 {
-  let offset = texel_size * 0.5;
-  let s0 = textureSampleLevel(tex, samp, uv - offset, 0.0).r;
-  let s1 = textureSampleLevel(tex, samp, uv + offset, 0.0).r;
-  let s2 = textureSampleLevel(tex, samp, uv + vec2<f32>(offset.x, -offset.y), 0.0).r;
-  let s3 = textureSampleLevel(tex, samp, uv + vec2<f32>(-offset.x, offset.y), 0.0).r;
-  return (s0 + s1 + s2 + s3) * 0.25;
+ let offset = texel_size * 0.5;
+ let s0 = textureSampleLevel(tex, samp, uv - offset, 0.0).r;
+ let s1 = textureSampleLevel(tex, samp, uv + offset, 0.0).r;
+ let s2 = textureSampleLevel(tex, samp, uv + vec2<f32>(offset.x, -offset.y), 0.0).r;
+ let s3 = textureSampleLevel(tex, samp, uv + vec2<f32>(-offset.x, offset.y), 0.0).r;
+ return (s0 + s1 + s2 + s3) * 0.25;
 }
 
 @compute @workgroup_size(8, 8, 1)
@@ -41,7 +38,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let pixelSize = 1.0 / resolution;
   let time = u.time;
     
-  // --- Parallax Logic ---
+  // --- Parallax Logic (Unchanged) ---
   let static_depth_for_motion = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
   let parallax_time = time * 0.5;
   let base_ambient_strength = 0.007;
@@ -67,7 +64,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   final_displacement *= edge_fade;
   var displacedUV = uv + final_displacement;
 
-  // --- Sampling & AA ---
+  // --- Sampling & AA (Unchanged) ---
   let sharp_visual_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV, 0.0).r;
   let aa_visual_depth = antialias_depth_sample(readDepthTexture, non_filtering_sampler, displacedUV, pixelSize);
   var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
@@ -80,10 +77,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let foreground_fog_intensity = smoothstep(0.2, 0.8, 1.0 - aa_visual_depth) * 0.18;
   let new_rgb_with_fog = color.rgb + (foreground_fog_color * foreground_fog_intensity);
   color = vec4<f32>(new_rgb_with_fog, color.a);
-  let foreground_shadow_color = vec4<f32>(0.05, 0.05, 0.1, 1.0);
-  let foreground_shadow_intensity = smoothstep(0.4, 0.0, aa_visual_depth) * 0.85;
+  
+  // MODIFIED: Make foreground shadows deeper
+  let foreground_shadow_color = vec4<f32>(0.02, 0.02, 0.05, 1.0);
+  let foreground_shadow_intensity = smoothstep(0.4, 0.0, aa_visual_depth) * 0.95;
 
-  // --- Shared Light Calculations ---
+  // --- Shared Light Calculations (Unchanged) ---
   let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(pixelSize.x, 0.0), 0.0).r;
   let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(0.0, pixelSize.y), 0.0).r;
   let normal_factor = abs(sharp_visual_depth - depth_right) + abs(sharp_visual_depth - depth_up);
@@ -98,18 +97,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let ray_stretch_factor2 = vec2<f32>(1.0, 0.2);
   let dist_to_sunray2 = distance(uv * ray_stretch_factor2, sunray2_pos * ray_stretch_factor2);
   let base_sunray2 = (1.0 - smoothstep(0.0, 0.15, dist_to_sunray2)) * pow(1.0 - aa_visual_depth, 2.5);
-  let total_sunray_intensity = clamp(base_sunray1 * 1.3 + base_sunray2 * 1.1, 0.0, 1.0);
+  
+  // MODIFIED: Sunrays are more powerful
+  let total_sunray_intensity = clamp(base_sunray1 * 1.5 + base_sunray2 * 1.3, 0.0, 1.0);
   let sunray_specular = specular_sheen * total_sunray_intensity * 1.5;
   let sunray_color = vec3<f32>(1.0, 0.95, 0.85);
 
-  let FOREGROUND_LIT_MULTIPLIER = 1.8;
+  // MODIFIED: The fully-lit state is much brighter for higher contrast
+  let FOREGROUND_LIT_MULTIPLIER = 2.2;
   let shadowed_foreground_color = mix(color.rgb, foreground_shadow_color.rgb, foreground_shadow_intensity);
   let lit_foreground_color = color.rgb * FOREGROUND_LIT_MULTIPLIER;
   let sunlit_color = mix(shadowed_foreground_color, lit_foreground_color, total_sunray_intensity);
   var final_rgb = mix(color.rgb, sunlit_color, foreground_shadow_intensity);
   final_rgb += sunray_specular * sunray_color;
     
-  // --- Roaming Spotlights ---
+  // --- Roaming Spotlights (Unchanged) ---
   let light_core_radius = 0.02;
   let light_falloff_intensity = 0.15;
   let depth_fade_margin = 0.05;
@@ -139,9 +141,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let light2_color = vec3<f32>(1.0, 0.7, 0.2);
   
   final_rgb += (light1_color * spotlight1_brightness) + (light2_color * spotlight2_brightness);
+  
+  // --- Tone Mapping and Final Output (Unchanged) ---
   let exposure = 1.0;
   let exposed_rgb = final_rgb * exposure;
-  
   let tonemapped_rgb = aces_tonemap(exposed_rgb);
 
   color = vec4<f32>(tonemapped_rgb, color.a);
