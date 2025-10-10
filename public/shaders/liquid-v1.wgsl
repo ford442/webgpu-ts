@@ -34,7 +34,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let foreground_displacement = vec2<f32>(fg_d1, fg_d2);
 
     let original_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
-    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.42, original_depth);
+    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.32, original_depth);
     let final_displacement = background_displacement + (foreground_displacement * foreground_mix_factor);
     
     var displacedUV = uv + final_displacement;
