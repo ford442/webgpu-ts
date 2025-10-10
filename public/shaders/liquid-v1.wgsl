@@ -46,7 +46,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // --- Fog and Spotlight Logic ---
     let fog_color = vec4<f32>(0.1, 0.1, 0.1, 1.0);
-    let fog_intensity = smoothstep(0.7, 0.95, dynamic_depth) * 0.4;
+    let fog_intensity = smoothstep(0.7, 0.95, dynamic_depth) * 0.5;
     color = mix(color, fog_color, fog_intensity);
 
     // --- THIS IS THE CORRECTED LINE ---
@@ -56,7 +56,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     let spotlight_brightness = (1.0 - smoothstep(0.0, light_radius, dist_to_light)) * (1.0 - dynamic_depth);
     
-    let new_rgb = color.rgb + vec3<f32>(spotlight_brightness * 0.4);
+    let light_color = vec3<f32>(0.2, 0.5, 1.0);
+    let new_rgb = color.rgb + (light_color * spotlight_brightness);
     color = vec4<f32>(new_rgb, color.a);
 
     textureStore(writeTexture, global_id.xy, color);
