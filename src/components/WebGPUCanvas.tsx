@@ -43,6 +43,10 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
     }, [rendererRef]); 
     
     useEffect(() => {
+        if (isLoading) {
+            cancelAnimationFrame(animationFrameId.current);
+            return;
+        }
         let active = true;
         const animate = () => {
             if (!active) return;
@@ -51,9 +55,12 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
-        animate();
-        return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown, rendererRef]);
+        animate(); // Start loop
+        return () => { // Cleanup when isLoading becomes true
+            active = false; 
+            cancelAnimationFrame(animationFrameId.current); 
+        };
+    }, [isLoading, mode, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown, rendererRef]);
 
     const updateMousePosition = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!canvasRef.current) return;
