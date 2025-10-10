@@ -16,7 +16,7 @@ interface ControlsProps {
     setAutoChangeEnabled: (enabled: boolean) => void;
     autoChangeDelay: number;
     setAutoChangeDelay: (delay: number) => void;
-      onLoadModel: () => void;
+    onLoadModel: () => void;
     isModelLoaded: boolean;
     modelQuantized: boolean; // NEW
     setModelQuantized: (quantized: boolean) => void; // NEW
@@ -36,7 +36,7 @@ const Controls: React.FC<ControlsProps> = ({
     const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple';
 
     return (
-        <div className="controls">
+<div className="controls">
 <div className="control-group">
                 <label htmlFor="model-type-select">AI Model Type:</label>
                 <select 
@@ -49,17 +49,14 @@ const Controls: React.FC<ControlsProps> = ({
                     <option value="true">Quantized (INT8 - Faster)</option>
                 </select>
             </div>
-
             <div className="control-group">
         <button onClick={onLoadModel} disabled={isModelLoaded}>
           {isModelLoaded ? 'AI Model Loaded' : 'Load AI Model'}
         </button>
         <button onClick={onNewImage}>Load New Random Image</button>
       </div>
-            
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
-                {/* MODIFIED: This dropdown now uses the new setMode function */}
                 <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
                     <option value="liquid-v1">Dynamic Lighting</option>
                     {/* TODO: As you convert other shaders (like liquid.wgsl) into their own 
