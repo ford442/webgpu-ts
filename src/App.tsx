@@ -19,10 +19,11 @@ function App() {
 
 env.allowLocalModels = false;
 env.backends.onnx.executionProviders = ['webgpu'];
-env.backends.onnx.logLevel = 'warning'; // Less verbose logging
+env.backends.onnx.logLevel = 'warning';
+    
 // const model_loc = 'https://test.1ink.us/webgputs/models/model.onnx'
-const model_loc = 'Xenova/dpt-hybrid-midas/resolve/main/onnx/model.onnx'
-
+const model_loc = 'Xenova/dpt-hybrid-midas'
+    
     useEffect(() => {
         rendererRef.current?.updateParams({
             displacementScale: displacementScale, 
@@ -70,10 +71,10 @@ const model_loc = 'Xenova/dpt-hybrid-midas/resolve/main/onnx/model.onnx'
                     if (progress.status === 'progress' && typeof progress.progress === 'number') {
                         setStatus(`Loading model... ${progress.progress.toFixed(2)}%`);
                     } else {
-                        // You can also display other statuses if you want, e.g., 'downloading', 'initializing'
                         setStatus(progress.status);
                     }
-                }
+                },
+                dtype: 'fp32'
             });
             setDepthEstimator(() => estimator);
             setStatus('Model Loaded. Processing initial image...');
@@ -91,7 +92,6 @@ const model_loc = 'Xenova/dpt-hybrid-midas/resolve/main/onnx/model.onnx'
             const { data, dims } = result.predicted_depth;
             const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
 
-            // === FIX IS HERE: Normalize the depth data before sending to GPU ===
             let min = Infinity, max = -Infinity;
             data.forEach((v: number) => {
                 if (v < min) min = v;
@@ -104,10 +104,8 @@ const model_loc = 'Xenova/dpt-hybrid-midas/resolve/main/onnx/model.onnx'
                 // Invert the depth map so closer objects are "higher" (value 1)
                 normalizedData[i] = 1.0 - ((data[i] - min) / range);
             }
-            // ===================================================================
 
             setStatus('Updating depth map on GPU...');
-            // Send the NEW normalized data to the renderer
             rendererRef.current.updateDepthMap(normalizedData, width, height);
             rendererRef.current.createBindGroups();
             
