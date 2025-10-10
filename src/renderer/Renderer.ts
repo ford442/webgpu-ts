@@ -60,6 +60,12 @@ export class Renderer {
         this.depthTextureRead = this.device.createTexture({ size: [1, 1], format: 'r32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING });
     }
     
+    public onPointerDown(x: number, y: number): void {
+        if (this.activeMode?.onPointerDown) {
+            this.activeMode.onPointerDown(x, y);
+        }
+    }
+    
     public async setMode(modeName: RenderMode): Promise<void> {
         if (modeName === this.activeModeName && this.activeMode) return;
         this.isModeReady = false;
