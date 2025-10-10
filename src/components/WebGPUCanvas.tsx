@@ -72,6 +72,13 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
         setIsMouseDown(true);
         updateMousePosition(event);
+        if (rendererRef.current) {
+            const canvas = canvasRef.current!;
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / canvas.width;
+            const y = (event.clientY - rect.top) / canvas.height;
+            rendererRef.current.onPointerDown(x, y);
+        }
     };
 
     const handleMouseUp = () => setIsMouseDown(false);
