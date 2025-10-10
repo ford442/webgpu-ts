@@ -15,8 +15,7 @@ struct Uniforms {
 // It takes an HDR color (with components > 1.0) and maps it to a visually
 // pleasing LDR color (in the [0.0, 1.0] range) for display.
 fn aces_tonemap(color: vec3<f32>) -> vec3<f32> {
-    // A, B, C, D, and E are constants that define the shape of the ACES curve.
-    let A = 2.51;
+    let A = 2.5101;
     let B = 0.03;
     let C = 2.43;
     let D = 0.59;
