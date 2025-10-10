@@ -178,8 +178,6 @@ export class Renderer {
         { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } },
         { binding: 4, resource: this.depthTextureRead.createView() },
         { binding: 5, resource: this.nonFilteringSampler },
-        // This new entry allows the shader to write to the next depth texture
-        { binding: 6, resource: this.depthTextureWrite.createView() },
     ]
 }));
         const computeLayout = this.pipelines.get('compute')!.getBindGroupLayout(0);
