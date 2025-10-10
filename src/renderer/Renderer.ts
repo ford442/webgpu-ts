@@ -197,7 +197,6 @@ private createBindGroups(): void {
             { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } },
             { binding: 4, resource: this.depthTextureRead.createView() },
             { binding: 5, resource: this.nonFilteringSampler },
-            { binding: 6, resource: this.depthTextureWrite.createView() }, // ADD THIS
         ] 
     }));
 
