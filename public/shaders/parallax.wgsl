@@ -26,10 +26,84 @@ struct VertexOutput {
 
 const GRID_SIZE = 1024u;
 
-fn sample_depth(uv: vec2<f32>) -> f32 { /* no change */ }
+
+fn sample_depth(uv: vec2<f32>) -> f32 {
+    var smoothedDepth = 0.0;
+    let texelSize = 1.0 / vec2<f32>(textureDimensions(depthMap));
+    let sampleRadius = texelSize * u.smoothness;
+    for (var i = -1; i <= 1; i = i + 1) {
+        for (var j = -1; j <= 1; j = j + 1) {
+            let offset = vec2<f32>(f32(i), f32(j)) * sampleRadius;
+            smoothedDepth += textureSampleLevel(depthMap, u_sampler, uv + offset, 0.0).r;
+        }
+    }
+    return smoothedDepth / 9.0;
+}
 
 @vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput { /* no change */ }
+fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
+    let point_index = in_vertex_index / 6u;
+    let vertex_in_quad = in_vertex_index % 6u;
+
+    let corner_offsets = array<vec2<f32>, 4>(
+        vec2<f32>(-1.0, 1.0),
+        vec2<f32>(1.0, 1.0),
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(1.0, -1.0)
+    );
+
+    let triangle_indices = array<u32, 6>(0u, 1u, 2u, 2u, 1u, 3u);
+    let corner_index = triangle_indices[vertex_in_quad];
+    let chosen_offset = corner_offsets[corner_index];
+
+    let x = point_index % GRID_SIZE;
+    let y = point_index / GRID_SIZE;
+    let uv = vec2<f32>(f32(x) / f32(GRID_SIZE - 1u), f32(y) / f32(GRID_SIZE - 1u));
+    
+    let texelSize = 1.0 / vec2<f32>(f32(GRID_SIZE - 1u));
+    let hL = sample_depth(uv - vec2<f32>(texelSize.x, 0.0));
+    let hR = sample_depth(uv + vec2<f32>(texelSize.x, 0.0));
+    let hD = sample_depth(uv - vec2<f32>(0.0, texelSize.y));
+    let hU = sample_depth(uv + vec2<f32>(0.0, texelSize.y));
+    let normal = normalize(vec3<f32>((hL - hR) * u.displacementScale, (hD - hU) * u.displacementScale, texelSize.x * 2.0));
+    let depthValue = sample_depth(uv);
+    let zDisplacement = depthValue * u.displacementScale;
+    let projectedX = (uv.x * 2.0 - 1.0);
+    let projectedY = (uv.y * 2.0 - 1.0);
+    var center_pos = vec3<f32>(projectedX, projectedY, zDisplacement - 0.5);
+
+    let angleX = u.rotation.x;
+    let angleY = u.rotation.y;
+    let cosX = cos(angleX); let sinX = sin(angleX);
+    let cosY = cos(angleY); let sinY = sin(angleY);
+    center_pos = vec3<f32>(center_pos.x * cosY - center_pos.z * sinY, center_pos.y, center_pos.x * sinY + center_pos.z * cosY);
+    center_pos = vec3<f32>(center_pos.x, center_pos.y * cosX - center_pos.z * sinX, center_pos.y * sinX + center_pos.z * cosX);
+    var rotatedNormal = normal;
+    rotatedNormal = vec3<f32>(rotatedNormal.x * cosY - rotatedNormal.z * sinY, rotatedNormal.y, rotatedNormal.x * sinY + rotatedNormal.z * cosY);
+    rotatedNormal = vec3<f32>(rotatedNormal.x, rotatedNormal.y * cosX - rotatedNormal.z * sinX, rotatedNormal.y * sinX + rotatedNormal.z * cosX);
+
+    let particle_uv = (chosen_offset + 1.0) * 0.5;
+
+    let cam_right = vec3<f32>(cosY, 0.0, -sinY);
+    let cam_up_rotated = vec3<f32>(sinY * sinX, cosX, cosY * sinX);
+    
+    let size = u.pointSize * 0.005;
+    var final_pos = center_pos 
+        + (cam_right * chosen_offset.x * size) 
+        + (cam_up_rotated * chosen_offset.y * size);
+
+    let perspective_factor = 2.5;
+    let finalX = (final_pos.x / perspective_factor) * u.zoom;
+    let finalY = (final_pos.y / perspective_factor) * u.zoom;
+
+    var output: VertexOutput;
+    output.worldPos = center_pos;
+    output.worldNormal = normalize(rotatedNormal);
+    output.fragUV = uv;
+    output.particleUV = particle_uv;
+    output.position = vec4<f32>(finalX, -finalY, zDisplacement, 1.0);
+    return output;
+}
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
