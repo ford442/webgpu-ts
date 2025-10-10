@@ -73,7 +73,7 @@ export class Renderer {
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
-                format: 'rgba16float',
+                format: 'rgba32float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
@@ -124,7 +124,7 @@ export class Renderer {
         this.device.queue.writeTexture({ texture: this.depthTextureWrite }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
         this.writeTexture = this.device.createTexture({
             size: [width, height],
-            format: 'rgba16float',
+            format: 'rgba32float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
         await this.loadRandomImage();
