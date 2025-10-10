@@ -72,7 +72,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // --- Atmospheric Effects ---
   let bg_shadow_color = vec4<f32>(0.12, 0.12, 0.15, 1.0);  
   // MODIFIED: Reduced the background shadow intensity from 0.85 to 0.65
-  let bg_shadow_intensity = smoothstep(0.4, 0.9, aa_visual_depth) * 0.65;
+  let bg_shadow_intensity = smoothstep(0.4, 0.9, aa_visual_depth) * 0.777;
   color = mix(color, bg_shadow_color, bg_shadow_intensity);
   let foreground_fog_color = vec3<f32>(0.6, 0.6, 0.7);
   let foreground_fog_intensity = smoothstep(0.2, 0.8, 1.0 - aa_visual_depth) * 0.18;
