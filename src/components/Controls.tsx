@@ -34,6 +34,14 @@ const Controls: React.FC<ControlsProps> = ({
 
     return (
         <div className="controls">
+
+            <div className="control-group">
+        <button onClick={onLoadModel} disabled={isModelLoaded}>
+          {isModelLoaded ? 'AI Model Loaded' : 'Load AI Model'}
+        </button>
+        <button onClick={onNewImage}>Load New Random Image</button>
+      </div>
+            
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
                 {/* MODIFIED: This dropdown now uses the new setMode function */}
