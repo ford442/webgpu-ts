@@ -2,8 +2,6 @@
 @group(0) @binding(1) var sourceImage: texture_2d<f32>;
 @group(0) @binding(2) var depthMap: texture_2d<f32>;
 
-// --- MODIFICATION START ---
-// Updated uniform structure to match the new layout in Renderer.ts
 struct Uniforms {
     rotation: vec2<f32>,
     lightPos: vec2<f32>, // Was mouse position, now used for light
@@ -15,7 +13,6 @@ struct Uniforms {
     backlightOn: f32,
     time: f32,
 };
-// --- MODIFICATION END ---
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
@@ -27,7 +24,7 @@ struct VertexOutput {
     @location(3) particleUV: vec2<f32>,
 };
 
-const GRID_SIZE = 1024u;
+const GRID_SIZE = 1536u;
 
 fn sample_depth(uv: vec2<f32>) -> f32 {
     var smoothedDepth = 0.0;
@@ -44,8 +41,58 @@ fn sample_depth(uv: vec2<f32>) -> f32 {
 
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
-    // ... (no changes in this function down to the perspective calculation)
+fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
+    let point_index = in_vertex_index / 6u;
+    let vertex_in_quad = in_vertex_index % 6u;
 
+    let corner_offsets = array<vec2<f32>, 4>(
+        vec2<f32>(-1.0, 1.0), // 0: Top-left
+        vec2<f32>(1.0, 1.0),  // 1: Top-right
+        vec2<f32>(-1.0, -1.0), // 2: Bottom-left
+        vec2<f32>(1.0, -1.0)  // 3: Bottom-right
+    );
+
+    let triangle_indices = array<u32, 6>(0u, 1u, 2u, 2u, 1u, 3u);
+    let corner_index = triangle_indices[vertex_in_quad];
+    let chosen_offset = corner_offsets[corner_index];
+
+    let x = point_index % GRID_SIZE;
+    let y = point_index / GRID_SIZE;
+    let uv = vec2<f32>(f32(x) / f32(GRID_SIZE - 1u), f32(y) / f32(GRID_SIZE - 1u));
+    
+    let texelSize = 1.0 / vec2<f32>(f32(GRID_SIZE - 1u));
+    let hL = sample_depth(uv - vec2<f32>(texelSize.x, 0.0));
+    let hR = sample_depth(uv + vec2<f32>(texelSize.x, 0.0));
+    let hD = sample_depth(uv - vec2<f32>(0.0, texelSize.y));
+    let hU = sample_depth(uv + vec2<f32>(0.0, texelSize.y));
+    let normal = normalize(vec3<f32>((hL - hR) * u.displacementScale, (hD - hU) * u.displacementScale, texelSize.x * 2.0));
+    let depthValue = sample_depth(uv);
+    let zDisplacement = depthValue * u.displacementScale;
+    let projectedX = (uv.x * 2.0 - 1.0);
+    let projectedY = (uv.y * 2.0 - 1.0);
+    var center_pos = vec3<f32>(projectedX, projectedY, zDisplacement - 0.5);
+
+    let angleX = u.rotation.x;
+    let angleY = u.rotation.y;
+    let cosX = cos(angleX); let sinX = sin(angleX);
+    let cosY = cos(angleY); let sinY = sin(angleY);
+    center_pos = vec3<f32>(center_pos.x * cosY - center_pos.z * sinY, center_pos.y, center_pos.x * sinY + center_pos.z * cosY);
+    center_pos = vec3<f32>(center_pos.x, center_pos.y * cosX - center_pos.z * sinX, center_pos.y * sinX + center_pos.z * cosX);
+    var rotatedNormal = normal;
+    rotatedNormal = vec3<f32>(rotatedNormal.x * cosY - rotatedNormal.z * sinY, rotatedNormal.y, rotatedNormal.x * sinY + rotatedNormal.z * cosY);
+    rotatedNormal = vec3<f32>(rotatedNormal.x, rotatedNormal.y * cosX - rotatedNormal.z * sinX, rotatedNormal.y * sinX + rotatedNormal.z * cosX);
+
+    let particle_uv = (chosen_offset + 1.0) * 0.5;
+
+    let cam_right = vec3<f32>(cosY, 0.0, -sinY);
+    let cam_up_rotated = vec3<f32>(sinY * sinX, cosX, cosY * sinX);
+    
+    let size = u.pointSize * 0.005;
+    var final_pos = center_pos 
+        + (cam_right * chosen_offset.x * size) 
+        + (cam_up_rotated * chosen_offset.y * size);
+
+    let perspective_factor = 2.5;
     // Apply the perspective projection to X and Y, and then apply user zoom.
     let finalX = (final_pos.x / perspective_factor) * u.zoom;
     let finalY = (final_pos.y / perspective_factor) * u.zoom;
