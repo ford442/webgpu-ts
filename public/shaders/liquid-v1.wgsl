@@ -29,15 +29,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
     let background_displacement = motion * base_ambient_strength;
 
-    let fg_rate = 0.9;
-    let base_fg_strength = 0.01;
+    let fg_rate = 0.79;
+    let base_fg_strength = 0.007;
     let fg_freq = 25.0;
     let fg_time = u.time * fg_rate;
     let fg_d1 = sin(uv.x * fg_freq + fg_time);
     let fg_d2 = cos(uv.y * fg_freq * 1.3 + fg_time);
     let base_foreground_motion = vec2<f32>(fg_d1, fg_d2);
 
-    let motion_gradient = pow(1.0 - smoothstep(0.0, 0.5, static_depth_for_motion), 2.5);
+    let motion_gradient = pow(1.0 - smoothstep(0.0, 0.42, static_depth_for_motion), 2.5);
     let final_displacement = background_displacement + (base_foreground_motion * base_fg_strength * motion_gradient);
 
     // 3. Find the displaced coordinate.
