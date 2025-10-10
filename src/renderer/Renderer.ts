@@ -88,15 +88,12 @@ export class Renderer {
     public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, mousePosition: { x: number, y: number }, isMouseDown: boolean): void {
         if (this.isLoading || !this.device || !this.activeMode || !this.isModeReady || mode !== this.activeModeName) return;
         const commandEncoder = this.device.createCommandEncoder();
-        
-        // --- FIX #1: Correctly size the uniform data array ---
         const uniformData = new Float32Array([
             this.canvas.width, this.canvas.height,
             mousePosition.x, mousePosition.y,
             isMouseDown ? 1.0 : 0.0,
             0 // Padding to make the total size 24 bytes
         ]);
-
         this.activeMode.render(commandEncoder, uniformData);
         const textureView = this.context.getCurrentTexture().createView();
         const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] };
@@ -172,10 +169,7 @@ export class Renderer {
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
         });
         this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4 }, [width, height]);
-        
-        // --- FIX #2: Add the missing await command ---
         await this.device.queue.onSubmittedWorkDone();
-
         if (oldTexture) {
             oldTexture.destroy();
         }
