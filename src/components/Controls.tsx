@@ -1,8 +1,11 @@
+// src/components/Controls.tsx
+
 import React from 'react';
 import { RenderMode } from '../renderer/types';
 
-
 interface ControlsProps {
+    mode: RenderMode; // ADD THIS LINE
+    setMode: (mode: RenderMode) => void; // ADD THIS LINE
     zoom: number;
     setZoom: (zoom: number) => void;
     panX: number;
@@ -19,17 +22,25 @@ interface ControlsProps {
 }
 
 const Controls: React.FC<ControlsProps> = ({
-                                               zoom, setZoom,
-                                               panX, setPanX,
-                                               panY, setPanY,
-                                               onNewImage,
-                                               autoChangeEnabled, setAutoChangeEnabled,
-                                               autoChangeDelay, setAutoChangeDelay,
-                                               onLoadModel, isModelLoaded
-                                           }) => {
+    mode, setMode, // ADD THIS LINE
+    zoom, setZoom,
+    panX, setPanX,
+    panY, setPanY,
+    onNewImage,
+    autoChangeEnabled, setAutoChangeEnabled,
+    autoChangeDelay, setAutoChangeDelay,
+    onLoadModel, isModelLoaded
+}) => {
+    // The previous logic for `isImageMode` is no longer needed since you are always showing these controls.
 
     return (
         <div className="controls">
+            <div className="control-group">
+                <label htmlFor="mode-select">Render Mode:</label>
+                <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
+                    <option value="liquid-perspective">Liquid Perspective</option>
+                </select>
+            </div>
             <div className="control-group">
                 <button onClick={onLoadModel} disabled={isModelLoaded}>
                     {isModelLoaded ? 'AI Model Loaded' : 'Load AI Model'}
