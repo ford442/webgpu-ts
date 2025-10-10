@@ -13,9 +13,11 @@ interface WebGPUCanvasProps {
     setMousePosition: (pos: { x: number, y: number }) => void;
     isMouseDown: boolean;
     setIsMouseDown: (down: boolean) => void;
+    isLoading: boolean; // Add this prop
+    onReady: () => void;   // Add this prop
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown, isLoading, onReady }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
@@ -29,19 +31,12 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
                  if (rendererRef && 'current' in rendererRef) {
                     (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
                 }
-                videoRef.current = document.createElement('video');
-                videoRef.current.src = 'https://test.1ink.us/webgputs/big_buck_bunny_720p_surround.mp4';
-                videoRef.current.crossOrigin = 'anonymous';
-                videoRef.current.muted = true;
-                videoRef.current.loop = true;
-                videoRef.current.autoplay = true;
-                videoRef.current.playsInline = true;
-                await videoRef.current.play().catch(console.error);
+                // Tell the App component that the renderer is initialized and ready
+                onReady(); 
             }
         })();
         return () => cancelAnimationFrame(animationFrameId.current);
-    }, [rendererRef]); 
-    
+    }, [rendererRef, onReady]); 
     useEffect(() => {
         if (isLoading) {
             cancelAnimationFrame(animationFrameId.current);
@@ -56,7 +51,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate(); // Start loop
-        return () => { // Cleanup when isLoading becomes true
+        return () => { 
             active = false; 
             cancelAnimationFrame(animationFrameId.current); 
         };
