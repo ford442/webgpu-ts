@@ -252,8 +252,6 @@ export class Renderer {
         const passEncoder = commandEncoder.beginRenderPass({
             colorAttachments: [{ view: textureView, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp, clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1 } }]
         });
-        this.device.queue.writeBuffer(
-            this.uniformBuffer, 0,
             this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
             new Float32Array([
@@ -264,8 +262,7 @@ export class Renderer {
                 this.params.smoothness,
                 this.mouseState.x, this.mouseState.y,
                 this.params.pointSize,
-                this.backlightOn ? 1.0 : 0.0, // The new backlight flag
-                0.0, 0.0 // Padding
+                this.backlightOn ? 1.0 : 0.0, 0.0, 0.0 // Padding
             ])
         );
         passEncoder.setPipeline(this.pipelines.get('depth')!);
