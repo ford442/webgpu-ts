@@ -96,11 +96,11 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
 
         const uniformData = new Float32Array([
-            this.canvas.width, this.canvas.height,
-            mousePosition.x, mousePosition.y,
-            isMouseDown ? 1.0 : 0.0,
-            0, 0, 0 
-        ]);
+        this.canvas.width, this.canvas.height,
+        mousePosition.x, mousePosition.y,
+        isMouseDown ? 1.0 : 0.0,
+        0 // Single padding float
+    ]);
         this.activeMode.render(commandEncoder, uniformData);
 
         const textureView = this.context.getCurrentTexture().createView();
