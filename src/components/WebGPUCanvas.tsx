@@ -56,10 +56,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef }) => {
         rendererRef.current?.toggleBacklight();
     };
 
-    const handleMouseUp = () => {
-        isDragging.current = false;
-        rendererRef.current?.stopMouseDrag();
-    };
+    // const handleMouseUp = () => {isDragging.current = false; rendererRef.current?.stopMouseDrag();};
 
     const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
