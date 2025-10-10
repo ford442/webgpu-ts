@@ -49,7 +49,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // 5. Add fog to the background.
     let fog_color = vec4<f32>(0.1, 0.1, 0.1, 1.0); // Dark grey fog
-    let fog_intensity = smoothstep(0.1, 0.8, 1.0 - depth); // Apply fog to the background (higher depth values)
+    // --- THIS IS THE CORRECTED LINE ---
+    let fog_intensity = smoothstep(0.1, 0.8, depth); // Use 'depth' directly
     color = mix(color, fog_color, fog_intensity);
 
     // 6. Add a moving spotlight to the foreground.
@@ -60,7 +61,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Calculate spotlight brightness, apply only to foreground.
     let spotlight_brightness = (1.0 - smoothstep(0.0, light_radius, dist_to_light)) * (1.0 - depth);
     
-    // --- THIS IS THE CORRECTED LOGIC ---
     // Calculate the new RGB value first.
     let new_rgb = color.rgb + vec3<f32>(spotlight_brightness * 0.4);
     // Re-create the color with the new RGB and original alpha.
