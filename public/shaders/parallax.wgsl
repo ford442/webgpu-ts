@@ -10,6 +10,9 @@ struct Uniforms {
     smoothness: f32,
     lightPos: vec2<f32>,
     pointSize: f32,
+    // --- MODIFICATION START ---
+    backlightOn: f32, // New uniform for the backlight toggle
+    // --- MODIFICATION END ---
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
@@ -116,12 +119,39 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     let textureColor = textureSample(sourceImage, u_sampler, in.fragUV).rgb;
-    let light_pos_3d = vec3<f32>( (u.lightPos.x * 2.0 - 1.0), (u.lightPos.y * 2.0 - 1.0), -0.5);
-    let light_dir = normalize(light_pos_3d - in.worldPos);
     let normal = normalize(in.worldNormal);
-    let diffuse = max(dot(normal, light_dir), 0.0) * 0.8;
-    let lighting = u.ambientLight + diffuse;
+    
+    // --- MODIFICATION START ---
+    var finalColor = vec3<f32>(0.0);
 
-    let finalColor = textureColor * lighting;
+    if (u.backlightOn > 0.5) {
+        // --- Backlight Logic ---
+        let backlightColor = vec3<f32>(1.0, 0.9, 0.7); // A warm white light
+        let backlightIntensity = 2.0;
+
+        // Calculate luminance (brightness) of the texture color
+        let luminance = dot(textureColor, vec3<f32>(0.299, 0.587, 0.114));
+
+        // The light comes from behind, so we'll use the inverted normal (facing away from the camera)
+        let light_dir = vec3<f32>(0.0, 0.0, -1.0); // Simple light from straight behind
+        let diffuse = max(dot(normal, -light_dir), 0.0);
+
+        // The final color is a mix of the backlight shining through (based on luminance)
+        // and some diffuse reflection of the backlight.
+        let through_light = backlightColor * pow(luminance, 4.0) * backlightIntensity;
+        let reflected_light = textureColor * diffuse * 0.5;
+
+        finalColor = through_light + reflected_light;
+
+    } else {
+        // --- Original Front Light Logic ---
+        let light_pos_3d = vec3<f32>( (u.lightPos.x * 2.0 - 1.0), (u.lightPos.y * 2.0 - 1.0), -0.5);
+        let light_dir = normalize(light_pos_3d - in.worldPos);
+        let diffuse = max(dot(normal, light_dir), 0.0) * 0.8;
+        let lighting = u.ambientLight + diffuse;
+        finalColor = textureColor * lighting;
+    }
+    // --- MODIFICATION END ---
+    
     return vec4<f32>(finalColor, 1.0);
 }
