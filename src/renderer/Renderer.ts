@@ -104,7 +104,10 @@ export class Renderer {
         this.activeMode.render(commandEncoder, uniformData);
 
         const textureView = this.context.getCurrentTexture().createView();
-        const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear', storeOp: 'store' }] };
+        
+        // --- THIS IS THE CORRECTED LINE ---
+        const renderPassDescriptor: GPURenderPassDescriptor = { colorAttachments: [{ view: textureView, clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, loadOp: 'clear' as GPULoadOp, storeOp: 'store' as GPUStoreOp }] };
+        
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
         
         this.finalRenderBindGroup = this.device.createBindGroup({
@@ -124,7 +127,6 @@ export class Renderer {
     }
     
     private async fetchImageUrls(): Promise<void> {
-        // This is your existing code to fetch image URLs
         const bucketName = 'my-sd35-space-images-2025';
         const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
         try {
@@ -153,7 +155,6 @@ export class Renderer {
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
 
-            // If a mode is active, re-initialize it with the new texture.
             if (this.activeModeName) {
                 await this.setMode(this.activeModeName);
             }
@@ -176,7 +177,6 @@ export class Renderer {
         });
         this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4 }, [width, height]);
 
-        // If a mode is active, re-initialize it with the new depth texture.
         if (this.activeModeName) {
             await this.setMode(this.activeModeName);
         }
