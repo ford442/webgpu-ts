@@ -22,7 +22,7 @@ export class LightingMode implements IRenderMode {
         const lightingModule = this.device.createShaderModule({ code: lightingCode });
         const bindGroupLayout = this.device.createBindGroupLayout({
             entries: [
-                { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: {} },
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'filtering' } },
                 { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: {} },
                 { binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { format: 'rgba16float' as GPUTextureFormat } },
                 { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' as GPUBufferBindingType } },
