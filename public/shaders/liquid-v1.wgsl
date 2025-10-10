@@ -15,10 +15,8 @@ struct Uniforms {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = vec2<f32>(u.resolutionX, u.resolutionY);
     let uv = vec2<f32>(global_id.xy) / resolution;
-    let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
-    let time = u.time;
-
-    // 1. Define a slower, more subtle background motion.
+    
+    // --- Motion Calculation (Unchanged) ---
     let bg_rate = 0.75;
     let bg_strength = 0.013;
     let bg_freq = 13.0;
@@ -27,7 +25,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let bg_d2 = cos(uv.x * bg_freq * 0.7 + bg_time) * bg_strength;
     let background_displacement = vec2<f32>(bg_d1, bg_d2);
 
-    // 2. Define the additional "foreground" motion.
     let fg_rate = 0.9;
     let fg_strength = 0.017;
     let fg_freq = 25.0;
@@ -36,37 +33,39 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let fg_d2 = cos(uv.y * fg_freq * 1.3 + fg_time) * fg_strength;
     let foreground_displacement = vec2<f32>(fg_d1, fg_d2);
 
-    // 3. Widen the blend range to have a "looser" selection.
-    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.2, depth);
-
-    // 4. Combine the displacements.
+    // --- Depth Sampling and Displacement ---
+    // We need the original depth to determine how much foreground motion to apply.
+    let original_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
+    let foreground_mix_factor = 1.0 - smoothstep(0.0, 0.2, original_depth);
     let final_displacement = background_displacement + (foreground_displacement * foreground_mix_factor);
     
     var displacedUV = uv + final_displacement;
+    
+    // --- THIS IS THE FIRST CHANGE ---
+    // Sample the depth from the DISPLACED UVs to get the depth of the content that's currently visible.
+    let dynamic_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV, 0.0).r;
+    
     var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
 
-    // --- START: New Fog and Spotlight Logic ---
+    // --- Fog and Spotlight Logic ---
 
-    // 5. Add fog to the background.
-    let fog_color = vec4<f32>(0.1, 0.1, 0.1, 1.0); // Dark grey fog
-    // --- THIS IS THE MODIFIED LINE ---
-    let fog_intensity = smoothstep(0.7, 0.95, depth) * 0.6;
+    // Add fog to the background using the dynamic depth.
+    let fog_color = vec4<f32>(0.1, 0.1, 0.1, 1.0);
+    // --- THIS IS THE SECOND CHANGE ---
+    // Further lowered intensity from 0.6 to 0.4.
+    let fog_intensity = smoothstep(0.7, 0.95, dynamic_depth) * 0.4;
     color = mix(color, fog_color, fog_intensity);
 
-    // 6. Add a moving spotlight to the foreground.
+    // Add a moving spotlight to the foreground using the dynamic depth.
     let light_pos = vec2<f32>(sin(time * 0.5) * 0.5 + 0.5, cos(time * 0.3) * 0.5 + 0.5);
     let light_radius = 0.3;
     let dist_to_light = distance(uv, light_pos);
     
-    // Calculate spotlight brightness, apply only to foreground.
-    let spotlight_brightness = (1.0 - smoothstep(0.0, light_radius, dist_to_light)) * (1.0 - depth);
+    // Using dynamic_depth here makes the spotlight "stick" to the moving foreground objects correctly.
+    let spotlight_brightness = (1.0 - smoothstep(0.0, light_radius, dist_to_light)) * (1.0 - dynamic_depth);
     
-    // Calculate the new RGB value first.
     let new_rgb = color.rgb + vec3<f32>(spotlight_brightness * 0.4);
-    // Re-create the color with the new RGB and original alpha.
     color = vec4<f32>(new_rgb, color.a);
-
-    // --- END: New Fog and Spotlight Logic ---
 
     textureStore(writeTexture, global_id.xy, color);
 }
