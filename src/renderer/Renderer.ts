@@ -142,7 +142,7 @@ export class Renderer {
                 format: 'rgba16float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
             });
-            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, image<em></em>.height]);
+            this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
             await this.device.queue.onSubmittedWorkDone();
             if (oldTexture) {
                 oldTexture.destroy();
