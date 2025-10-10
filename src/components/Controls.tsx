@@ -30,7 +30,6 @@ const Controls: React.FC<ControlsProps> = ({
     autoChangeDelay, setAutoChangeDelay,
     onLoadModel, isModelLoaded // NEW
 }) => {
-    const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple';
 
     return (
         <div className="controls">
@@ -55,8 +54,6 @@ const Controls: React.FC<ControlsProps> = ({
         </button>
         <button onClick={onNewImage}>Load New Random Image</button>
       </div>
-             {isImageMode && (
-                <>
                     <div className="control-group">
                         <label></label>
                         <button onClick={onNewImage}>New Random Image</button>
@@ -71,7 +68,6 @@ const Controls: React.FC<ControlsProps> = ({
                             <input type="range" id="delay-slider" min="1" max="10" step="1" value={autoChangeDelay} onChange={(e) => setAutoChangeDelay(Number(e.target.value))} />
                         </div>
                     )}
-                </>
             )}
             <div className="control-group">
                 <label htmlFor="zoom-slider">Zoom:</label>
