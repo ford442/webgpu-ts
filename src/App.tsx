@@ -17,10 +17,6 @@ function App() {
     const [smoothness, setSmoothness] = useState(1.0);
     const [pointSize, setPointSize] = useState(1.0); // New state
 
-    
-    // --- FIX IS HERE ---
-// 2. Configure the environment to use WebGPU and 16-bit floats.
-// This tells the library to use the GPU for all subsequent model operations.
 env.allowLocalModels = false;
 env.backends.onnx.executionProviders = ['webgpu'];
 env.backends.onnx.logLevel = 'warning'; // Less verbose logging
@@ -69,8 +65,13 @@ const model_loc = 'https://huggingface.co/Xenova/dpt-hybrid-midas/resolve/main/o
         try {
             setStatus('Loading model...');
             const estimator = await pipeline('depth-estimation', model_loc, {
-                 progress_callback: (progress: { progress: number }) => {
-                    setStatus(`Loading model... ${(progress.progress).toFixed(2)}%`);
+                 progress_callback: (progress: any) => {
+                    if (progress.status === 'progress' && typeof progress.progress === 'number') {
+                        setStatus(`Loading model... ${progress.progress.toFixed(2)}%`);
+                    } else {
+                        // You can also display other statuses if you want, e.g., 'downloading', 'initializing'
+                        setStatus(progress.status);
+                    }
                 }
             });
             setDepthEstimator(() => estimator);
