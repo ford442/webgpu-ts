@@ -15,7 +15,7 @@ struct Uniforms {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let uv = vec2<f32>(global_id.xy) / u.resolution;
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
-    var final_color = textureSampleLevel(readTexture, u_sampler, uv);
+    var final_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0).r;
 
     // 1. Top-down light on the closest 25% of the depth map
     // The light is strongest at depth 0.0 and fades out by 0.25.
