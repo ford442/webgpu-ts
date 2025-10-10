@@ -11,6 +11,7 @@ struct Uniforms {
     lightPos: vec2<f32>,
     pointSize: f32,
 };
+
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 struct VertexOutput {
@@ -88,16 +89,21 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
         + (cam_right * chosen_offset.x * size) 
         + (cam_up_rotated * chosen_offset.y * size);
 
+    let perspective_factor = 2.5;
+
+    // Apply the perspective projection to X and Y, and then apply user zoom.
+    let finalX = (final_pos.x / perspective_factor) * u.zoom;
+    let finalY = (final_pos.y / perspective_factor) * u.zoom;
+
     var output: VertexOutput;
     output.worldPos = center_pos;
     output.worldNormal = normalize(rotatedNormal);
     output.fragUV = uv;
     output.particleUV = particle_uv;
     
-    final_pos.z += 2.0;
-    final_pos.x *= u.zoom;
-    final_pos.y *= u.zoom;
-    output.position = vec4<f32>(final_pos.x, -final_pos.y, final_pos.z, 1.0);
+    // We'll use the original zDisplacement for the depth buffer.
+    // The final X and Y come from our new projection calculation.
+    output.position = vec4<f32>(finalX, -finalY, zDisplacement, 1.0);
     return output;
 }
 
