@@ -69,7 +69,7 @@ const model_loc = 'https://huggingface.co/Xenova/dpt-hybrid-midas/resolve/main/o
         try {
             setStatus('Loading model...');
             const estimator = await pipeline('depth-estimation', model_loc, {
-                progress_callback: (progress) => {
+                 progress_callback: (progress: { progress: number }) => {
                     setStatus(`Loading model... ${(progress.progress).toFixed(2)}%`);
                 }
             });
