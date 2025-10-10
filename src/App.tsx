@@ -74,7 +74,7 @@ const model_loc = 'Xenova/dpt-hybrid-midas'
                         setStatus(progress.status);
                     }
                 },
-                dtype: 'fp32'
+            quantized: false // Correct: Use this to load the FP32 model
             });
             setDepthEstimator(() => estimator);
             setStatus('Model Loaded. Processing initial image...');
