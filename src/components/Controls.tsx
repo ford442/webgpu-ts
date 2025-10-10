@@ -44,6 +44,7 @@ const Controls: React.FC<ControlsProps> = ({
                     */}
                 </select>
             </div>
+        </div>
     );
 };
 
