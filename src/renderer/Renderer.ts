@@ -1,6 +1,6 @@
 import { RenderMode } from './types';
 import { IRenderMode } from './IRenderMode';
-import { LightingMode } from './modes/LightingMode';
+import { renderModes } from './modes'; // Import the mode registry
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -72,21 +72,20 @@ export class Renderer {
         if (this.activeMode?.destroy) {
             this.activeMode.destroy();
         }
-        switch (modeName) {
-            case 'liquid-v1':
-                this.activeMode = new LightingMode();
-                break;
-            default:
-                console.warn(`Mode "${modeName}" not yet implemented.`);
-                this.activeMode = null;
-                this.activeModeName = modeName;
-                return;
+        const ModeClass = renderModes[modeName];
+        if (ModeClass) {
+            this.activeMode = new ModeClass();
+        } else {
+            console.warn(`Mode "${modeName}" not yet implemented.`);
+            this.activeMode = null;
         }
         this.activeModeName = modeName;
-        await this.activeMode.init(
-            this.device, this.presentationFormat, this.sampler, this.nonFilteringSampler,
-            this.imageTexture, this.depthTextureRead, this.writeTexture, this.uniformBuffer
-        );
+        if (this.activeMode) {
+            await this.activeMode.init(
+                this.device, this.presentationFormat, this.sampler, this.nonFilteringSampler,
+                this.imageTexture, this.depthTextureRead, this.writeTexture, this.uniformBuffer
+            );
+        }
         this.isModeReady = true;
     }
     
