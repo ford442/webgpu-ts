@@ -41,12 +41,11 @@ export class Renderer {
     }
     
     // public stopMouseDrag() { this.cameraState.isDragging = false; }
-    /*
+
     public updateZoom(deltaY: number) {
         this.cameraState.zoom += deltaY * 0.001;
         this.cameraState.zoom = Math.max(0.2, Math.min(5.0, this.cameraState.zoom));
     }
-    */
     
     public updateDepthMap(data: Float32Array, width: number, height: number) {
         if (!this.device || !width || !height) return;
