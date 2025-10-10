@@ -25,9 +25,8 @@ export class LightingMode implements IRenderMode {
                 { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: {} },
                 { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: {} },
                 { binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { format: 'rgba16float' as GPUTextureFormat } },
-                // --- THIS IS THE CORRECTED LINE ---
                 { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' as GPUBufferBindingType } },
-                { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float' } },
+                { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float' as GPUTextureSampleType } },
                 { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' } },
             ]
         });
