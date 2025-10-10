@@ -1,6 +1,6 @@
 export type RenderMode = 'shader' | 'image' | 'video' | 'ripple' | 'liquid' | 'depth';
 
-const GRID_SIZE = 1024;
+const GRID_SIZE = 1536;
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
