@@ -19,7 +19,8 @@ function App() {
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
   const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
   const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 });
-  const [isMouseDown, setIsMouseDown] = useState(false);
+const [isMouseDown, setIsMouseDown] = useState(false);
+    const [modelQuantized, setModelQuantized] = useState(false); // NEW STATE
 
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,21 +46,33 @@ function App() {
 
 
   const loadModel = async () => {
-    if (depthEstimator) {
-      setStatus('AI model is already loaded.');
-      return;
-    }
-    try {
-      setStatus('Loading AI model (this may take a minute)...');
-      const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
-      setDepthEstimator(() => estimator);
-      setStatus('AI Model Loaded. New images will now have depth effects.');
-    } catch (e: any) {
-      console.error(e);
-      setStatus(`Failed to load AI model: ${e.message}`);
-    }
-  };
+        if (depthEstimator) {
+            setStatus('AI model is already loaded.');
+            return;
+        }
+        try {
+            setStatus('Loading AI model (this may take a minute)...');
+            const estimator = await pipeline(
+                'depth-estimation', 
+                'Xenova/dpt-hybrid-midas',
+                { quantized: modelQuantized } // Use the state here
+            );
+            setDepthEstimator(() => estimator);
+            setStatus('AI Model Loaded. New images will now have depth effects.');
+        } catch (e: any) {
+            console.error(e);
+            setStatus(`Failed to load AI model: ${e.message}`);
+        }
+    };
 
+   const handleSetModelQuantized = (quantized: boolean) => {
+        if (depthEstimator) {
+            setDepthEstimator(null); // Unload the current model
+            setStatus('Model type changed. Please click "Load AI Model" again.');
+        }
+        setModelQuantized(quantized);
+    };
+  
   const runDepthAnalysis = useCallback(async (imageUrl: string) => {
     if (!depthEstimator || !rendererRef.current) return;
     setStatus('Analyzing image with AI model...');
@@ -167,8 +180,10 @@ function App() {
         autoChangeDelay={autoChangeDelay}
         setAutoChangeDelay={setAutoChangeDelay}
         onLoadModel={loadModel}
-        isModelLoaded={!!depthEstimator}
-      />
+                isModelLoaded={!!depthEstimator}
+                modelQuantized={modelQuantized} // Pass new state down
+                setModelQuantized={handleSetModelQuantized} // Pass new handler down
+            />
        <WebGPUCanvas
         rendererRef={rendererRef}
         mode={mode}
