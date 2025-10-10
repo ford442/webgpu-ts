@@ -42,32 +42,29 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // --- Atmospheric Effects ---
     let shadow_color = vec4<f32>(0.12, 0.12, 0.15, 1.0); 
-    let shadow_intensity = smoothstep(0.7, 0.95, dynamic_depth) * 0.85;
+    // --- CHANGE #1: Shadow now starts much closer to the foreground ---
+    let shadow_intensity = smoothstep(0.4, 0.9, dynamic_depth) * 0.85; // Starts at depth 0.4 instead of 0.7
     color = mix(color, shadow_color, shadow_intensity);
 
     let foreground_fog_color = vec3<f32>(0.6, 0.6, 0.7);
-    let foreground_fog_intensity = smoothstep(0.4, 0.8, 1.0 - dynamic_depth) * 0.15;
+    // --- CHANGE #2: Foreground fog is now a bit stronger and covers more area ---
+    let foreground_fog_intensity = smoothstep(0.2, 0.8, 1.0 - dynamic_depth) * 0.18; // Wider range and slightly more intense
     let new_rgb_with_fog = color.rgb + (foreground_fog_color * foreground_fog_intensity);
     color = vec4<f32>(new_rgb_with_fog, color.a);
     
-    // --- Spotlight Logic with Softer Sheen ---
+    // --- Spotlight Logic ---
     let light_pos = vec2<f32>(sin(u.time * 0.5) * 0.5 + 0.5, cos(u.time * 0.3) * 0.5 + 0.5);
     let light_radius = 0.45;
     let dist_to_light = distance(uv, light_pos);
     
     let base_spotlight = (1.0 - smoothstep(0.05, light_radius, dist_to_light)) * (1.0 - dynamic_depth);
     
-    // --- START: New Softer Sheen Logic ---
     let texel_size = 1.0 / resolution;
     let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(texel_size.x, 0.0), 0.0).r;
     let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(0.0, texel_size.y), 0.0).r;
     
     let normal_factor = abs(dynamic_depth - depth_right) + abs(dynamic_depth - depth_up);
-    
-    // This calculation is now much softer: wider smoothstep range, no pow(), and a lower multiplier.
-    // This creates a gentle sheen instead of a sharp, geometric glint.
     let specular_sheen = smoothstep(0.01, 0.05, normal_factor) * 1.5;
-    // --- END: New Softer Sheen Logic ---
 
     let spotlight_brightness = base_spotlight + (specular_sheen * base_spotlight);
     
