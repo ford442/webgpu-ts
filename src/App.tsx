@@ -4,6 +4,8 @@ import Controls from './components/Controls';
 import { Renderer } from './renderer/Renderer';
 import { RenderMode } from './renderer/types';
 import { pipeline } from '@huggingface/transformers';
+import Controls, { ModelDType } from './components/Controls';
+
 import './style.css';
 
 function App() {
