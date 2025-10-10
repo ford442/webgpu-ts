@@ -9,7 +9,6 @@ struct Uniforms {
     resolutionX: f32,
     resolutionY: f32,
 };
-
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 @compute @workgroup_size(8, 8, 1)
@@ -61,8 +60,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Calculate spotlight brightness, apply only to foreground.
     let spotlight_brightness = (1.0 - smoothstep(0.0, light_radius, dist_to_light)) * (1.0 - depth);
     
-    // Apply the spotlight as an additive effect.
-    color.rgb = color.rgb + vec3<f32>(spotlight_brightness * 0.4);
+    // --- THIS IS THE CORRECTED LOGIC ---
+    // Calculate the new RGB value first.
+    let new_rgb = color.rgb + vec3<f32>(spotlight_brightness * 0.4);
+    // Re-create the color with the new RGB and original alpha.
+    color = vec4<f32>(new_rgb, color.a);
 
     // --- END: New Fog and Spotlight Logic ---
 
