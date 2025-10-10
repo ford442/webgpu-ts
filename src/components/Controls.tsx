@@ -16,8 +16,8 @@ interface ControlsProps {
     setAutoChangeEnabled: (enabled: boolean) => void;
     autoChangeDelay: number;
     setAutoChangeDelay: (delay: number) => void;
-    onLoadModel: () => void; // NEW
-    isModelLoaded: boolean;   // NEW
+    onLoadModel: () => void;
+    isModelLoaded: boolean;
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
@@ -28,7 +28,7 @@ const Controls: React.FC<ControlsProps> = ({
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
-    onLoadModel, isModelLoaded // NEW
+    onLoadModel, isModelLoaded
 }) => {
     const isImageMode = mode.startsWith('liquid') || mode === 'image' || mode === 'ripple';
 
@@ -37,7 +37,7 @@ const Controls: React.FC<ControlsProps> = ({
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
 <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
-    <option value="vortex">Clean Vortex</option> {/* ADD THIS */}
+    <option value="vortex">Clean Vortex</option>
     <option value="liquid-perspective">Liquid Perspective</option>
     <option value="liquid-vortex">Liquid Vortex</option>
     <option value="liquid">Liquid (Interactive)</option>
