@@ -35,7 +35,7 @@ const Controls: React.FC<ControlsProps> = ({
         <div className="controls">
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
-<select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
+    <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
     <option value="vortex">Clean Vortex</option> {/* ADD THIS */}
     <option value="liquid-perspective">Liquid Perspective</option>
     <option value="liquid-vortex">Liquid Vortex</option>
@@ -67,7 +67,6 @@ const Controls: React.FC<ControlsProps> = ({
                             <label htmlFor="delay-slider">Delay ({autoChangeDelay}s):</label>
                             <input type="range" id="delay-slider" min="1" max="10" step="1" value={autoChangeDelay} onChange={(e) => setAutoChangeDelay(Number(e.target.value))} />
                         </div>
-                    )}
             )}
             <div className="control-group">
                 <label htmlFor="zoom-slider">Zoom:</label>
