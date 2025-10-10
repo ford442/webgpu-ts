@@ -18,37 +18,29 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     let original_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
-    // --- START: New Motion Logic ---
-
-    // 1. Background Motion: Using the preferred complex ambient motion.
+    // --- Motion Logic ---
     let time = u.time * 0.5;
     let base_ambient_strength = 0.004;
     let ambient_freq = 15.0;
     let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
     let background_displacement = motion * base_ambient_strength;
 
-    // 2. Foreground Motion: Lowered the max strength.
     let fg_rate = 0.9;
-    let base_fg_strength = 0.015; // Lowered from 0.02
+    let base_fg_strength = 0.015;
     let fg_freq = 25.0;
     let fg_time = u.time * fg_rate;
     let fg_d1 = sin(uv.x * fg_freq + fg_time);
     let fg_d2 = cos(uv.y * fg_freq * 1.3 + fg_time);
     let base_foreground_motion = vec2<f32>(fg_d1, fg_d2);
 
-    // 3. Motion Gradient: Tightened the range of the effect.
-    let motion_gradient = pow(1.0 - smoothstep(0.0, 0.5, original_depth), 2.5); // Range lowered from 0.7
-    
-    // 4. Combine Motions.
+    let motion_gradient = pow(1.0 - smoothstep(0.0, 0.5, original_depth), 2.5);
     let final_displacement = background_displacement + (base_foreground_motion * base_fg_strength * motion_gradient);
-
-    // --- END: New Motion Logic ---
 
     var displacedUV = uv + final_displacement;
     let dynamic_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV, 0.0).r;
     var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
 
-    // --- Atmospheric Effects (Unchanged) ---
+    // --- Atmospheric Effects ---
     let shadow_color = vec4<f32>(0.12, 0.12, 0.15, 1.0); 
     let shadow_intensity = smoothstep(0.7, 0.95, dynamic_depth) * 0.85;
     color = mix(color, shadow_color, shadow_intensity);
@@ -58,11 +50,28 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let new_rgb_with_fog = color.rgb + (foreground_fog_color * foreground_fog_intensity);
     color = vec4<f32>(new_rgb_with_fog, color.a);
     
+    // --- Spotlight Logic with Specular Glint ---
     let light_pos = vec2<f32>(sin(u.time * 0.5) * 0.5 + 0.5, cos(u.time * 0.3) * 0.5 + 0.5);
     let light_radius = 0.45;
     let dist_to_light = distance(uv, light_pos);
     
-    let spotlight_brightness = (1.0 - smoothstep(0.05, light_radius, dist_to_light)) * (1.0 - dynamic_depth);
+    let base_spotlight = (1.0 - smoothstep(0.05, light_radius, dist_to_light)) * (1.0 - dynamic_depth);
+    
+    // --- START: New Specular/Reflectivity Logic ---
+    let texel_size = 1.0 / resolution;
+    // Sample depth of neighboring pixels
+    let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(texel_size.x, 0.0), 0.0).r;
+    let depth_up = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(0.0, texel_size.y), 0.0).r;
+    
+    // Calculate how much the depth changes at this point
+    let normal_factor = abs(dynamic_depth - depth_right) + abs(dynamic_depth - depth_up);
+    
+    // Create a sharp glint only on the edges with a high depth change
+    let specular_glint = pow(smoothstep(0.002, 0.01, normal_factor), 2.0) * 20.0;
+    // --- END: New Specular/Reflectivity Logic ---
+
+    // Add the glint to the base spotlight brightness
+    let spotlight_brightness = base_spotlight + (specular_glint * base_spotlight);
     
     let light_color = vec3<f32>(0.2, 0.5, 1.0);
     let final_rgb = color.rgb + (light_color * spotlight_brightness);
