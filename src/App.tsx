@@ -7,7 +7,7 @@ import { pipeline, env } from '@xenova/transformers';
 import './style.css';
 
 env.allowLocalModels = false;
-env.backends.onnx.executionProviders = ['webgpu'];
+// env.backends.onnx.executionProviders = ['webgpu'];
 env.backends.onnx.logLevel = 'warning';
 const model_loc = 'Xenova/dpt-hybrid-midas'
 
