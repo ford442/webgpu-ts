@@ -30,14 +30,17 @@ fn sample_zooming_layer(
     let depth_multiplier = mix(1.0, fg_max_scale, 1.0 - (depth / u.zoom_params.w));
     let scale = 1.0 + (1.0 - zoom_progress) * depth_multiplier;
     let repeating_uv = (uv - zoom_center) * scale + zoom_center;
-
-    // --- MODIFICATION ---
-    // The parallax offset was causing the shearing artifact. By removing it,
-    // we ensure the zoom effect is flat and coherent across the entire foreground object.
     let color = textureSampleLevel(readTexture, u_sampler, fract(repeating_uv), 0.0);
 
-    let fade_in_duration = 0.2;
-    let alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
+    // --- MODIFICATION: Improved Fade-in and Fade-out ---
+    // By fading the layer out as it reaches the end of its cycle (progress -> 1.0),
+    // we can create a much smoother blend between the two overlapping layers.
+    // This eliminates the hard edge artifact and creates a seamless tunnel effect.
+    let fade_duration = 0.4; // A longer duration creates a softer blend
+    let fade_in = smoothstep(0.0, fade_duration, zoom_progress);
+    let fade_out = 1.0 - smoothstep(1.0 - fade_duration, 1.0, zoom_progress);
+    let alpha = fade_in * fade_out;
+
     return vec4(color.rgb, alpha);
 }
 
