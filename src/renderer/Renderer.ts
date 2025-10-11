@@ -37,13 +37,8 @@ export class Renderer {
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
         await this.fetchImageUrls();
-
-        // --- THIS IS THE FIX ---
-        // Pipelines must be created BEFORE resources that use them.
         await this.createPipelines();
         await this.createResources();
-        // --- END FIX ---
-
         return true;
     }
     
@@ -65,9 +60,7 @@ export class Renderer {
         try {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
-            
             this.currentImageUrl = imageUrl;
-
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
             this.imageDimensions = { width: imageBitmap.width, height: imageBitmap.height };
@@ -111,7 +104,8 @@ export class Renderer {
             this.writeTexture = this.device.createTexture({
                 size: [newCanvasWidth, newCanvasHeight],
                 format: 'rgba16float',
-                usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+                // --- THIS IS THE FIX ---
+                usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
             });
             this.createBindGroups();
         }
@@ -152,7 +146,8 @@ export class Renderer {
         this.writeTexture = this.device.createTexture({
             size: [this.canvas.width, this.canvas.height],
             format: 'rgba16float',
-            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            // --- THIS IS THE FIX ---
+            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
         });
         
         await this.loadRandomImage();
