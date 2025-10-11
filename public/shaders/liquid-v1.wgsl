@@ -12,44 +12,6 @@ struct Uniforms {
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-fn calculate_shadow(
-  light_pos: vec2<f32>,      // The light's screen-space position
-  receiver_uv: vec2<f32>,     // The UV of the pixel receiving light
-  receiver_depth: f32,  // The depth of the pixel receiving light
-  step_size: f32,           // How far back towards the light to check for occluders
-  bias: f32                 // A small depth bias to prevent self-shadowing
-) -> f32 {
-    var shadow = 0.0;
-    let total_samples = 4.0;
-    
-    // The direction from the pixel back to the light source
-    let light_vec = light_pos - receiver_uv;
-    let light_dir = normalize(light_vec);
-    
-    // Take 4 samples in a small pattern along the path to the light
-    // to create soft shadows (Percentage-Closer Filtering).
-    let offsets = array<vec2<f32>, 4>(
-        vec2<f32>(-0.5, -0.5),
-        vec2<f32>(0.5, -0.5),
-        vec2<f32>(-0.5, 0.5),
-        vec2<f32>(0.5, 0.5)
-    );
-  for (var i = 0; i < 4; i = i + 1) {
-        // Find the UV coordinate of the potential shadow-caster (occluder)
-        let occluder_uv = receiver_uv + light_dir * step_size + offsets[i] * step_size * 0.5;
-        let occluder_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, occluder_uv, 0.0).r;
-
-        // The shadow test: Is the occluder's depth closer to the camera than the receiver's depth?
-        // If so, it casts a shadow.
-        if (occluder_depth < receiver_depth - bias) {
-            shadow += 1.0;
-        }
-    }
-    
-    // The final shadow factor is 1.0 minus the percentage of samples that were in shadow.
-    return 1.0 - (shadow / total_samples);
-}
-
 fn aces_tonemap(color: vec3<f32>) -> vec3<f32> {
   let A = 2.5101;
   let B = 0.03;
@@ -75,11 +37,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let uv = vec2<f32>(global_id.xy) / resolution;
   let pixelSize = 1.0 / resolution;
   let time = u.time;
-
-      // --- NEW: Tunable Shadow Parameters ---
-  let shadow_step_size = 0.015; // Controls shadow "offset". Larger values = longer shadows.
-  let shadow_bias = 0.01;       // Prevents "shadow acne" or self-shadowing artifacts.
-
+    
   // --- Parallax Logic (Unchanged) ---
   let static_depth_for_motion = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
   let parallax_time = time * 0.5;
@@ -94,7 +52,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let fg_d1 = sin(uv.x * fg_freq + fg_time);
   let fg_d2 = cos(uv.y * fg_freq * 1.3 + fg_time);
   let base_foreground_motion = vec2<f32>(fg_d1, fg_d2);
-  let motion_gradient = pow(1.0 - smoothstep(0.0, 0.22, static_depth_for_motion), 2.5);
+  let motion_gradient = pow(1.0 - smoothstep(0.0, 0.32, static_depth_for_motion), 2.5);
   var final_displacement = background_displacement + (base_foreground_motion * base_fg_strength * motion_gradient);
   let border_thickness = 0.1;
   let fade_start = 0.5 - border_thickness;
@@ -138,19 +96,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let ray_stretch_factor2 = vec2<f32>(1.0, 0.2);
   let dist_to_sunray2 = distance(uv * ray_stretch_factor2, sunray2_pos * ray_stretch_factor2);
   let base_sunray2 = (1.0 - smoothstep(0.0, 0.15, dist_to_sunray2)) * pow(1.0 - aa_visual_depth, 2.5);
-
-  // MODIFICATION: Calculate shadows cast by sunrays
-  let sunray1_shadow = calculate_shadow(sunray1_pos, displacedUV, aa_visual_depth, shadow_step_size, shadow_bias);
-  let sunray2_shadow = calculate_shadow(sunray2_pos, displacedUV, aa_visual_depth, shadow_step_size, shadow_bias);
-  // A pixel is lit if either sunray can see it.
-  let sunray_shadow_factor = max(sunray1_shadow, sunray2_shadow);
-  var total_sunray_intensity = clamp(base_sunray1 * 1.5 + base_sunray2 * 1.3, 0.0, 1.0);
-  // Apply the shadow factor to the sunray intensity
-  total_sunray_intensity *= sunray_shadow_factor;
-
+  
+  let total_sunray_intensity = clamp(base_sunray1 * 1.5 + base_sunray2 * 1.3, 0.0, 1.0);
   let sunray_specular = specular_sheen * total_sunray_intensity * 1.5;
   let sunray_color = vec3<f32>(1.0, 0.95, 0.85);
-  
+
   let FOREGROUND_LIT_MULTIPLIER = 2.2;
   let shadowed_foreground_color = mix(color.rgb, foreground_shadow_color.rgb, foreground_shadow_intensity);
   let lit_foreground_color = color.rgb * FOREGROUND_LIT_MULTIPLIER;
@@ -171,12 +121,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let dist_to_light1 = distance(uv, light1_pos);
   let core1 = 1.0 - smoothstep(light_core_radius * 0.5, light_core_radius, dist_to_light1);
   let falloff1 = (1.0 - smoothstep(light_core_radius, light1_falloff_radius, dist_to_light1)) * light_falloff_intensity;
-  let spot1_shadow_factor = calculate_shadow(light1_pos, displacedUV, aa_visual_depth, shadow_step_size, shadow_bias);
-  let base_spotlight1 = (core1 + falloff1) * light1_depth_occlusion * spot1_shadow_factor;
-  var spotlight1_brightness = base_spotlight1 + (specular_sheen * base_spotlight1);
-
+  let base_spotlight1 = (core1 + falloff1) * light1_depth_occlusion;
+  let spotlight1_brightness = base_spotlight1 + (specular_sheen * base_spotlight1);
   let light1_color = vec3<f32>(0.2, 0.5, 1.0);
-
 
   // Spotlight 2 (Warm)
   let light2_pos = vec2<f32>(cos(time * -0.4) * 0.5 + 0.5, sin(time * 0.6) * 0.5 + 0.5);
@@ -186,13 +133,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let dist_to_light2 = distance(uv, light2_pos);
   let core2 = 1.0 - smoothstep(light_core_radius * 0.5, light_core_radius, dist_to_light2);
   let falloff2 = (1.0 - smoothstep(light_core_radius, light2_falloff_radius, dist_to_light2)) * light_falloff_intensity;
-    let spot2_shadow_factor = calculate_shadow(light2_pos, displacedUV, aa_visual_depth, shadow_step_size, shadow_bias);
-  let base_spotlight2 = (core2 + falloff2) * light2_depth_occlusion * spot2_shadow_factor;
-  var spotlight2_brightness = base_spotlight2 + (specular_sheen * base_spotlight2);
-  
+  let base_spotlight2 = (core2 + falloff2) * light2_depth_occlusion;
+  let spotlight2_brightness = base_spotlight2 + (specular_sheen * base_spotlight2);
   let light2_color = vec3<f32>(1.0, 0.7, 0.2);
-
-
+  
   final_rgb += (light1_color * spotlight1_brightness) + (light2_color * spotlight2_brightness);
 
 // --- MODIFICATION START: Post-Processing Contrast Boost ---
