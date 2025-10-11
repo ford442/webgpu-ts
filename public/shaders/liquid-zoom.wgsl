@@ -26,17 +26,18 @@ fn sample_zooming_layer(
 ) -> vec4<f32> {
     let fg_speed = u.zoom_params.x;
     let zoom_progress = fract(zoom_time * fg_speed + cycle_offset);
-    let fg_max_scale = 3.0; 
-    let depth_multiplier = mix(1.0, fg_max_scale, 1.0 - (depth / u.zoom_params.w));
-    let scale = 1.0 + (1.0 - zoom_progress) * depth_multiplier;
+
+    // --- MODIFICATION: Uniform Zoom Rate ---
+    // Instead of scaling based on depth, we use a constant intensity.
+    // This makes all foreground pixels zoom at the same rate, creating the
+    // "level plane" effect you're looking for.
+    let zoom_intensity = 2.5;
+    let scale = 1.0 + (1.0 - zoom_progress) * zoom_intensity;
+
     let repeating_uv = (uv - zoom_center) * scale + zoom_center;
     let color = textureSampleLevel(readTexture, u_sampler, fract(repeating_uv), 0.0);
 
-    // --- MODIFICATION: Improved Fade-in and Fade-out ---
-    // By fading the layer out as it reaches the end of its cycle (progress -> 1.0),
-    // we can create a much smoother blend between the two overlapping layers.
-    // This eliminates the hard edge artifact and creates a seamless tunnel effect.
-    let fade_duration = 0.4; // A longer duration creates a softer blend
+    let fade_duration = 0.4;
     let fade_in = smoothstep(0.0, fade_duration, zoom_progress);
     let fade_out = 1.0 - smoothstep(1.0 - fade_duration, 1.0, zoom_progress);
     let alpha = fade_in * fade_out;
@@ -57,8 +58,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let static_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
     let static_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
-    // --- Liquid/ripple logic ---
+    // --- MODIFICATION: Liquid Ripple Effect Disabled ---
+    // By commenting out the ripple calculation, we ensure the UV plane (the "ground")
+    // is not distorted and remains perfectly level.
     var totalDisplacement = vec2<f32>(0.0);
+    /*
     let rippleCount = u32(u.config.y);
     for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
         let rippleData = u.ripples[i];
@@ -77,6 +81,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             }
         }
     }
+    */
     var displaced_uv = uv + totalDisplacement;
 
     // --- Calculate the FULLY TRANSFORMED color ---
@@ -97,8 +102,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // --- Depth texture update with masking ---
     let main_zoom_progress = fract(zoom_time * u.zoom_params.x);
-    let main_depth_multiplier = mix(1.0, 3.0, 1.0 - (transformed_depth_sample / fg_depth_cutoff));
-    let main_scale = 1.0 + (1.0 - main_zoom_progress) * main_depth_multiplier;
+    let main_zoom_intensity = 2.5;
+    let main_scale = 1.0 + (1.0 - main_zoom_progress) * main_zoom_intensity;
     let main_repeating_uv = (displaced_uv - zoom_center) * main_scale + zoom_center;
     let transformed_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, fract(main_repeating_uv), 0.0).r;
     let final_depth = mix(static_depth, transformed_depth, effect_mask);
