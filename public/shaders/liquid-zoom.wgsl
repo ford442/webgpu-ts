@@ -17,7 +17,7 @@ struct Uniforms {
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// Helper function to sample a single, depth-aware zooming layer
+// Helper function to sample a single, depth-aware zooming layer (unchanged)
 fn sample_zooming_layer(
     uv: vec2<f32>,
     depth: f32,
@@ -51,7 +51,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let bg_speed = u.zoom_params.y;
     let fg_depth_cutoff = u.zoom_params.w;
 
-    // --- Liquid/ripple logic ---
+    // --- NEW: Sample static color and depth at the start ---
+    // We'll use these at the end to ensure the background remains still.
+    let static_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
+    let static_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
+
+    // --- Liquid/ripple logic (unchanged) ---
     var totalDisplacement = vec2<f32>(0.0);
     let rippleCount = u32(u.config.y);
     for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
@@ -71,10 +76,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             }
         }
     }
-    
     var displaced_uv = uv + totalDisplacement;
 
-    // --- NEW VORTEX LOGIC ---
+    // --- Vortex Logic (unchanged) ---
     let vortex_strength = u.vortex_params.x;
     let vortex_speed = u.vortex_params.y;
     let centered_uv = displaced_uv - zoom_center;
@@ -82,30 +86,36 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let angle = u.zoom_config.x * vortex_speed + dist_from_center * vortex_strength;
     let s = sin(angle);
     let c = cos(angle);
-    let rotated_centered_uv = vec2<f32>(
-        centered_uv.x * c - centered_uv.y * s,
-        centered_uv.x * s + centered_uv.y * c
-    );
+    let rotated_centered_uv = vec2<f32>(centered_uv.x * c - centered_uv.y * s, centered_uv.x * s + centered_uv.y * c);
     displaced_uv = rotated_centered_uv + zoom_center;
-    // --- END VORTEX LOGIC ---
 
-    // --- Zoom & Layering Logic ---
-    let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, displaced_uv, 0.0).r;
+    // --- Calculate the FULLY TRANSFORMED color ---
+    let transformed_depth_sample = textureSampleLevel(readDepthTexture, non_filtering_sampler, displaced_uv, 0.0).r;
     let bg_scale = 1.0 + zoom_time * bg_speed;
     let bg_uv = (displaced_uv - zoom_center) * bg_scale + zoom_center;
     let background_color = textureSampleLevel(readTexture, u_sampler, fract(bg_uv), 0.0);
-    let foreground1 = sample_zooming_layer(displaced_uv, depth, zoom_time, zoom_center, 0.0);
-    let foreground2 = sample_zooming_layer(displaced_uv, depth, zoom_time, zoom_center, 0.5);
+    let foreground1 = sample_zooming_layer(displaced_uv, transformed_depth_sample, zoom_time, zoom_center, 0.0);
+    let foreground2 = sample_zooming_layer(displaced_uv, transformed_depth_sample, zoom_time, zoom_center, 0.5);
     let blended_foreground = mix(foreground1, foreground2, foreground2.a);
-    let blend_amount = smoothstep(fg_depth_cutoff + 0.1, fg_depth_cutoff, depth);
-    let final_color_rgb = mix(background_color.rgb, blended_foreground.rgb, blend_amount);
+    let blend_amount = smoothstep(fg_depth_cutoff + 0.1, fg_depth_cutoff, transformed_depth_sample);
+    let transformed_color_rgb = mix(background_color.rgb, blended_foreground.rgb, blend_amount);
+
+    // --- NEW: Final Depth-Based Separation ---
+    // Create the mask using the static, original depth.
+    let effect_mask = pow(1.0 - smoothstep(0.0, fg_depth_cutoff, static_depth), 2.5);
+
+    // Blend between the static color and the transformed color using the mask.
+    let final_color_rgb = mix(static_color.rgb, transformed_color_rgb, effect_mask);
     textureStore(writeTexture, global_id.xy, vec4(final_color_rgb, 1.0));
 
-    // --- Depth texture update ---
+    // --- Depth texture update with masking ---
     let main_zoom_progress = fract(zoom_time * u.zoom_params.x);
-    let main_depth_multiplier = mix(1.0, 3.0, 1.0 - (depth / fg_depth_cutoff));
+    let main_depth_multiplier = mix(1.0, 3.0, 1.0 - (transformed_depth_sample / fg_depth_cutoff));
     let main_scale = 1.0 + (1.0 - main_zoom_progress) * main_depth_multiplier;
     let main_repeating_uv = (displaced_uv - zoom_center) * main_scale + zoom_center;
-    let new_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, fract(main_repeating_uv), 0.0).r;
-    textureStore(writeDepthTexture, global_id.xy, vec4<f32>(new_depth, 0.0, 0.0, 0.0));
+    let transformed_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, fract(main_repeating_uv), 0.0).r;
+    
+    // Apply the same mask to the depth update to prevent artifacts.
+    let final_depth = mix(static_depth, transformed_depth, effect_mask);
+    textureStore(writeDepthTexture, global_id.xy, vec4<f32>(final_depth, 0.0, 0.0, 0.0));
 }
