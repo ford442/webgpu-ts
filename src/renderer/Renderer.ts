@@ -12,9 +12,8 @@ export class Renderer {
     private nonFilteringSampler!: GPUSampler;
     private imageUrls: string[] = [];
     
-    // --- BUFFERS for different shaders ---
-    private zoomUniformBuffer!: GPUBuffer; // For 3d-zoom
-    private liquidUniformBuffer!: GPUBuffer; // For ambient-liquid
+    private zoomUniformBuffer!: GPUBuffer;
+    private liquidUniformBuffer!: GPUBuffer;
     
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
