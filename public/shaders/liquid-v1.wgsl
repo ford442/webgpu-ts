@@ -69,6 +69,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let aa_visual_depth = antialias_depth_sample(readDepthTexture, non_filtering_sampler, displacedUV, pixelSize);
   var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
 
+// --- MODIFICATION: Z-AXIS WAVER ---
+let waver_frequency = 15.0;
+let waver_amplitude = 0.03; // Keep this small! A little goes a long way.
+let waver_speed = 1.5;
+
+// Create a wave that ripples across the image. Using uv.x makes it different from other motions.
+let z_waver = sin(uv.x * waver_frequency + u.time * waver_speed) * waver_amplitude;
+
+// Apply the waver only to foreground objects, using the same gradient as the XY motion.
+let z_waver_amount = z_waver * motion_gradient;
+
+// Create the new, wavering depth values.
+// We add the waver to the original depth.
+// We also clamp it to ensure the depth value stays in the valid 0.0 to 1.0 range.
+var aa_visual_depth = clamp(aa_visual_depth_original + z_waver_amount, 0.0, 1.0);
+var sharp_visual_depth = clamp(sharp_visual_depth_original + z_waver_amount, 0.0, 1.0);
+// --- END OF Z-AXIS MODIFICATION ---
+
   // --- Atmospheric Effects ---
   let bg_shadow_color = vec4<f32>(0.12, 0.12, 0.15, 1.0);  
   let bg_shadow_intensity = smoothstep(0.4, 0.9, aa_visual_depth) * 0.777;
