@@ -91,7 +91,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // The fog amount increases with distance (higher depth value).
   let fog_amount = pow(static_depth, 2.0) * fog_density; 
   
-  final_color.rgb = mix(final_color.rgb, fog_color, fog_amount);
+  final_color = vec4<f32>(mix(final_color.rgb, fog_color, fog_amount), final_color.a);
 
   textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
 
