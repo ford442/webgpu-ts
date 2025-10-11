@@ -177,7 +177,7 @@ function App() {
         isModelLoaded={!!depthEstimator}
         isRendererReady={isRendererReady}
         // Props for 3D Zoom
-        depthThreshold={depthThreshold} setDepthThreshold={setDepthThreshold}
+        // depthThreshold={depthThreshold} setDepthThreshold={setDepthThreshold}
         edgeHardness={edgeHardness} setEdgeHardness={setEdgeHardness}
         depthLevels={depthLevels} setDepthLevels={setDepthLevels}
         fogColor={fogColor} setFogColor={setFogColor}
@@ -195,7 +195,7 @@ function App() {
         onRendererReady={() => setIsRendererReady(true)}
         // Props for 3D Zoom
         farthestPoint={farthestPoint}
-        depthThreshold={depthThreshold}
+        // depthThreshold={depthThreshold}
         edgeHardness={edgeHardness}
         depthLevels={depthLevels}
         imageDimensions={imageDimensions}
