@@ -13,7 +13,7 @@ struct Uniforms {
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
 fn aces_tonemap(color: vec3<f32>) -> vec3<f32> {
-  let A = 2.51;
+  let A = 2.5101;
   let B = 0.03;
   let C = 2.43;
   let D = 0.59;
@@ -138,7 +138,22 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let light2_color = vec3<f32>(1.0, 0.7, 0.2);
   
   final_rgb += (light1_color * spotlight1_brightness) + (light2_color * spotlight2_brightness);
+
+// --- MODIFICATION START: Post-Processing Contrast Boost ---
+
+  // This is the "knob" for the effect. 0.0 is no change, 1.0 is full effect.
+  // A small value like 0.25-0.3 is often enough.
+  let contrast_strength = 0.3;
   
+  // Apply a classic S-curve function to the HDR color to increase contrast.
+  // It pushes darks darker and brights brighter.
+  let s_curve_color = final_rgb * final_rgb * (3.0 - 2.0 * final_rgb);
+
+  // Blend between the original color and the high-contrast version.
+  let post_processed_rgb = mix(final_rgb, s_curve_color, contrast_strength);
+
+  // --- MODIFICATION END ---
+
   // --- Tone Mapping and Final Output (Unchanged) ---
   let exposure = 1.0;
   let exposed_rgb = final_rgb * exposure;
