@@ -112,7 +112,7 @@ export class Renderer {
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 64 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
             format: 'r32float',
@@ -264,8 +264,8 @@ this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RI
                     uniformArray.set(rippleDataArr, 4);
                     this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
                 } else {
-    // MODIFIED: Increased array size by 4 floats (16 bytes) for zoom_params
-    const uniformArray = new Float32Array(12 + this.MAX_RIPPLES * 4);
+    // MODIFIED: Increased array size for new vortex_params
+    const uniformArray = new Float32Array(16 + this.MAX_RIPPLES * 4);
     
     // Set config uniforms (offset 0)
     uniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
@@ -273,9 +273,7 @@ this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RI
     // Set zoom_config uniforms (offset 4)
     uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
 
-    // --- NEW: Define and set the zoom_params uniform data (offset 8) ---
-    // This is where you control the effects from your TypeScript!
-    // [fg_speed, bg_speed, parallax_str, fg_depth_cutoff]
+    // Set zoom_params uniform data (offset 8)
     const zoomParams = new Float32Array([
         0.1,    // fg_speed: How fast the foreground zooms.
         -0.02,  // bg_speed: Negative for "Vertigo", positive for parallax.
@@ -284,8 +282,16 @@ this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RI
     ]);
     uniformArray.set(zoomParams, 8);
 
-    // MODIFIED: Update offset for ripple data to 12
-    uniformArray.set(rippleDataArr, 12);
+    // --- NEW: Define and set the vortex_params uniform data (offset 12) ---
+    // [strength, speed, unused, unused]
+    const vortexParams = new Float32Array([
+        2.5,  // strength: How much the distance from center affects rotation.
+        0.2   // speed: How fast the overall vortex spins.
+    ]);
+    uniformArray.set(vortexParams, 12);
+
+    // MODIFIED: Update offset for ripple data to 16
+    uniformArray.set(rippleDataArr, 16);
 
     this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
 }
