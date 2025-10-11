@@ -127,9 +127,10 @@ var sharp_visual_depth = clamp(sharp_visual_depth_original + z_waver_amount, 0.0
   
   // The rest of the logic now works as intended.
   let sunlit_color = mix(shadowed_foreground_color, lit_foreground_color, total_sunray_intensity);
-  var final_rgb = mix(color.rgb, sunlit_color, foreground_shadow_intensity);
-  final_rgb += sunray_specular * sunray_color;
-    
+ var final_rgb = mix(color.rgb, sunlit_color, foreground_shadow_intensity);
+  // Optional: Mix the highlight color instead of adding it for a softer effect.
+  final_rgb = mix(final_rgb, sunray_color, clamp(sunray_specular, 0.0, 1.0));
+
   // --- Roaming Spotlights (Unchanged) ---
   let light_core_radius = 0.02;
   let light_falloff_intensity = 0.15;
