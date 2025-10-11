@@ -265,7 +265,12 @@ export class Renderer {
 
         const textureView = this.context.getCurrentTexture().createView();
         const renderPassDescriptor: GPURenderPassDescriptor = {
-            colorAttachments: [{ view: textureView, loadOp: 'clear', storeOp: 'store' }]
+            colorAttachments: [{
+                view: textureView,
+                loadOp: 'clear' as GPULoadOp,
+                storeOp: 'store' as GPUStoreOp,
+                clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+            }]
         };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
         const presentPipeline = this.pipelines.get('present') as GPURenderPipeline;
