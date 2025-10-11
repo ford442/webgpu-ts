@@ -64,6 +64,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   final_displacement *= edge_fade;
   var displacedUV = uv + final_displacement;
 
+// --- Sampling & AA (Unchanged from original) ---
+let sharp_visual_depth_original = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV, 0.0).r;
+let aa_visual_depth_original = antialias_depth_sample(readDepthTexture, non_filtering_sampler, displacedUV, pixelSize);
+var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
+
 // --- MODIFICATION: Z-AXIS WAVER ---
 let waver_frequency = 15.0;
 let waver_amplitude = 0.03; // Keep this small! A little goes a long way.
