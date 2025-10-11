@@ -21,13 +21,29 @@ export class Renderer {
     private writeTexture!: GPUTexture;
     private depthTextureRead!: GPUTexture;
     private depthTextureWrite!: GPUTexture;
-
+    private fgSpeed: number = 0.05;
+    private bgSpeed: number = 0.01;
+    private parallaxStrength: number = 2.0;
+    private fogDensity: number = 0.7;
+    
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
     public addRipplePoint(x: number, y: number) {
         this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
     }
-
+    
+    public updateZoomParams(params: { 
+        fgSpeed?: number, 
+        bgSpeed?: number, 
+        parallaxStrength?: number, 
+        fogDensity?: number 
+    }): void {
+        if (params.fgSpeed !== undefined) this.fgSpeed = params.fgSpeed;
+        if (params.bgSpeed !== undefined) this.bgSpeed = params.bgSpeed;
+        if (params.parallaxStrength !== undefined) this.parallaxStrength = params.parallaxStrength;
+        if (params.fogDensity !== undefined) this.fogDensity = params.fogDensity;
+    }
+    
     public async init(): Promise<boolean> {
         if (!navigator.gpu) return false;
         const adapter = await navigator.gpu.requestAdapter();
@@ -275,11 +291,11 @@ this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RI
 
         // Set zoom_params uniform data (offset 8)
         const zoomParams = new Float32Array([
-            0.1,    // fg_speed: How fast the foreground zooms.
-            -0.02,  // bg_speed: Negative for "Vertigo", positive for parallax.
-            0.1,    // parallax_str: Additional lateral parallax shift strength.
-            0.6     // fg_depth_cutoff: The depth value where the foreground ends.
-        ]);
+    0.1,   // fg_speed: How fast the foreground zooms.
+    -0.02, // bg_speed: Negative for "Vertigo", positive for parallax.
+    0.1,   // parallax_str: Additional lateral parallax shift strength.
+    0.6    // fg_depth_cutoff: The depth value where the foreground ends.
+]);
         uniformArray.set(zoomParams, 8);
 
         // MODIFIED: Update offset for ripple data back to 12
