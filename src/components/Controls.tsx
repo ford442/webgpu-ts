@@ -37,15 +37,12 @@ const Controls: React.FC<ControlsProps> = (props) => {
             </div>
 
             {/* --- Sliders for 3D Zoom --- */}
-            {props.mode === '3d-zoom' && (
                 <div className="control-group">
                     <label htmlFor="parallax-strength">Parallax Strength:</label>
                     <input type="range" id="parallax-strength" min="0" max="100" value={props.parallaxStrength * 1000} onChange={(e) => props.setParallaxStrength(parseFloat(e.target.value) / 1000)} />
                 </div>
-            )}
 
             {/* --- Sliders for 3D Parallax --- */}
-            {props.mode === '3d-parallax' && (<>
                  <div className="control-group">
                     <label htmlFor="d-scale">Displacement:</label>
                     <input type="range" id="d-scale" min="0" max="1" step="0.01" value={props.displacementScale} onChange={(e) => props.setDisplacementScale(parseFloat(e.target.value))} />
@@ -62,7 +59,6 @@ const Controls: React.FC<ControlsProps> = (props) => {
                     <label htmlFor="amb-light">Ambient Light:</label>
                     <input type="range" id="amb-light" min="0" max="1" step="0.01" value={props.ambientLight} onChange={(e) => props.setAmbientLight(parseFloat(e.target.value))} />
                 </div>
-            </>)}
         </div>
     );
 };
