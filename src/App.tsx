@@ -178,8 +178,8 @@ function App() {
         isRendererReady={isRendererReady}
         // Props for 3D Zoom
         // depthThreshold={depthThreshold} setDepthThreshold={setDepthThreshold}
-        edgeHardness={edgeHardness} setEdgeHardness={setEdgeHardness}
-        depthLevels={depthLevels} setDepthLevels={setDepthLevels}
+        // edgeHardness={edgeHardness} setEdgeHardness={setEdgeHardness}
+        // depthLevels={depthLevels} setDepthLevels={setDepthLevels}
         fogColor={fogColor} setFogColor={setFogColor}
         fogDensity={fogDensity} setFogDensity={setFogDensity}
         parallaxStrength={parallaxStrength} setParallaxStrength={setParallaxStrength}
@@ -196,8 +196,8 @@ function App() {
         // Props for 3D Zoom
         farthestPoint={farthestPoint}
         // depthThreshold={depthThreshold}
-        edgeHardness={edgeHardness}
-        depthLevels={depthLevels}
+        // edgeHardness={edgeHardness}
+        // depthLevels={depthLevels}
         imageDimensions={imageDimensions}
         depthDimensions={depthDimensions}
         fogColor={fogColor}
