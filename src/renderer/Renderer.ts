@@ -12,14 +12,16 @@ export class Renderer {
     private nonFilteringSampler!: GPUSampler;
     private imageUrls: string[] = [];
     
-    // --- BUFFERS for different shaders ---
-    private zoomUniformBuffer!: GPUBuffer; // For 3d-zoom
-    private liquidUniformBuffer!: GPUBuffer; // For ambient-liquid
+    private zoomUniformBuffer!: GPUBuffer;
+    private liquidUniformBuffer!: GPUBuffer;
     
     private imageTexture!: GPUTexture;
     private writeTexture!: GPUTexture;
     private staticDepthTexture!: GPUTexture;
     public imageDimensions = { width: 1, height: 1 };
+    
+    // --- ADD THIS LINE ---
+    private currentImageUrl: string | undefined;
     
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
     
@@ -59,6 +61,10 @@ export class Renderer {
         try {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
+            
+            // --- ADD THIS LINE ---
+            this.currentImageUrl = imageUrl; // Store the URL
+
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
             this.imageDimensions = { width: imageBitmap.width, height: imageBitmap.height };
@@ -75,6 +81,11 @@ export class Renderer {
             console.error("Failed to load image:", e);
             return undefined;
         }
+    }
+
+    // --- ADD THIS METHOD ---
+    public getCurrentImageUrl(): string | undefined {
+        return this.currentImageUrl;
     }
 
     public handleResize(): void {
@@ -121,12 +132,12 @@ export class Renderer {
         this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
         
         this.zoomUniformBuffer = this.device.createBuffer({
-            size: 96, // For 3d-zoom shader
+            size: 96,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST 
         });
 
         this.liquidUniformBuffer = this.device.createBuffer({
-            size: 16, // For ambient-liquid shader (time, resX, resY)
+            size: 16,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
 
@@ -184,7 +195,6 @@ export class Renderer {
             ]
         }));
         
-        // Bind group for the '3d-zoom' shader
         this.bindGroups.set('computeZoom', this.device.createBindGroup({
             layout: this.pipelines.get('computeZoom')!.getBindGroupLayout(0),
             entries: [
@@ -197,7 +207,6 @@ export class Renderer {
             ]
         }));
 
-        // Bind group for the 'ambient-liquid' shader
         this.bindGroups.set('computeLiquid', this.device.createBindGroup({
             layout: this.pipelines.get('computeLiquid')!.getBindGroupLayout(0),
             entries: [
