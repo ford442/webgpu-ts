@@ -11,7 +11,7 @@ struct Uniforms {
   config: vec4<f32>,          // time, rippleCount, resolutionX, resolutionY
   zoom_config: vec4<f32>,      // zoomTime, farthestX, farthestY, unused
   zoom_params: vec4<f32>,      // fg_speed, bg_speed, parallax_str, fg_depth_cutoff
-  vortex_params: vec4<f32>,      // strength, speed, unused, unused
+  // REMOVED: vortex_params
   ripples: array<vec4<f32>, 50>, // x, y, startTime, unused
 };
 
@@ -51,12 +51,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let bg_speed = u.zoom_params.y;
     let fg_depth_cutoff = u.zoom_params.w;
 
-    // --- NEW: Sample static color and depth at the start ---
-    // We'll use these at the end to ensure the background remains still.
     let static_color = textureSampleLevel(readTexture, u_sampler, uv, 0.0);
     let static_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
-    // --- Liquid/ripple logic (unchanged) ---
+    // --- Liquid/ripple logic ---
     var totalDisplacement = vec2<f32>(0.0);
     let rippleCount = u32(u.config.y);
     for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
@@ -78,16 +76,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     var displaced_uv = uv + totalDisplacement;
 
-    // --- Vortex Logic (unchanged) ---
-    let vortex_strength = u.vortex_params.x;
-    let vortex_speed = u.vortex_params.y;
-    let centered_uv = displaced_uv - zoom_center;
-    let dist_from_center = length(centered_uv);
-    let angle = u.zoom_config.x * vortex_speed + dist_from_center * vortex_strength;
-    let s = sin(angle);
-    let c = cos(angle);
-    let rotated_centered_uv = vec2<f32>(centered_uv.x * c - centered_uv.y * s, centered_uv.x * s + centered_uv.y * c);
-    displaced_uv = rotated_centered_uv + zoom_center;
+    // --- REMOVED VORTEX LOGIC ---
 
     // --- Calculate the FULLY TRANSFORMED color ---
     let transformed_depth_sample = textureSampleLevel(readDepthTexture, non_filtering_sampler, displaced_uv, 0.0).r;
@@ -100,11 +89,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let blend_amount = smoothstep(fg_depth_cutoff + 0.1, fg_depth_cutoff, transformed_depth_sample);
     let transformed_color_rgb = mix(background_color.rgb, blended_foreground.rgb, blend_amount);
 
-    // --- NEW: Final Depth-Based Separation ---
-    // Create the mask using the static, original depth.
+    // --- Final Depth-Based Separation ---
     let effect_mask = pow(1.0 - smoothstep(0.0, fg_depth_cutoff, static_depth), 2.5);
-
-    // Blend between the static color and the transformed color using the mask.
     let final_color_rgb = mix(static_color.rgb, transformed_color_rgb, effect_mask);
     textureStore(writeTexture, global_id.xy, vec4(final_color_rgb, 1.0));
 
@@ -114,8 +100,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let main_scale = 1.0 + (1.0 - main_zoom_progress) * main_depth_multiplier;
     let main_repeating_uv = (displaced_uv - zoom_center) * main_scale + zoom_center;
     let transformed_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, fract(main_repeating_uv), 0.0).r;
-    
-    // Apply the same mask to the depth update to prevent artifacts.
     let final_depth = mix(static_depth, transformed_depth, effect_mask);
     textureStore(writeDepthTexture, global_id.xy, vec4<f32>(final_depth, 0.0, 0.0, 0.0));
 }
