@@ -1,20 +1,25 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Renderer, RenderMode } from '../renderer/Renderer';
+import React, { useRef, useEffect } from 'react';
+import { Renderer } from '../renderer/Renderer';
+import { RenderMode } from '../renderer/types';
 
 interface WebGPUCanvasProps {
     mode: RenderMode;
     zoom: number;
     panX: number;
     panY: number;
-    rendererRef: React.MutableRefObject<Renderer | null>; // Accept the ref from props
+    rendererRef: React.MutableRefObject<Renderer | null>;
+    farthestPoint: { x: number; y: number };
+    mousePosition: { x: number; y: number };
+    setMousePosition: (pos: { x: number, y: number }) => void;
+    isMouseDown: boolean;
+    setIsMouseDown: (down: boolean) => void;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
     const lastMouseAddTime = useRef(0);
-    const [isMouseDown, setIsMouseDown] = useState(false);
 
     useEffect(() => {
         if (!canvasRef.current) return;
@@ -24,7 +29,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         (async () => {
             const success = await renderer.init();
             if (success) {
-                if (rendererRef && 'current' in rendererRef) {
+                 if (rendererRef && 'current' in rendererRef) {
                     (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
                 }
                 videoRef.current = document.createElement('video');
@@ -38,21 +43,36 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
             }
         })();
         return () => cancelAnimationFrame(animationFrameId.current);
-    }, [rendererRef]); // The effect now depends on the ref object itself
-
-    useEffect(() => {
+    }, [rendererRef]); 
+    
+ useEffect(() => {
         let active = true;
         const animate = () => {
             if (!active) return;
             if (rendererRef.current && videoRef.current) {
-                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY);
+                // --- THIS IS THE CORRECTED LINE ---
+                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY]);
+    }, [mode, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown, rendererRef]); // Added isMouseDown and rendererRef
 
+     const updateMousePosition = (event: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!canvasRef.current) return;
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / canvas.width;
+        const y = (event.clientY - rect.top) / canvas.height;
+        setMousePosition({ x, y });
+    };
+
+    const handleMouseLeave = () => {
+        setIsMouseDown(false);
+        setMousePosition({ x: -1, y: -1 });
+    };
+    
     const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!rendererRef.current) return;
         const canvas = canvasRef.current!;
@@ -64,16 +84,17 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
 
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
         setIsMouseDown(true);
-        if (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1') {
+        updateMousePosition(event); // Ensure position is updated on click
+        if (mode === 'ripple' || mode === 'liquid') { // Removed liquid-v1 from ripple logic
             addRippleAtMouseEvent(event);
         }
     };
 
     const handleMouseUp = () => setIsMouseDown(false);
-    const handleMouseLeave = () => setIsMouseDown(false);
 
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        if (isMouseDown && (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-v1')) {
+        updateMousePosition(event);
+        if (isMouseDown && (mode === 'ripple' || mode === 'liquid')) { // Removed liquid-v1 from ripple logic
             const now = performance.now();
             if (now - lastMouseAddTime.current < 10) return;
             lastMouseAddTime.current = now;
@@ -81,7 +102,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         }
     };
 
-    return (
+   return (
         <canvas ref={canvasRef} width="2048" height="2048" onMouseMove={handleCanvasMouseMove} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave} />
     );
 };

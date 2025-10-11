@@ -19,19 +19,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let currentTime = u.config.x;
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
 
-  // --- Ambient Displacement (Background Only) ---
-  var ambientDisplacement = vec2<f32>(0.0, 0.0);
-  let background_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
+var ambientDisplacement = vec2<f32>(0.0, 0.0);
+let background_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
 
-  if (background_factor > 0.0) {
+if (background_factor > 0.0) {
     let time = currentTime * 0.5;
-    let base_ambient_strength = 0.004;
+let base_ambient_strength = 0.02; 
     let ambient_freq = 15.0;
     let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
     ambientDisplacement = motion * base_ambient_strength * background_factor;
-  }
+}
   
-  // --- Mouse-driven Ripples ---
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
   let rippleCount = u32(u.config.y);
   for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
@@ -52,13 +50,34 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
   }
   
-  // --- Final Output ---
-  let totalDisplacement = mouseDisplacement + ambientDisplacement;
-  let colorDisplacedUV = uv + totalDisplacement;
+  let interactiveDisplacement = mouseDisplacement + ambientDisplacement;
+
+  // --- MODIFIED: Perspective Waver Logic ---
+  // 1. Create a slow, large-scale warping effect for the background perspective shift.
+  let parallax_time = currentTime * 0.2;
+  let parallax_strength = 0.03;
+  let parallax_freq = 2.0;
+  let parallaxDisplacement = vec2<f32>(
+      sin(uv.y * parallax_freq + parallax_time) * parallax_strength,
+      cos(uv.x * parallax_freq + parallax_time) * parallax_strength
+  );
+
+  // 2. Use the depth value to blend the parallax effect.
+  //    - center_depth = 0.0 is pure foreground (no parallax)
+  //    - center_depth = 1.0 is pure background (full parallax)
+  //    - smoothstep creates a nice falloff instead of a hard edge.
+let parallax_mix_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
+
+  // 3. Add the parallax effect to the main interactive displacement.
+  let finalDisplacement = interactiveDisplacement + (parallaxDisplacement * parallax_mix_factor);
+  
+  // --- End of modification ---
+
+  let colorDisplacedUV = uv + finalDisplacement;
   let color = textureSampleLevel(readTexture, u_sampler, colorDisplacedUV, 0.0);
   textureStore(writeTexture, global_id.xy, color);
 
-  // Update depth texture for next frame
+  // Update depth texture with mouse displacement only, so the background waver doesn't distort it.
   let depthDisplacedUV = uv + mouseDisplacement;
   let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthDisplacedUV, 0.0).r;
   textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
