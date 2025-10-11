@@ -152,12 +152,16 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // Blend between the original color and the high-contrast version.
   let post_processed_rgb = mix(final_rgb, s_curve_color, contrast_strength);
 
-  // --- MODIFICATION END ---
+let contrast_strength = 0.3;
+let s_curve_color = final_rgb * final_rgb * (3.0 - 2.0 * final_rgb);
+let post_processed_rgb = mix(final_rgb, s_curve_color, contrast_strength);
+// --- MODIFICATION END ---
 
-  // --- Tone Mapping and Final Output (Unchanged) ---
-  let exposure = 1.0;
-  let exposed_rgb = final_rgb * exposure;
-  let tonemapped_rgb = aces_tonemap(exposed_rgb);
+// --- Tone Mapping and Final Output (FIXED) ---
+let exposure = 1.0;
+// Use the new post-processed color here!
+let exposed_rgb = post_processed_rgb * exposure;
+let tonemapped_rgb = aces_tonemap(exposed_rgb);
 
   color = vec4<f32>(tonemapped_rgb, color.a);
   textureStore(writeTexture, global_id.xy, color);
