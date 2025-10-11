@@ -138,22 +138,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let ray_stretch_factor2 = vec2<f32>(1.0, 0.2);
   let dist_to_sunray2 = distance(uv * ray_stretch_factor2, sunray2_pos * ray_stretch_factor2);
   let base_sunray2 = (1.0 - smoothstep(0.0, 0.15, dist_to_sunray2)) * pow(1.0 - aa_visual_depth, 2.5);
-  
-  let total_sunray_intensity = clamp(base_sunray1 * 1.5 + base_sunray2 * 1.3, 0.0, 1.0);
-  let sunray_specular = specular_sheen * total_sunray_intensity * 1.5;
-  let sunray_color = vec3<f32>(1.0, 0.95, 0.85);
 
   // MODIFICATION: Calculate shadows cast by sunrays
   let sunray1_shadow = calculate_shadow(sunray1_pos, displacedUV, aa_visual_depth, shadow_step_size, shadow_bias);
   let sunray2_shadow = calculate_shadow(sunray2_pos, displacedUV, aa_visual_depth, shadow_step_size, shadow_bias);
   // A pixel is lit if either sunray can see it.
   let sunray_shadow_factor = max(sunray1_shadow, sunray2_shadow);
-
   var total_sunray_intensity = clamp(base_sunray1 * 1.5 + base_sunray2 * 1.3, 0.0, 1.0);
   // Apply the shadow factor to the sunray intensity
   total_sunray_intensity *= sunray_shadow_factor;
 
   let sunray_specular = specular_sheen * total_sunray_intensity * 1.5;
+  let sunray_color = vec3<f32>(1.0, 0.95, 0.85);
   
   let FOREGROUND_LIT_MULTIPLIER = 2.2;
   let shadowed_foreground_color = mix(color.rgb, foreground_shadow_color.rgb, foreground_shadow_intensity);
