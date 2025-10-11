@@ -20,7 +20,6 @@ export class Renderer {
     private staticDepthTexture!: GPUTexture;
     public imageDimensions = { width: 1, height: 1 };
     
-    // --- ADD THIS LINE ---
     private currentImageUrl: string | undefined;
     
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
@@ -38,8 +37,13 @@ export class Renderer {
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
         await this.fetchImageUrls();
-        await this.createResources();
+
+        // --- THIS IS THE FIX ---
+        // Pipelines must be created BEFORE resources that use them.
         await this.createPipelines();
+        await this.createResources();
+        // --- END FIX ---
+
         return true;
     }
     
@@ -62,8 +66,7 @@ export class Renderer {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             
-            // --- ADD THIS LINE ---
-            this.currentImageUrl = imageUrl; // Store the URL
+            this.currentImageUrl = imageUrl;
 
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
@@ -83,7 +86,6 @@ export class Renderer {
         }
     }
 
-    // --- ADD THIS METHOD ---
     public getCurrentImageUrl(): string | undefined {
         return this.currentImageUrl;
     }
