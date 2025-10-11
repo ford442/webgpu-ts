@@ -34,7 +34,7 @@ fn calculate_shadow(
         vec2<f32>(-0.5, 0.5),
         vec2<f32>(0.5, 0.5)
     );
-  for (var i = 0; i < 4; i = i + 1) {
+    for (var i = 0; i < 4; i = i + 1) {
         // Find the UV coordinate of the potential shadow-caster (occluder)
         let occluder_uv = receiver_uv + light_dir * step_size + offsets[i] * step_size * 0.5;
         let occluder_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, occluder_uv, 0.0).r;
@@ -112,16 +112,36 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
 
   // --- Atmospheric Effects ---
+
+  // --- MODIFICATION START: New Directional Background Shadow ---
   let bg_shadow_color = vec4<f32>(0.12, 0.12, 0.15, 1.0);  
-  let bg_shadow_intensity = smoothstep(0.4, 0.9, aa_visual_depth) * 0.777;
-  color = mix(color, bg_shadow_color, bg_shadow_intensity);
+  
+  // 1. Define the origin of the background light (brightest part of the nebula).
+  // This is a "virtual" point. You can tune this to change the shadow direction.
+  let horizon_origin_point = vec2<f32>(-0.2, 0.7);
+
+  // 2. Create a radial gradient spreading out from that origin point.
+  let dist_from_horizon = distance(uv, horizon_origin_point);
+  let gradient_factor = smoothstep(0.5, 1.5, dist_from_horizon); // Shadow increases with distance
+
+  // 3. Create a mask to ensure this shadow only applies to the background depth range.
+  let background_depth_mask = smoothstep(0.4, 0.9, aa_visual_depth);
+
+  // 4. Combine them. The final shadow is the directional gradient multiplied by the depth mask.
+  let directional_shadow_intensity = gradient_factor * background_depth_mask * 0.9;
+  
+  // Apply the new shadow
+  color = mix(color, bg_shadow_color, directional_shadow_intensity);
+  // --- MODIFICATION END ---
+
+  // The rest of the atmospheric effects are unchanged
   let foreground_fog_color = vec3<f32>(0.6, 0.6, 0.7);
-  let foreground_fog_intensity = smoothstep(0.2, 0.8, 1.0 - aa_visual_depth) * 0.38;
+  let foreground_fog_intensity = smoothstep(0.2, 0.8, 1.0 - aa_visual_depth) * 0.18;
   let new_rgb_with_fog = color.rgb + (foreground_fog_color * foreground_fog_intensity);
   color = vec4<f32>(new_rgb_with_fog, color.a);
   
   let foreground_shadow_color = vec4<f32>(0.02, 0.02, 0.05, 1.0);
-  let foreground_shadow_intensity = smoothstep(0.75, 0.0, aa_visual_depth) * 0.95;
+  let foreground_shadow_intensity = smoothstep(0.65, 0.0, aa_visual_depth) * 0.95;
 
   // --- Shared Light Calculations (Unchanged) ---
   let depth_right = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV + vec2<f32>(pixelSize.x, 0.0), 0.0).r;
