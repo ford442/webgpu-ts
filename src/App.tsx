@@ -7,45 +7,23 @@ import { pipeline } from '@huggingface/transformers';
 import './style.css';
 
 function App() {
-  const [mode, setMode] = useState<RenderMode>('3d-zoom');
+  const [mode, setMode] = useState<RenderMode>('ambient-liquid');
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
   const [depthEstimator, setDepthEstimator] = useState<any>(null);
   const [depthMapResult, setDepthMapResult] = useState<any>(null);
   const [isRendererReady, setIsRendererReady] = useState(false);
   
-  // --- CONSOLIDATED STATE & REFS ---
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // State for 3D Zoom
   const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
-  const [depthThreshold, setDepthThreshold] = useState(0.5);
-  const [edgeHardness, setEdgeHardness] = useState(0.5);
-  const [depthLevels, setDepthLevels] = useState(5);
-  const [fogColor, setFogColor] = useState('#202025');
-  const [fogDensity, setFogDensity] = useState(4.0);
   const [parallaxStrength, setParallaxStrength] = useState(0.05);
   const [imageDimensions, setImageDimensions] = useState({ width: 1, height: 1 });
   const [depthDimensions, setDepthDimensions] = useState({ width: 1, height: 1 });
   
-  // State for 3D Parallax
-  const [displacementScale, setDisplacementScale] = useState(0.3);
-  const [ambientLight, setAmbientLight] = useState(0.2);
-  const [smoothness, setSmoothness] = useState(1.0);
-  const [pointSize, setPointSize] = useState(3.0);
-    
-  // This useEffect correctly updates the parallax params when they change
-  useEffect(() => {
-    rendererRef.current?.updateParallaxParams({
-        displacementScale, ambient: ambientLight, smoothness, pointSize
-    });
-  }, [displacementScale, ambientLight, smoothness, pointSize]);
-
   const loadModel = async () => {
-    if (depthEstimator) {
-      setStatus('AI model is already loaded.');
-      return;
-    }
+    if (depthEstimator) return;
     try {
       setStatus('Loading AI model (this may take a minute)...');
       const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
@@ -55,34 +33,6 @@ function App() {
       console.error(e);
       setStatus(`Failed to load AI model: ${e.message}`);
     }
-  };
-
-  const findOptimalThreshold = (data: Float32Array): number => {
-    const binCount = 256;
-    const histogram = new Array(binCount).fill(0);
-    for (let i = 0; i < data.length; ++i) {
-        const bin = Math.min(Math.floor(data[i] * binCount), binCount - 1);
-        histogram[bin]++;
-    }
-    const totalPixels = data.length;
-    let bestThreshold = 0, maxVariance = 0, sum = 0;
-    for (let i = 0; i < binCount; i++) sum += i * histogram[i];
-    let sumB = 0, wB = 0, wF = 0;
-    for (let t = 0; t < binCount; t++) {
-        wB += histogram[t];
-        if (wB === 0) continue;
-        wF = totalPixels - wB;
-        if (wF === 0) break;
-        sumB += t * histogram[t];
-        const mB = sumB / wB;
-        const mF = (sum - sumB) / wF;
-        const variance = wB * wF * (mB - mF) * (mB - mF);
-        if (variance > maxVariance) {
-            maxVariance = variance;
-            bestThreshold = t;
-        }
-    }
-    return bestThreshold / binCount;
   };
 
   const runDepthAnalysis = useCallback(async (imageUrl: string) => {
@@ -110,9 +60,6 @@ function App() {
             normalizedData[i] = (data[i] - min) / range;
         }
 
-        const newThreshold = findOptimalThreshold(normalizedData);
-        setDepthThreshold(newThreshold);
-
         setStatus('Updating depth map on GPU...');
         rendererRef.current.updateDepthMap(normalizedData, width, height);
         setDepthMapResult(result);
@@ -129,12 +76,11 @@ function App() {
     const newImageUrl = await rendererRef.current.loadRandomImage();
     if (newImageUrl) {
         const dims = rendererRef.current.getImageDimensions();
-        if (dims) setImageDimensions(dims);
+        setImageDimensions(dims);
         rendererRef.current.handleResize();
         if (depthEstimator) {
             await runDepthAnalysis(newImageUrl);
         } else {
-            setFarthestPoint({ x: 0.5, y: 0.5 });
             setStatus('Ready. Load AI model to add depth effects.');
         }
     } else {
@@ -148,7 +94,7 @@ function App() {
       const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
       const canvas = debugCanvasRef.current;
       const context = canvas.getContext('2d');
-      if (!width || !height || !context) return;
+      if (!context) return;
       canvas.width = width;
       canvas.height = height;
       const imageData = context.createImageData(width, height);
@@ -157,10 +103,7 @@ function App() {
       const range = max - min;
       for (let i = 0; i < data.length; ++i) {
         const value = Math.round(((data[i] - min) / range) * 255);
-        imageData.data[i * 4 + 0] = value;
-        imageData.data[i * 4 + 1] = value;
-        imageData.data[i * 4 + 2] = value;
-        imageData.data[i * 4 + 3] = 255;
+        imageData.data.set([value, value, value, 255], i * 4);
       }
       context.putImageData(imageData, 0, 0);
     }
@@ -176,36 +119,24 @@ function App() {
         onLoadModel={loadModel}
         isModelLoaded={!!depthEstimator}
         isRendererReady={isRendererReady}
-        // Props for 3D Zoom
-        // depthThreshold={depthThreshold} setDepthThreshold={setDepthThreshold}
-        // edgeHardness={edgeHardness} setEdgeHardness={setEdgeHardness}
-        // depthLevels={depthLevels} setDepthLevels={setDepthLevels}
-        // fogColor={fogColor} setFogColor={setFogColor}
-        // fogDensity={fogDensity} setFogDensity={setFogDensity}
         parallaxStrength={parallaxStrength} setParallaxStrength={setParallaxStrength}
-        // Props for 3D Parallax
-        displacementScale={displacementScale} setDisplacementScale={setDisplacementScale}
-        ambientLight={ambientLight} setAmbientLight={setAmbientLight}
-        smoothness={smoothness} setSmoothness={setSmoothness}
-        pointSize={pointSize} setPointSize={setPointSize}
       />
-      <WebGPUCanvas
-        rendererRef={rendererRef}
-        mode={mode}
-        onRendererReady={() => setIsRendererReady(true)}
-        // Props for 3D Zoom
-        farthestPoint={farthestPoint}
-        // depthThreshold={depthThreshold}
-        // edgeHardness={edgeHardness}
-        // depthLevels={depthLevels}
-        imageDimensions={imageDimensions}
-        depthDimensions={depthDimensions}
-        // fogColor={fogColor}
-        // fogDensity={fogDensity}
-        parallaxStrength={parallaxStrength}
-      />
+      <div style={{ width: '90vw', height: '80vh', maxWidth: '1600px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <WebGPUCanvas
+          rendererRef={rendererRef}
+          mode={mode}
+          onRendererReady={() => setIsRendererReady(true)}
+          // Pass all params in a single object
+          params={{
+            farthestPoint,
+            imageDimensions,
+            depthDimensions,
+            parallaxStrength,
+          }}
+        />
+      </div>
       {depthMapResult && (
-           <div className="debug-container">
+           <div className="debug-container" style={{ marginTop: '20px' }}>
           <h2>AI Model Output (Debug Depth Map)</h2>
           <canvas ref={debugCanvasRef} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
         </div>
