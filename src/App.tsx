@@ -88,6 +88,30 @@ function App() {
     }
   }, [depthEstimator, runDepthAnalysis]);
 
+  // --- ADD THIS WHOLE useEffect HOOK ---
+  // This hook runs once after the renderer initializes to set up the FIRST image.
+  useEffect(() => {
+    if (isRendererReady && rendererRef.current) {
+        const setupInitialImage = async () => {
+            const renderer = rendererRef.current!;
+            // Get dimensions of the initially loaded image
+            const dims = renderer.getImageDimensions();
+            setImageDimensions(dims);
+            // Trigger the first resize
+            renderer.handleResize();
+            
+            // If the model is already loaded, analyze the initial image
+            if (depthEstimator) {
+                const initialUrl = renderer.getCurrentImageUrl();
+                if (initialUrl) {
+                    await runDepthAnalysis(initialUrl);
+                }
+            }
+        };
+        setupInitialImage();
+    }
+  }, [isRendererReady, depthEstimator, runDepthAnalysis]);
+
   useEffect(() => {
     if (depthMapResult?.predicted_depth && debugCanvasRef.current) {
       const { data, dims } = depthMapResult.predicted_depth;
@@ -126,7 +150,6 @@ function App() {
           rendererRef={rendererRef}
           mode={mode}
           onRendererReady={() => setIsRendererReady(true)}
-          // Pass all params in a single object
           params={{
             farthestPoint,
             imageDimensions,
