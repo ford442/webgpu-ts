@@ -180,8 +180,8 @@ function App() {
         // depthThreshold={depthThreshold} setDepthThreshold={setDepthThreshold}
         // edgeHardness={edgeHardness} setEdgeHardness={setEdgeHardness}
         // depthLevels={depthLevels} setDepthLevels={setDepthLevels}
-        fogColor={fogColor} setFogColor={setFogColor}
-        fogDensity={fogDensity} setFogDensity={setFogDensity}
+        // fogColor={fogColor} setFogColor={setFogColor}
+        // fogDensity={fogDensity} setFogDensity={setFogDensity}
         parallaxStrength={parallaxStrength} setParallaxStrength={setParallaxStrength}
         // Props for 3D Parallax
         displacementScale={displacementScale} setDisplacementScale={setDisplacementScale}
@@ -200,8 +200,8 @@ function App() {
         // depthLevels={depthLevels}
         imageDimensions={imageDimensions}
         depthDimensions={depthDimensions}
-        fogColor={fogColor}
-        fogDensity={fogDensity}
+        // fogColor={fogColor}
+        // fogDensity={fogDensity}
         parallaxStrength={parallaxStrength}
       />
       {depthMapResult && (
