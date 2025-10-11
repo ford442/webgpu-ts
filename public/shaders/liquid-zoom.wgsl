@@ -11,13 +11,12 @@ struct Uniforms {
   config: vec4<f32>,          // time, rippleCount, resolutionX, resolutionY
   zoom_config: vec4<f32>,      // zoomTime, farthestX, farthestY, unused
   zoom_params: vec4<f32>,      // fg_speed, bg_speed, parallax_str, fg_depth_cutoff
-  // REMOVED: vortex_params
   ripples: array<vec4<f32>, 50>, // x, y, startTime, unused
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// Helper function to sample a single, depth-aware zooming layer (unchanged)
+// Helper function to sample a single, depth-aware zooming layer
 fn sample_zooming_layer(
     uv: vec2<f32>,
     depth: f32,
@@ -26,15 +25,17 @@ fn sample_zooming_layer(
     cycle_offset: f32
 ) -> vec4<f32> {
     let fg_speed = u.zoom_params.x;
-    let parallax_strength = u.zoom_params.z;
     let zoom_progress = fract(zoom_time * fg_speed + cycle_offset);
     let fg_max_scale = 3.0; 
     let depth_multiplier = mix(1.0, fg_max_scale, 1.0 - (depth / u.zoom_params.w));
     let scale = 1.0 + (1.0 - zoom_progress) * depth_multiplier;
     let repeating_uv = (uv - zoom_center) * scale + zoom_center;
-    let parallax_offset = (repeating_uv - zoom_center) * depth * parallax_strength;
-    let final_uv = repeating_uv + parallax_offset;
-    let color = textureSampleLevel(readTexture, u_sampler, fract(final_uv), 0.0);
+
+    // --- MODIFICATION ---
+    // The parallax offset was causing the shearing artifact. By removing it,
+    // we ensure the zoom effect is flat and coherent across the entire foreground object.
+    let color = textureSampleLevel(readTexture, u_sampler, fract(repeating_uv), 0.0);
+
     let fade_in_duration = 0.2;
     let alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
     return vec4(color.rgb, alpha);
@@ -45,7 +46,6 @@ fn sample_zooming_layer(
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let resolution = u.config.zw;
     let uv = vec2<f32>(global_id.xy) / resolution;
-    let currentTime = u.config.x;
     let zoom_time = u.zoom_config.x;
     let zoom_center = u.zoom_config.yz;
     let bg_speed = u.zoom_params.y;
@@ -75,8 +75,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
     }
     var displaced_uv = uv + totalDisplacement;
-
-    // --- REMOVED VORTEX LOGIC ---
 
     // --- Calculate the FULLY TRANSFORMED color ---
     let transformed_depth_sample = textureSampleLevel(readDepthTexture, non_filtering_sampler, displaced_uv, 0.0).r;
