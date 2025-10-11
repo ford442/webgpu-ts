@@ -105,10 +105,16 @@ var sharp_visual_depth = clamp(sharp_visual_depth_original + z_waver_amount, 0.0
   let normal_factor = abs(sharp_visual_depth - depth_right) + abs(sharp_visual_depth - depth_up);
   let specular_sheen = smoothstep(0.01, 0.05, normal_factor) * 1.5;
 
-  // --- Two Sunrays and New Lighting Model (Unchanged) ---
-    let sunray1_pos = vec2<f32>(0.5 + sin(time * 0.25) * 0.4, 1.3);
-  // ... (code omitted for brevity)
-
+  // --- Two Sunrays and New Lighting Model (FIXED) ---
+  let sunray1_pos = vec2<f32>(0.5 + sin(time * 0.25) * 0.4, 1.3);
+  let ray_stretch_factor1 = vec2<f32>(1.0, 0.15);
+  let dist_to_sunray1 = distance(uv * ray_stretch_factor1, sunray1_pos * ray_stretch_factor1);
+  let base_sunray1 = (1.0 - smoothstep(0.0, 0.18, dist_to_sunray1)) * pow(1.0 - aa_visual_depth, 2.5);
+  let sunray2_pos = vec2<f32>(0.5 + cos(time * -0.2) * 0.5, 1.35);
+  let ray_stretch_factor2 = vec2<f32>(1.0, 0.2);
+  let dist_to_sunray2 = distance(uv * ray_stretch_factor2, sunray2_pos * ray_stretch_factor2);
+  let base_sunray2 = (1.0 - smoothstep(0.0, 0.15, dist_to_sunray2)) * pow(1.0 - aa_visual_depth, 2.5);
+  
   let total_sunray_intensity = clamp(base_sunray1 * 1.5 + base_sunray2 * 1.3, 0.0, 1.0);
   let sunray_specular = specular_sheen * total_sunray_intensity * 1.5;
   let sunray_color = vec3<f32>(1.0, 0.95, 0.85);
