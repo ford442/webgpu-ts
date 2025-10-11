@@ -1,2 +1,3 @@
 export type RenderMode = 
-  '3d-zoom';
+  '3d-zoom' |
+  'ambient-liquid';
