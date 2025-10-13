@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
 import { Renderer } from './renderer/Renderer';
-import { RenderMode } from './renderer/types';
 import { pipeline, env } from '@xenova/transformers';
 import './style.css';
 
@@ -57,7 +56,6 @@ function App() {
           const result = await depthEstimator(imageUrl);
           const { data, dims } = result.predicted_depth;
           const [height, width] = [dims[dims.length - 2], dims[dims.length - 1]];
-
           let min = Infinity, max = -Infinity;
           let minIndex = 0;
           data.forEach((v: number, i: number) => {
@@ -71,17 +69,13 @@ function App() {
           const farthestY = Math.floor(minIndex / width);
           const farthestX = minIndex % width;
           setFarthestPoint({ x: farthestX / width, y: farthestY / height });
-
           const range = max - min;
           const normalizedData = new Float32Array(data.length);
-
           for (let i = 0; i < data.length; ++i) {
               normalizedData[i] = 1.0 - ((data[i] - min) / range);
           }
-
           setStatus('Updating depth map on GPU...');
           rendererRef.current.updateDepthMap(normalizedData, width, height);
-
           setDepthMapResult(result);
           setStatus('Ready.');
       } catch (e: any) {
@@ -97,7 +91,6 @@ function App() {
       }
       setStatus('Loading random image...');
       const newImageUrl = await rendererRef.current.loadRandomImage();
-
       if (newImageUrl) {
           if (depthEstimator) {
               await runDepthAnalysis(newImageUrl);
@@ -125,11 +118,9 @@ function App() {
           const canvas = debugCanvasRef.current;
           const context = canvas.getContext('2d');
           if (!width || !height || !context) return;
-
           canvas.width = width;
           canvas.height = height;
           const imageData = context.createImageData(width, height);
-
           let min = Infinity, max = -Infinity;
           data.forEach((v: number) => {
               if (v < min) min = v;
@@ -152,8 +143,6 @@ function App() {
         <h1>WebGPU Liquid + Depth Effect</h1>
         <p><strong>Status:</strong> {status}</p>
         <Controls
-            mode={mode}
-            setMode={setMode}
             zoom={zoom} setZoom={setZoom}
             panX={panX} setPanX={setPanX}
             panY={panY} setPanY={setPanY}
@@ -164,10 +153,10 @@ function App() {
             setAutoChangeDelay={setAutoChangeDelay}
             onLoadModel={loadModel}
             isModelLoaded={!!depthEstimator}
+            onLoadEffect={loadEffect}
         />
         <WebGPUCanvas
             rendererRef={rendererRef}
-            mode={mode}
             zoom={zoom}
             panX={panX}
             panY={panY}
@@ -176,6 +165,7 @@ function App() {
             setMousePosition={setMousePosition}
             isMouseDown={isMouseDown}
             setIsMouseDown={setIsMouseDown}
+            onLoadEffect={loadEffect}
         />
         {depthMapResult && (
             <div className="debug-container">
