@@ -1,23 +1,23 @@
-@group(0) @binding(0) var u_sampler: sampler;
-@group(0) @binding(1) var readTexture: texture_2d<f32>;
-@group(0) @binding(2) var writeTexture: texture_storage_2d<rgba32float, write>;
-@group(0) @binding(4) var readDepthTexture: texture_2d<f32>;
-@group(0) @binding(5) var non_filtering_sampler: sampler;
-@group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
+@group(0) @binding(0) var u_sampler: sampler; // Sampler at binding 0
 
 struct Uniforms {
-  config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
-  ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
+    params: array<f32, 64>,
 };
+@group(0) @binding(1) var<uniform> u: Uniforms; // Uniforms at binding 1
 
-@group(0) @binding(3) var<uniform> u: Uniforms;
+@group(0) @binding(2) var primaryTexture: texture_2d<f32>; // The main image to read from
+@group(0) @binding(3) var utilityTexture1: texture_2d<f32>; // The depth map
+// @binding(4) is unused by this shader.
+
+// The output texture for a compute shader is always the storage texture.
+@group(0) @binding(5) var outputTexture: texture_storage_2d<rgba8unorm, write>;
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let resolution = u.config.zw;
   let uv = vec2<f32>(global_id.xy) / resolution;
   let currentTime = u.config.x;
-  let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
+  let center_depth = textureSampleLevel(utilityTexture1, non_filtering_sampler, uv, 0.0).r;
 
   // --- Ambient Displacement (Background Only) ---
   var ambientDisplacement = vec2<f32>(0.0, 0.0);
@@ -41,7 +41,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let direction_vec = uv - rippleData.xy;
       let dist = length(direction_vec);
       if (dist > 0.0001) {
-        let rippleOriginDepthFactor = 1.0 - textureSampleLevel(readDepthTexture, non_filtering_sampler, rippleData.xy, 0.0).r;
+        let rippleOriginDepthFactor = 1.0 - textureSampleLevel(utilityTexture1, non_filtering_sampler, rippleData.xy, 0.0).r;
         let ripple_speed = mix(1.0, 2.0, rippleOriginDepthFactor);
         let ripple_amplitude = mix(0.005, 0.015, rippleOriginDepthFactor);
         let wave = sin(dist * 25.0 - timeSinceClick * ripple_speed);
@@ -55,11 +55,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // --- Final Output ---
   let totalDisplacement = mouseDisplacement + ambientDisplacement;
   let colorDisplacedUV = uv + totalDisplacement;
-  let color = textureSampleLevel(readTexture, u_sampler, colorDisplacedUV, 0.0);
-  textureStore(writeTexture, global_id.xy, color);
+  let color = textureSampleLevel(primaryTexture, u_sampler, colorDisplacedUV, 0.0);
+  textureStore(outputTexture, global_id.xy, color);
 
   // Update depth texture for next frame
   let depthDisplacedUV = uv + mouseDisplacement;
-  let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthDisplacedUV, 0.0).r;
+  let displacedDepth = textureSampleLevel(utilityTexture1, non_filtering_sampler, depthDisplacedUV, 0.0).r;
   textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
 }
