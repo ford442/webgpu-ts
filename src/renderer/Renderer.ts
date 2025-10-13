@@ -234,6 +234,26 @@ export class Renderer {
     public updateUniforms(values: Float32Array, offset: number = 0) {
         this.uniforms.set(values, offset);
     }
+
+    public updateDepthMap(data: Float32Array, width: number, height: number): void {
+        if (!this.device) return;
+        if (this.depthTextureRead && (this.depthTextureRead.width !== width || this.depthTextureRead.height !== height)) {
+            this.depthTextureRead.destroy();
+            this.depthTextureWrite.destroy();
+        }
+        if (!this.depthTextureRead || this.depthTextureRead.width !== width || this.depthTextureRead.height !== height) {
+            const depthTextureDescriptor: GPUTextureDescriptor = {
+                size: [width, height],
+                format: 'r32float',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
+            };
+            this.depthTextureRead = this.device.createTexture(depthTextureDescriptor);
+            this.depthTextureWrite = this.device.createTexture(depthTextureDescriptor);
+        }
+        this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
+        this.device.queue.writeTexture({ texture: this.depthTextureWrite }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
+        this.createBindGroups();
+    }
     
     /**
      * The main render loop, called every frame.
