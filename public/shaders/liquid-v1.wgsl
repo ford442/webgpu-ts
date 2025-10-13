@@ -1,16 +1,16 @@
-@group(0) @binding(0) var u_sampler: sampler;
-@group(0) @binding(1) var readTexture: texture_2d<f32>;
-@group(0) @binding(2) var writeTexture: texture_storage_2d<rgba32float, write>;
-@group(0) @binding(4) var readDepthTexture: texture_2d<f32>;
-@group(0) @binding(5) var non_filtering_sampler: sampler;
+@group(0) @binding(0) var u_sampler: sampler; // Sampler at binding 0
 
 struct Uniforms {
-  time: f32,
-  resolutionX: f32,
-  resolutionY: f32,
+    params: array<f32, 64>,
 };
+@group(0) @binding(1) var<uniform> u: Uniforms; // Uniforms at binding 1
 
-@group(0) @binding(3) var<uniform> u: Uniforms;
+@group(0) @binding(2) var primaryTexture: texture_2d<f32>; // The main image to read from
+@group(0) @binding(3) var utilityTexture1: texture_2d<f32>; // The depth map
+// @binding(4) is unused by this shader.
+
+// The output texture for a compute shader is always the storage texture.
+@group(0) @binding(5) var outputTexture: texture_storage_2d<rgba8unorm, write>;
 
 fn aces_tonemap(color: vec3<f32>) -> vec3<f32> {
   let A = 2.5101;
@@ -39,7 +39,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let time = u.time;
     
   // --- Parallax Logic (Unchanged) ---
-  let static_depth_for_motion = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
+  let static_depth_for_motion = textureSampleLevel(utilityTexture1, non_filtering_sampler, uv, 0.0).r;
   let parallax_time = time * 0.5;
   let base_ambient_strength = 0.013;
   let ambient_freq = 13.0;
@@ -67,7 +67,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 // --- Sampling & AA (Unchanged from original) ---
 let sharp_visual_depth_original = textureSampleLevel(readDepthTexture, non_filtering_sampler, displacedUV, 0.0).r;
 let aa_visual_depth_original = antialias_depth_sample(readDepthTexture, non_filtering_sampler, displacedUV, pixelSize);
-var color = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0);
+var color = textureSampleLevel(primaryTexture, u_sampler, displacedUV, 0.0);
 
 // --- MODIFICATION: Z-AXIS WAVER ---
 let waver_frequency = 15.0;
@@ -176,5 +176,5 @@ let exposed_rgb = post_processed_rgb * exposure;
 let tonemapped_rgb = aces_tonemap(exposed_rgb);
 
   color = vec4<f32>(tonemapped_rgb, color.a);
-  textureStore(writeTexture, global_id.xy, color);
+  textureStore(outputTexture, global_id.xy, color);
 }
