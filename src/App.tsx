@@ -26,6 +26,35 @@ function App() {
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  useEffect(() => {
+    // This effect runs whenever any of these values change.
+    if (!rendererRef.current) return;
+
+    // We pack all our dynamic data into a Float32Array.
+    // The order MUST match what your shaders expect.
+    // Example mapping:
+    // uniform[0] = time (set inside renderer)
+    // uniform[1] = zoom
+    // uniform[2] = panX
+    // uniform[3] = panY
+    // uniform[4] = mouseX
+    // uniform[5] = mouseY
+    // uniform[6] = isMouseDown (1.0 or 0.0)
+    
+    const uniformData = new Float32Array([
+        zoom,
+        panX,
+        panY,
+        mousePosition.x,
+        mousePosition.y,
+        isMouseDown ? 1.0 : 0.0
+    ]);
+
+    // We write this data to the uniform buffer starting at index 1
+    // (since index 0 is reserved for time).
+    rendererRef.current.updateUniforms(uniformData, 1);
+
+}, [zoom, panX, panY, mousePosition, isMouseDown]);
   const loadModel = async () => {
         if (depthEstimator) { setStatus('Model already loaded.'); return; }
         try {
@@ -137,6 +166,36 @@ function App() {
       }
   }, [depthMapResult]);
 
+  useEffect(() => {
+    // This effect runs whenever any of these values change.
+    if (!rendererRef.current) return;
+
+    // We pack all our dynamic data into a Float32Array.
+    // The order MUST match what your shaders expect.
+    // Example mapping:
+    // uniform[0] = time (set inside renderer)
+    // uniform[1] = zoom
+    // uniform[2] = panX
+    // uniform[3] = panY
+    // uniform[4] = mouseX
+    // uniform[5] = mouseY
+    // uniform[6] = isMouseDown (1.0 or 0.0)
+    
+    const uniformData = new Float32Array([
+        zoom,
+        panX,
+        panY,
+        mousePosition.x,
+        mousePosition.y,
+        isMouseDown ? 1.0 : 0.0
+    ]);
+
+    // We write this data to the uniform buffer starting at index 1
+    // (since index 0 is reserved for time).
+    rendererRef.current.updateUniforms(uniformData, 1);
+
+}, [zoom, panX, panY, mousePosition, isMouseDown]);
+  
   return (
     <div id="app-container">
         <h1>WebGPU Liquid + Depth Effect</h1>
