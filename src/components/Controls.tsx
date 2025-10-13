@@ -1,11 +1,8 @@
 // src/components/Controls.tsx
 
 import React from 'react';
-import { RenderMode } from '../renderer/types';
 
 interface ControlsProps {
-    mode: RenderMode; // ADD THIS LINE
-    setMode: (mode: RenderMode) => void; // ADD THIS LINE
     zoom: number;
     setZoom: (zoom: number) => void;
     panX: number;
@@ -19,10 +16,10 @@ interface ControlsProps {
     setAutoChangeDelay: (delay: number) => void;
     onLoadModel: () => void;
     isModelLoaded: boolean;
+    onLoadEffect: (shaderUrl: string, type: 'render' | 'compute') => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({
-    mode, setMode, // ADD THIS LINE
     zoom, setZoom,
     panX, setPanX,
     panY, setPanY,
@@ -37,18 +34,15 @@ const Controls: React.FC<ControlsProps> = ({
         <div className="controls">
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
-                 <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
-    <option value="vortex">Clean Vortex</option> {/* ADD THIS */}
-    <option value="liquid-perspective">Liquid Perspective</option>
-    <option value="liquid-vortex">Liquid Vortex</option>
-    <option value="liquid">Liquid (Interactive)</option>
-    <option value="liquid-zoom">Liquid Zoom</option>
-    <option value="shader">Galaxy Shader</option>
-                    <option value="image">Static Image</option>
-                    <option value="ripple">Ripple Effect</option>
-                    <option value="video">Video Texture</option>
-                    <option value="liquid-v1">Liquid (Ambient)</option>
-                </select>
+            <button onClick={() => onLoadEffect('/shaders/galaxy.wgsl', 'render')}>
+                Load Galaxy (Render)
+            </button>
+            <button onClick={() => onLoadEffect('/shaders/liquid.wgsl', 'compute')}>
+                Load Liquid (Compute)
+            </button>
+            <button onClick={() => onLoadEffect('/shaders/vortex.wgsl', 'compute')}>
+                Load Vortex (Compute)
+            </button>
             </div>
             <div className="control-group">
                 <button onClick={onLoadModel} disabled={isModelLoaded}>
