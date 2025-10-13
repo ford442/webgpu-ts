@@ -55,6 +55,13 @@ function App() {
     rendererRef.current.updateUniforms(uniformData, 1);
 
 }, [zoom, panX, panY, mousePosition, isMouseDown]);
+
+  const loadEffect = useCallback((shaderUrl: string, type: 'render' | 'compute') => {
+    if (rendererRef.current) {
+        rendererRef.current.loadEffect(shaderUrl, type);
+    }
+}, []); // Note: This uses useCallback for optimization
+  
   const loadModel = async () => {
         if (depthEstimator) { setStatus('Model already loaded.'); return; }
         try {
