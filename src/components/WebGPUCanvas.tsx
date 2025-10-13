@@ -43,19 +43,23 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         return () => cancelAnimationFrame(animationFrameId.current);
     }, [rendererRef]); 
     
- useEffect(() => {
-        let active = true;
-        const animate = () => {
-            if (!active) return;
-            if (rendererRef.current && videoRef.current) {
-                // --- THIS IS THE CORRECTED LINE ---
-                rendererRef.current.render(videoRef.current, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown);
-            }
-            animationFrameId.current = requestAnimationFrame(animate);
-        };
-        animate();
-        return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [zoom, panX, panY, farthestPoint, mousePosition, isMouseDown, rendererRef]); // Added isMouseDown and rendererRef
+useEffect(() => {
+    let active = true;
+    const animate = () => {
+        if (!active || !rendererRef.current) return;
+
+        // The render call is now simple and takes no arguments!
+        rendererRef.current.render(); 
+
+        animationFrameId.current = requestAnimationFrame(animate);
+    };
+    animate();
+
+    return () => { 
+        active = false; 
+        cancelAnimationFrame(animationFrameId.current); 
+    };
+}, [rendererRef]); // The loop only needs to be set up once.
 
      const updateMousePosition = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!canvasRef.current) return;
