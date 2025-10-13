@@ -1,9 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Renderer } from '../renderer/Renderer';
-import { RenderMode } from '../renderer/types';
 
 interface WebGPUCanvasProps {
-    mode: RenderMode;
     zoom: number;
     panX: number;
     panY: number;
@@ -51,13 +49,13 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
             if (!active) return;
             if (rendererRef.current && videoRef.current) {
                 // --- THIS IS THE CORRECTED LINE ---
-                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown);
+                rendererRef.current.render(videoRef.current, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown, rendererRef]); // Added isMouseDown and rendererRef
+    }, [zoom, panX, panY, farthestPoint, mousePosition, isMouseDown, rendererRef]); // Added isMouseDown and rendererRef
 
      const updateMousePosition = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!canvasRef.current) return;
@@ -103,7 +101,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
     };
 
    return (
-        <canvas ref={canvasRef} width="2048" height="2048" onMouseMove={handleCanvasMouseMove} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave} />
+        <canvas ref={canvasRef} width="1280" height="1280" onMouseMove={handleCanvasMouseMove} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave} />
     );
 };
 
