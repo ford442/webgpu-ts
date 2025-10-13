@@ -2,16 +2,15 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
 import { Renderer } from './renderer/Renderer';
-import { pipeline, env } from '@xenova/transformers';
+import { pipeline, env } from '@huggingface/transformers';
 import './style.css';
 
 env.allowLocalModels = false;
-// env.backends.onnx.executionProviders = ['webgpu'];
+env.backends.onnx.executionProviders = ['webgpu'];
 env.backends.onnx.logLevel = 'warning';
 const model_loc = 'Xenova/dpt-hybrid-midas'
 
 function App() {
-  const [mode, setMode] = useState<RenderMode>('liquid');
   const [zoom, setZoom] = useState(1.0);
   const [panX, setPanX] = useState(0.5);
   const [panY, setPanY] = useState(0.5);
