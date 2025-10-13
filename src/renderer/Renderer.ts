@@ -209,9 +209,11 @@ this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RI
         this.bindGroups.set('compute', this.device.createBindGroup({ layout: computeLayout, entries: computeEntries }));
         const computeZoomPipeline = this.pipelines.get('computeZoom');
         if (computeZoomPipeline) {
+            // FIX: Create a separate entries array for the zoom shader that doesn't have the sampler at binding 0
+            const computeZoomEntries = computeEntries.filter(entry => entry.binding !== 0);
             this.bindGroups.set('computeZoom', this.device.createBindGroup({
                 layout: computeZoomPipeline.getBindGroupLayout(0),
-                entries: computeEntries
+                entries: computeZoomEntries
             }));
         }
 
