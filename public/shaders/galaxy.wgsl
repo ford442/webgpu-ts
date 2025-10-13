@@ -1,11 +1,12 @@
-// Uniforms: time, zoom, panX, panY
-// Sampler for the texture
-@group(0) @binding(0) var u_sampler: sampler;
-@group(0) @binding(1) var u_texture: texture_2d<f32>;
+@group(0) @binding(0) var u_sampler: sampler; // Correct
 
-// Input texture from a video or image
-@group(0) @binding(2) var inputTexture: texture_2d<f32>;
-@group(0) @binding(3) var<uniform> uniforms : vec4<f32>;
+struct Uniforms {
+    // A generic array to hold all parameters
+    params: array<f32, 64>,
+};
+@group(0) @binding(1) var<uniform> u: Uniforms; // Uniforms now at binding 1
+
+@group(0) @binding(2) var primaryTexture: texture_2d<f32>; // Main texture at binding 2
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -34,8 +35,10 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
-    let time = uniforms.x;
-
+    let time = u.params[0]; // Access time from the uniform array
+    let zoom = u.params[1];
+    let panX = u.params[2];
+    let panY = u.params[3];
     // Create a simple animated color pattern
     let color1 = vec3<f32>(sin(fragUV.x * 20.0 + time), cos(fragUV.y * 20.0 + time), 0.5);
     let color2 = vec3<f32>(0.1, 0.2, 0.4);
