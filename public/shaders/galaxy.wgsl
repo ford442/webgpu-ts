@@ -1,12 +1,11 @@
-@group(0) @binding(0) var u_sampler: sampler; // Correct
+@group(0) @binding(0) var u_sampler: sampler;
 
 struct Uniforms {
-    // A generic array to hold all parameters
     params: array<f32, 64>,
 };
-@group(0) @binding(1) var<uniform> u: Uniforms; // Uniforms now at binding 1
 
-@group(0) @binding(2) var primaryTexture: texture_2d<f32>; // Main texture at binding 2
+@group(0) @binding(1) var<uniform> u: Uniforms;
+@group(0) @binding(2) var primaryTexture: texture_2d<f32>;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -23,22 +22,13 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
 
     // Create base UV coordinates (0.0 to 1.0)
     var uv = vec2<f32>((x + 1.0) * 0.5, (y + 1.0) * 0.5);
-
-    // Apply zoom and pan from uniforms
-    // uniforms.y = zoom, uniforms.z = panX, uniforms.w = panY
-    uv = (uv - 0.5) / uniforms.y; // Zoom
-    uv += vec2<f32>(uniforms.z - 0.5, uniforms.w - 0.5); // Pan
-
     output.fragUV = uv;
     return output;
 }
 
 @fragment
 fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
-    let time = u.params[0]; // Access time from the uniform array
-    let zoom = u.params[1];
-    let panX = u.params[2];
-    let panY = u.params[3];
+    let time = u.params[0];
     // Create a simple animated color pattern
     let color1 = vec3<f32>(sin(fragUV.x * 20.0 + time), cos(fragUV.y * 20.0 + time), 0.5);
     let color2 = vec3<f32>(0.1, 0.2, 0.4);
