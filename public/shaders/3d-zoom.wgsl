@@ -79,21 +79,20 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let slowest_speed = 0.025;
   let stop_speed = 0.0;
   let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, stop_speed, 0.0, 0.0);
-//  let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
-  // let blended_horizon = mix(horizon1, horizon2, horizon2.a);
-  final_color = horizon1;
-  // final_color = mix(final_color, blended_horizon, blended_horizon.a);
+  let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
+  let blended_horizon = mix(horizon1, horizon1, horizon1.a);
+  final_color = mix(final_color, blended_horizon, blended_horizon.a);
   // 2. The Mid-ground Layer (now starts from the new horizon_depth)
-  let slow_speed = 0.05; // Slightly increase mid-ground speed as well
+  let slow_speed = 0.005; // Slightly increase mid-ground speed as well
   let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
   let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
   let blended_midground = mix(mid1, mid2, mid2.a);
   final_color = mix(final_color, blended_midground, blended_midground.a);
-  // 3. The Foreground Layer (starts from the new midground_depth)
+  // 3. The Foreground Layer (starts from the new midground_depth) //  removing midground
   let fast_speed = 0.15;
-  let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
+  let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, 0.9, 1.0);
   let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
-  let blended_foreground = mix(fg1, fg2, fg2.a);
+  let blended_foreground = mix(fg1, fg1, fg1.a); // removing fg2
   final_color = mix(final_color, blended_foreground, blended_foreground.a);
   // --- IMPROVEMENT 3: ATMOSPHERIC FOG ---
   // We need a single depth value for the fog calculation. Let's use the static
