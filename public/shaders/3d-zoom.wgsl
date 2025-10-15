@@ -6,15 +6,12 @@
 @group(0) @binding(5) var staticDepthTexture: texture_2d<f32>;
 
 struct Uniforms {
-  resolutions: vec4<f32>,     // align 16
-  time_zoom: vec4<f32>,       // align 16
-  config: vec4<f32>,          // align 16
-  depth_map_res: vec4<f32>,   // align 16
-  color_map_res: vec4<f32>,   // align 16
-  effect_params: vec4<f32>,   // align 16
-  layer_speeds: vec4<f32>,    // align 16
-  layer_depths: vec4<f32>,    // align 16
-  zoom_range: vec2<f32>,      // align 8
+  resolutions: vec4<f32>,
+  time_zoom: vec4<f32>,
+  config: vec4<f32>,
+  depth_map_res: vec4<f32>,
+  color_map_res: vec4<f32>, 
+  effect_params: vec4<f32>,
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
@@ -54,7 +51,7 @@ fn create_layer(
 
   let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
   let eased_progress = ease_out_quad(zoom_progress);
-  let layer_scale = mix(u.zoom_range.x, u.zoom_range.y, eased_progress);
+  let layer_scale = eased_progress; // mix(u.zoom_range.x, u.zoom_range.y, eased_progress);
 
   let repeating_uv = fract((uv - zoom_center) * layer_scale + zoom_center);
   
@@ -112,12 +109,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let zoom_center = u.time_zoom.yz;
 
   // --- 1. Define Layer Properties ---
-  let horizon_depth = u.layer_depths.x;
-  let midground_depth = u.layer_depths.y;
+  let horizon_depth = .4; // u.layer_depths.x;
+  let midground_depth = .8; // u.layer_depths.y;
   
-  let slowest_speed = u.layer_speeds.x;
-  let slow_speed = u.layer_speeds.y;
-  let fast_speed = u.layer_speeds.z;
+  let slowest_speed = 0.005; // u.layer_speeds.x;
+  let slow_speed = 0.015; //  u.layer_speeds.y;
+  let fast_speed = 0.075; //  u.layer_speeds.z;
 
   // --- 2. Create and Blend Layers Sequentially ---
   let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
