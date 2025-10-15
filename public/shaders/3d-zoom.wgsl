@@ -112,7 +112,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // This avoids blending and creates a sharp, solid cutout.
   var final_color = mix(background_color, vec4(blended_foreground.rgb, 1.0), foreground_mask);
 
-
   // --- Apply Fog ---
   // Note: Fog is applied to the final composed image.
   let fog_depth_uv = get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy);
