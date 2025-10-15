@@ -10,7 +10,7 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "paramiko"])
     import paramiko
 
-WEBGPU_TS_DIR = '/content/RAMDRIVE2/webgpu-ts'
+WEBGPU_TS_DIR = '/workspaces/webgpu-ts'
 HTML_FILE_PATH = os.path.join(WEBGPU_TS_DIR, 'build', 'index.html')
 DEPLOY_SCRIPT = os.path.join(WEBGPU_TS_DIR, 'deploy.py')
 
