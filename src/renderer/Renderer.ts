@@ -11,7 +11,7 @@ export class Renderer {
     private universalBindGroupLayout!: GPUBindGroupLayout;
     private uniformBuffer!: GPUBuffer;
     private primaryTexture!: GPUTexture;   // The original, undisturbed image
-    private depthTexture!: GPUTexture;     // For depth data, renamed from utilityTexture1
+    private depthTexture!: GPUTexture;     // For depth data
     
     // --- Resources for Stateful Ping-Pong ---
     private stateTextureA!: GPUTexture;
@@ -28,7 +28,6 @@ export class Renderer {
     private uniforms = new Float32Array(256);
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
     private readonly MAX_RIPPLES = 50;
-    private isComputeEffect: boolean = false;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -69,16 +68,17 @@ export class Renderer {
         this.stateTextureA = this.device.createTexture(stateTextureDesc);
         this.stateTextureB = this.device.createTexture(stateTextureDesc);
 
-        this.primaryTexture = this.device.createTexture({ ...stateTextureDesc, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+        this.primaryTexture = this.device.createTexture({ ...stateTextureDesc, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC });
         this.depthTexture = this.device.createTexture({ size: [1, 1], format: 'r32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
         
+        // --- THIS IS THE CORRECTED PART ---
         this.universalBindGroupLayout = this.device.createBindGroupLayout({
             entries: [
                 { binding: 0, visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT, sampler: {} },
                 { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
-                { binding: 2, visibility: GPUShaderStage.COMPUTE, texture: {} }, // Primary Texture
-                { binding: 3, visibility: GPUShaderStage.COMPUTE, texture: {} }, // Read Texture
-                { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: {} }, // Depth Texture
+                { binding: 2, visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT, texture: {} }, // Primary Texture (Made visible to fragment)
+                { binding: 3, visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT, texture: {} }, // Read/Display Texture (Made visible to fragment)
+                { binding: 4, visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT, texture: {} }, // Depth Texture (Made visible to fragment)
                 { binding: 5, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba8unorm' } }, // Write Texture
                 { binding: 6, visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT, sampler: { type: 'non-filtering' } },
             ]
@@ -106,15 +106,13 @@ export class Renderer {
         this.createOrUpdateBindGroups();
     }
     
-    public async loadEffect(shaderUrl: string, effectType: 'compute'): Promise<void> {
+    public async loadEffect(shaderUrl: string): Promise<void> {
         this.activePipeline = null;
-        this.isComputeEffect = effectType === 'compute';
         try {
             const shaderCode = await fetch(shaderUrl).then(res => res.text());
             const shaderModule = this.device.createShaderModule({ code: shaderCode });
-            const layout = this.device.createPipelineLayout({ bindGroupLayouts: [this.universalBindGroupLayout] });
             this.activePipeline = await this.device.createComputePipelineAsync({
-                layout,
+                layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.universalBindGroupLayout] }),
                 compute: { module: shaderModule, entryPoint: 'main' }
             });
             console.log(`Successfully loaded compute effect: ${shaderUrl}`);
@@ -132,7 +130,6 @@ export class Renderer {
             { binding: 6, resource: this.nearestSampler },
         ];
 
-        // Bind Group A: Reads from A, Writes to B
         this.computeBindGroupA = this.device.createBindGroup({
             layout: this.universalBindGroupLayout,
             entries: [ ...commonEntries,
@@ -141,7 +138,6 @@ export class Renderer {
             ],
         });
 
-        // Bind Group B: Reads from B, Writes to A
         this.computeBindGroupB = this.device.createBindGroup({
             layout: this.universalBindGroupLayout,
             entries: [ ...commonEntries,
@@ -150,55 +146,52 @@ export class Renderer {
             ],
         });
         
-        // Display Group for Texture A
         this.displayBindGroupA = this.device.createBindGroup({
             layout: this.universalBindGroupLayout,
-            entries: [
-                { binding: 0, resource: this.linearSampler },
-                { binding: 1, resource: { buffer: this.uniformBuffer } },
-                { binding: 2, resource: this.primaryTexture.createView() },
-                { binding: 3, resource: this.stateTextureA.createView() }, // READS A
-                { binding: 4, resource: this.depthTexture.createView() },
-                { binding: 5, resource: this.stateTextureB.createView() }, // Dummy
-                { binding: 6, resource: this.nearestSampler },
+            entries: [ ...commonEntries,
+                { binding: 3, resource: this.stateTextureA.createView() },
+                { binding: 5, resource: this.stateTextureB.createView() },
             ],
         });
 
-        // Display Group for Texture B
         this.displayBindGroupB = this.device.createBindGroup({
             layout: this.universalBindGroupLayout,
-            entries: [
-                { binding: 0, resource: this.linearSampler },
-                { binding: 1, resource: { buffer: this.uniformBuffer } },
-                { binding: 2, resource: this.primaryTexture.createView() },
-                { binding: 3, resource: this.stateTextureB.createView() }, // READS B
-                { binding: 4, resource: this.depthTexture.createView() },
-                { binding: 5, resource: this.stateTextureA.createView() }, // Dummy
-                { binding: 6, resource: this.nearestSampler },
+            entries: [ ...commonEntries,
+                { binding: 3, resource: this.stateTextureB.createView() },
+                { binding: 5, resource: this.stateTextureA.createView() },
             ],
         });
     }
 
-    private async fetchImageUrls(): Promise<void> {/* Unchanged */}
+    private async fetchImageUrls(): Promise<void> {
+         const bucketName = 'my-sd35-space-images-2025';
+        const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            const data = await response.json();
+            this.imageUrls = data.items ? data.items.map((item: { name: string }) => `https://storage.googleapis.com/${bucketName}/${item.name}`) : [];
+        } catch (e) {
+            console.error("Failed to fetch image list:", e);
+            this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
+        }
+    }
     
     public async loadRandomImage(): Promise<string | undefined> {
         try {
-            if (this.imageUrls.length === 0) {
-                 this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
-            }
+            if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
             
-            if (this.primaryTexture) this.primaryTexture.destroy();
+            if(this.primaryTexture) this.primaryTexture.destroy();
             this.primaryTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
                 format: 'rgba8unorm',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.primaryTexture }, [imageBitmap.width, imageBitmap.height]);
 
-            // Initialize state by copying the primary texture to stateTextureA
             const commandEncoder = this.device.createCommandEncoder();
             commandEncoder.copyTextureToTexture(
                 { texture: this.primaryTexture },
@@ -215,8 +208,10 @@ export class Renderer {
         }
     }
     
-    public updateUniforms(values: Float32Array, offset: number = 0) {
-        this.uniforms.set(values, offset);
+    public updateUniforms(values: Float32Array, offset: number = 0) { this.uniforms.set(values, offset); }
+    public addRipplePoint(x: number, y: number) {
+        this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
+        if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.shift();
     }
 
     public updateDepthMap(data: Float32Array, width: number, height: number): void {
@@ -230,15 +225,9 @@ export class Renderer {
         this.createOrUpdateBindGroups();
     }
     
-    public addRipplePoint(x: number, y: number) {
-        this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
-        if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.shift();
-    }
-    
     public render(): void {
         if (!this.activePipeline) return;
 
-        // Update uniforms
         const currentTime = performance.now() / 1000.0;
         this.uniforms[0] = currentTime;
         this.uniforms[4] = this.canvas.width;
@@ -252,7 +241,6 @@ export class Renderer {
 
         const commandEncoder = this.device.createCommandEncoder();
         
-        // --- Compute Pass with Ping-Pong ---
         const computePass = commandEncoder.beginComputePass();
         computePass.setPipeline(this.activePipeline);
         if (this.frameCount % 2 === 0) {
@@ -263,7 +251,6 @@ export class Renderer {
         computePass.dispatchWorkgroups(Math.ceil(this.canvas.width / 8), Math.ceil(this.canvas.height / 8));
         computePass.end();
 
-        // --- Display Pass ---
         const textureView = this.context.getCurrentTexture().createView();
         const renderPass = commandEncoder.beginRenderPass({
             colorAttachments: [{ view: textureView, loadOp: 'clear', storeOp: 'store', clearValue: [0,0,0,1] }]
