@@ -30,7 +30,7 @@ export class Renderer {
         lastMouseY: 0,
     };
     
-    private parallaxParams = { displacementScale: 0.3, ambient: 0.3, smoothness: 1.0, pointSize: 3.0 };
+    private parallaxParams = { displacementScale: 0.3, ambient: 0.3, smoothness: 1.0, pointSize: 1.0 };
 
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
@@ -118,7 +118,7 @@ export class Renderer {
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
-                format: 'rgba16float',
+                format: 'rgba32float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
@@ -150,7 +150,7 @@ export class Renderer {
         if (this.writeTexture) this.writeTexture.destroy();
         this.writeTexture = this.device.createTexture({
             size: [newCanvasWidth, newCanvasHeight],
-            format: 'rgba16float',
+            format: 'rgba32float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
         this.createBindGroups();
@@ -190,7 +190,7 @@ export class Renderer {
         this.device.queue.writeTexture({ texture: this.staticDepthTexture }, new Float32Array([0.0]), { bytesPerRow: 4 }, [1, 1]);
         this.writeTexture = this.device.createTexture({
             size: [this.canvas.width, this.canvas.height],
-            format: 'rgba16float',
+            format: 'rgba32float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
         await this.loadRandomImage();
