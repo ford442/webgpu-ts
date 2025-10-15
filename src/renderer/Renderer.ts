@@ -78,12 +78,15 @@ export class Renderer {
         this.linearSampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.nearestSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
 
-        // Create placeholder textures. These will be replaced by actual data later.
-        const placeholder = { size: [1, 1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING };
-        this.primaryTexture = this.device.createTexture(placeholder);
-        this.utilityTexture1 = this.device.createTexture(placeholder);
-        this.utilityTexture2 = this.device.createTexture(placeholder);
-
+        const placeholder: GPUTextureDescriptor = { 
+    size: [1, 1], 
+    format: 'rgba8unorm', 
+    usage: GPUTextureUsage.TEXTURE_BINDING 
+};
+this.primaryTexture = this.device.createTexture(placeholder);
+this.utilityTexture1 = this.device.createTexture(placeholder);
+this.utilityTexture2 = this.device.createTexture(placeholder);
+        
         // The storage texture needs to be sized to the canvas.
         this.storageTexture = this.device.createTexture({
             size: [this.canvas.width, this.canvas.height],
