@@ -87,17 +87,6 @@ export class Renderer {
         if (!this.device) return;
         const newCanvasWidth = 1280;
         const newCanvasHeight = 1280;
-        if (this.canvas.width !== newCanvasWidth || this.canvas.height !== newCanvasHeight) {
-            this.canvas.width = newCanvasWidth;
-            this.canvas.height = newCanvasHeight;
-            if (this.writeTexture) this.writeTexture.destroy();
-            this.writeTexture = this.device.createTexture({
-                size: [newCanvasWidth, newCanvasHeight],
-                format: 'rgba16float',
-                usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
-            });
-            this.createBindGroups();
-        }
     }
     
     public updateDepthMap(data: Float32Array, width: number, height: number): void {
