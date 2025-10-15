@@ -3,12 +3,6 @@
 import React from 'react';
 
 interface ControlsProps {
-    zoom: number;
-    setZoom: (zoom: number) => void;
-    panX: number;
-    setPanX: (panX: number) => void;
-    panY: number;
-    setPanY: (panY: number) => void;
     onNewImage: () => void;
     autoChangeEnabled: boolean;
     setAutoChangeEnabled: (enabled: boolean) => void;
@@ -20,9 +14,6 @@ interface ControlsProps {
 }
 
 const Controls: React.FC<ControlsProps> = ({
-    zoom, setZoom,
-    panX, setPanX,
-    panY, setPanY,
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
