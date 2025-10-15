@@ -42,7 +42,11 @@ export class Renderer {
             console.error("Failed to get GPU adapter.");
             return false;
         }
-        this.device = await adapter.requestDevice();
+        const requiredFeatures: GPUFeatureName[] = [];
+        if (adapter.features.has('float32-filterable')) {
+            requiredFeatures.push('float32-filterable');
+        }
+        this.device = await adapter.requestDevice({ requiredFeatures });
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         this.context.configure({
