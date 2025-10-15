@@ -250,9 +250,11 @@ export class Renderer {
     public render(): void {
         if (!this.device || !this.activePipeline || !this.universalBindGroup) return;
         const currentTime = performance.now() / 1000.0;
-        this.uniforms[0] = currentTime; // Write time to the first float (u.params[0].x)
+        this.uniforms[0] = currentTime; // time
+        this.uniforms[4] = this.canvas.width;
+        this.uniforms[5] = this.canvas.height;
         this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
-        this.uniforms[8] = this.ripplePoints.length; // Write ripple count to u.params[2].x
+        this.uniforms[10] = this.ripplePoints.length; 
         const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
         this.ripplePoints.forEach((p, i) => {
             rippleData.set([p.x, p.y, p.startTime, 0.0], i * 4);
