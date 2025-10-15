@@ -31,7 +31,7 @@ function App() {
         0.0,
     ]);
     rendererRef.current.updateUniforms(uniformData, 4);
-9  }, [mousePosition, isMouseDown]);
+  }, [mousePosition, isMouseDown]);
   
   const loadEffect = useCallback((shaderUrl: string, type: 'render' | 'compute') => {
     if (rendererRef.current) {
@@ -158,8 +158,8 @@ function App() {
         isMouseDown ? 1.0 : 0.0
     ]);
     rendererRef.current.updateUniforms(uniformData, 1);
-}, [mousePosition, isMouseDown]);
-return (
+  }, [mousePosition, isMouseDown]);
+  return (
     <div id="app-container">
         <h1>WebGPU Liquid + Depth Effect</h1>
         <p><strong>Status:</strong> {status}</p>
