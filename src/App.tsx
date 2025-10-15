@@ -222,16 +222,11 @@ function App() {
             onLoadEffect={loadEffect} // <-- ADD THIS LINE
         />
         <WebGPUCanvas
-            rendererRef={rendererRef}
-            zoom={zoom}
-            panX={panX}
-            panY={panY}
-            farthestPoint={farthestPoint}
-            mousePosition={mousePosition}
-            setMousePosition={setMousePosition}
-            isMouseDown={isMouseDown}
-            setIsMouseDown={setIsMouseDown}
-        />
+    rendererRef={rendererRef}
+    setMousePosition={setMousePosition}
+    isMouseDown={isMouseDown}
+    setIsMouseDown={setIsMouseDown}
+/>
         {depthMapResult && (
             <div className="debug-container">
                 <h2>AI Model Output (Debug Depth Map)</h2>
