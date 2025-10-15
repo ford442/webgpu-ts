@@ -71,10 +71,10 @@ export class Renderer {
         });
         this.linearSampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.nearestSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
-        const placeholder: GPUTextureDescriptor = { 
-            size: [1, 1], 
-            format: 'rgba8unorm', 
-            usage: GPUTextureUsage.TEXTURE_BINDING 
+        const placeholder: GPUTextureDescriptor = {
+            size: [1, 1],
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING
         };
         this.primaryTexture = this.device.createTexture(placeholder);
         this.utilityTexture1 = this.device.createTexture(placeholder);
@@ -121,7 +121,7 @@ export class Renderer {
         });
         this.createOrUpdateBindGroup();
     }
-    
+
     /**
      * Dynamically loads a shader, creates a pipeline, and sets it as the active effect.
      * @param shaderUrl The URL of the .wgsl file to load.
@@ -153,14 +153,14 @@ export class Renderer {
             console.error(`Failed to load shader from ${shaderUrl}:`, e);
         }
     }
-    
+
     public addRipplePoint(x: number, y: number) {
         this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
         if (this.ripplePoints.length > this.MAX_RIPPLES) {
             this.ripplePoints.shift(); // Remove the oldest ripple
         }
     }
-    
+
     /**
      * Assembles the universal bind group from the current state of the resources.
      * This should be called whenever a key texture (like primaryTexture) is replaced.
@@ -193,7 +193,7 @@ export class Renderer {
             this.imageUrls = ['https://i.imgur.com/vCNL2sT.jpeg'];
         }
     }
-    
+
     /**
      * Loads a new primary image, creates a texture, and updates the bind group.
      */
@@ -217,7 +217,7 @@ export class Renderer {
             return undefined;
         }
     }
-    
+
     /**
      * Updates a specific range of the uniform buffer.
      * @param values The Float32Array of values to write.
@@ -245,7 +245,7 @@ export class Renderer {
         );
         this.createOrUpdateBindGroup();
     }
-    
+
     /**
      * The main render loop, called every frame.
      */
@@ -256,12 +256,12 @@ export class Renderer {
         this.uniforms[4] = this.canvas.width;
         this.uniforms[5] = this.canvas.height;
         this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
-        this.uniforms[10] = this.ripplePoints.length; 
+        this.uniforms[10] = this.ripplePoints.length;
         const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
         this.ripplePoints.forEach((p, i) => {
             rippleData.set([p.x, p.y, p.startTime, 0.0], i * 4);
         });
-        this.uniforms.set(rippleData, 12); 
+        this.uniforms.set(rippleData, 12);
         this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniforms);
         const commandEncoder = this.device.createCommandEncoder();
         if (this.isComputeEffect) {
@@ -276,11 +276,11 @@ export class Renderer {
             computePass.end();
             const textureView = this.context.getCurrentTexture().createView();
             const renderPass = commandEncoder.beginRenderPass({
-            colorAttachments: [{ 
-                view: textureView, 
-                loadOp: 'clear' as GPULoadOp, 
-                storeOp: 'store' as GPUStoreOp, 
-                clearValue: [0, 0, 0, 1] 
+            colorAttachments: [{
+                view: textureView,
+                loadOp: 'clear' as GPULoadOp,
+                storeOp: 'store' as GPUStoreOp,
+                clearValue: [0, 0, 0, 1]
             }]
             });
             renderPass.setPipeline(this.displayPipeline);
@@ -293,6 +293,7 @@ export class Renderer {
                     { binding: 3, resource: this.utilityTexture1.createView() },
                     { binding: 4, resource: this.utilityTexture2.createView() },
                     { binding: 5, resource: this.storageTexture.createView() },
+                    { binding: 6, resource: this.nearestSampler }, // This was missing
                 ],
             });
             renderPass.setBindGroup(0, displayBindGroup);
@@ -301,11 +302,11 @@ export class Renderer {
         } else {
             const textureView = this.context.getCurrentTexture().createView();
             const renderPass = commandEncoder.beginRenderPass({
-            colorAttachments: [{ 
-                view: textureView, 
-                loadOp: 'clear' as GPULoadOp, 
-                storeOp: 'store' as GPUStoreOp, 
-                clearValue: [0, 0, 0, 1] 
+            colorAttachments: [{
+                view: textureView,
+                loadOp: 'clear' as GPULoadOp,
+                storeOp: 'store' as GPUStoreOp,
+                clearValue: [0, 0, 0, 1]
             }]
         });
             renderPass.setPipeline(this.activePipeline as GPURenderPipeline);
@@ -316,5 +317,5 @@ export class Renderer {
         this.device.queue.submit([commandEncoder.finish()]);
         this.frameCount++;
     }
-    
+
 }
