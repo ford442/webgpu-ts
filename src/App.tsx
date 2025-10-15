@@ -219,6 +219,7 @@ function App() {
             setAutoChangeDelay={setAutoChangeDelay}
             onLoadModel={loadModel}
             isModelLoaded={!!depthEstimator}
+            onLoadEffect={loadEffect} // <-- ADD THIS LINE
         />
         <WebGPUCanvas
             rendererRef={rendererRef}
