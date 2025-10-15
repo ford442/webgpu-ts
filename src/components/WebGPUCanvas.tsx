@@ -2,64 +2,52 @@ import React, { useRef, useEffect } from 'react';
 import { Renderer } from '../renderer/Renderer';
 
 interface WebGPUCanvasProps {
-    zoom: number;
-    panX: number;
-    panY: number;
     rendererRef: React.MutableRefObject<Renderer | null>;
-    farthestPoint: { x: number; y: number };
-    mousePosition: { x: number; y: number };
     setMousePosition: (pos: { x: number, y: number }) => void;
-    isMouseDown: boolean;
     setIsMouseDown: (down: boolean) => void;
+    isMouseDown: boolean;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef, setMousePosition, setIsMouseDown, isMouseDown }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
     const lastMouseAddTime = useRef(0);
+    const videoRef = useRef<HTMLVideoElement | null>(null); // Keep video ref for potential future use
 
     useEffect(() => {
-        if (!canvasRef.current) return;
-        const canvas = canvasRef.current;
-        const renderer = new Renderer(canvas);
+        if (!canvasRef.current || rendererRef.current) return;
+        const renderer = new Renderer(canvasRef.current);
         
         (async () => {
             const success = await renderer.init();
             if (success) {
-                 if (rendererRef && 'current' in rendererRef) {
-                    (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
-                }
-                videoRef.current = document.createElement('video');
-                videoRef.current.src = 'https://test.1ink.us/webgputs/big_buck_bunny_720p_surround.mp4';
-                videoRef.current.crossOrigin = 'anonymous';
-                videoRef.current.muted = true;
-                videoRef.current.loop = true;
-                videoRef.current.autoplay = true;
-                videoRef.current.playsInline = true;
-                await videoRef.current.play().catch(console.error);
+                rendererRef.current = renderer;
+                // You can initialize a default effect here if you want
+                renderer.loadEffect('/shaders/liquid.wgsl', 'compute'); 
             }
         })();
-        return () => cancelAnimationFrame(animationFrameId.current);
+        
+        return () => {
+            if (animationFrameId.current) {
+                cancelAnimationFrame(animationFrameId.current);
+            }
+        };
     }, [rendererRef]); 
     
-useEffect(() => {
-    let active = true;
-    const animate = () => {
-        if (!active || !rendererRef.current) return;
+    useEffect(() => {
+        let active = true;
+        const animate = () => {
+            if (!active || !rendererRef.current) return;
+            rendererRef.current.render(); 
+            animationFrameId.current = requestAnimationFrame(animate);
+        };
+        animate();
 
-        // The render call is now simple and takes no arguments!
-        rendererRef.current.render(); 
-
-        animationFrameId.current = requestAnimationFrame(animate);
-    };
-    animate();
-
-    return () => { 
-        active = false; 
-        cancelAnimationFrame(animationFrameId.current); 
-    };
-}, [rendererRef]); // The loop only needs to be set up once.
+        return () => { 
+            active = false; 
+            cancelAnimationFrame(animationFrameId.current); 
+        };
+    }, [rendererRef]);
 
      const updateMousePosition = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!canvasRef.current) return;
@@ -86,26 +74,34 @@ useEffect(() => {
 
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
         setIsMouseDown(true);
-        updateMousePosition(event); // Ensure position is updated on click
-        if (mode === 'ripple' || mode === 'liquid') { // Removed liquid-v1 from ripple logic
-            addRippleAtMouseEvent(event);
-        }
+        updateMousePosition(event);
+        // FIX: The conditional logic is removed. Always add a ripple.
+        addRippleAtMouseEvent(event);
     };
 
     const handleMouseUp = () => setIsMouseDown(false);
 
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
         updateMousePosition(event);
-        if (isMouseDown && (mode === 'ripple' || mode === 'liquid')) { // Removed liquid-v1 from ripple logic
+        // FIX: The conditional logic is removed. Add ripples if dragging.
+        if (isMouseDown) {
             const now = performance.now();
-            if (now - lastMouseAddTime.current < 10) return;
+            if (now - lastMouseAddTime.current < 50) return; // small delay to prevent too many points
             lastMouseAddTime.current = now;
             addRippleAtMouseEvent(event);
         }
     };
 
    return (
-        <canvas ref={canvasRef} width="1280" height="1280" onMouseMove={handleCanvasMouseMove} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave} />
+        <canvas 
+            ref={canvasRef} 
+            width="1280" 
+            height="1280" 
+            onMouseMove={handleCanvasMouseMove} 
+            onMouseDown={handleMouseDown} 
+            onMouseUp={handleMouseUp} 
+            onMouseLeave={handleMouseLeave} 
+        />
     );
 };
 
