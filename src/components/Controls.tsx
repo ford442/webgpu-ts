@@ -27,10 +27,8 @@ const Controls: React.FC<ControlsProps> = ({
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
     onLoadModel, isModelLoaded,
-    onLoadEffect // <-- ADD THIS
+    onLoadEffect
 }) => {
-    // The previous logic for `isImageMode` is no longer needed since you are always showing these controls.
-
     return (
         <div className="controls">
             <div className="control-group">
@@ -67,18 +65,6 @@ const Controls: React.FC<ControlsProps> = ({
                     </div>
                 )}
             </>
-            <div className="control-group">
-                <label htmlFor="zoom-slider">Zoom:</label>
-                <input type="range" id="zoom-slider" min="50" max="200" value={zoom * 100} onChange={(e) => setZoom(parseFloat(e.target.value) / 100)} />
-            </div>
-            <div className="control-group">
-                <label htmlFor="pan-x-slider">Pan X:</label>
-                <input type="range" id="pan-x-slider" min="0" max="200" value={panX * 100} onChange={(e) => setPanX(parseFloat(e.target.value) / 100)} />
-            </div>
-            <div className="control-group">
-                <label htmlFor="pan-y-slider">Pan Y:</label>
-                <input type="range" id="pan-y-slider" min="0" max="200" value={panY * 100} onChange={(e) => setPanY(parseFloat(e.target.value) / 100)} />
-            </div>
         </div>
     );
 };
