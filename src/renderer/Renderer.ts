@@ -84,27 +84,16 @@ export class Renderer {
     }
 
     public handleResize(): void {
-        if (!this.device || !this.canvas.parentElement) return;
-        const container = this.canvas.parentElement;
-        const imageAspect = this.imageDimensions.width / this.imageDimensions.height;
-        
-        let newCanvasWidth = container.clientWidth;
-        let newCanvasHeight = Math.round(newCanvasWidth / imageAspect);
-
-        if (newCanvasHeight > container.clientHeight) {
-            newCanvasHeight = container.clientHeight;
-            newCanvasWidth = Math.round(newCanvasHeight * imageAspect);
-        }
-
+        if (!this.device) return;
+        const newCanvasWidth = 1280;
+        const newCanvasHeight = 1280;
         if (this.canvas.width !== newCanvasWidth || this.canvas.height !== newCanvasHeight) {
             this.canvas.width = newCanvasWidth;
             this.canvas.height = newCanvasHeight;
-            
             if (this.writeTexture) this.writeTexture.destroy();
             this.writeTexture = this.device.createTexture({
                 size: [newCanvasWidth, newCanvasHeight],
                 format: 'rgba16float',
-                // --- THIS IS THE FIX ---
                 usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
             });
             this.createBindGroups();
