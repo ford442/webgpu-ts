@@ -27,10 +27,11 @@ function App() {
     const uniformData = new Float32Array([
         mousePosition.x,
         mousePosition.y,
-        isMouseDown ? 1.0 : 0.0
+        isMouseDown ? 1.0 : 0.0,
+        0.0,
     ]);
-    rendererRef.current.updateUniforms(uniformData, 1);
-  }, [mousePosition, isMouseDown]);
+    rendererRef.current.updateUniforms(uniformData, 4);
+9  }, [mousePosition, isMouseDown]);
   
   const loadEffect = useCallback((shaderUrl: string, type: 'render' | 'compute') => {
     if (rendererRef.current) {
