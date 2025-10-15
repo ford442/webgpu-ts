@@ -96,31 +96,15 @@ export class Renderer {
     }
 
   public handleResize(): void {
-    if (!this.device || !this.canvas.parentElement) return;
-
-    // Get the current size of the container
-    const containerWidth = this.canvas.parentElement.clientWidth;
-    const containerHeight = this.canvas.parentElement.clientHeight;
-    
-    const imageAspect = this.imageDimensions.width / this.imageDimensions.height;
-    
-    let newCanvasWidth = containerWidth;
-    let newCanvasHeight = Math.round(containerWidth / imageAspect);
-
-    if (newCanvasHeight > containerHeight) {
-        newCanvasHeight = containerHeight;
-        newCanvasWidth = Math.round(containerHeight * imageAspect);
-    }
-    
-    // Only resize if there's a meaningful change to avoid unnecessary re-creations
+   if (!this.device) return;
+    const newCanvasWidth = 1280;
+    const newCanvasHeight = 1280;
     if (this.canvas.width !== newCanvasWidth || this.canvas.height !== newCanvasHeight) {
         this.canvas.style.width = newCanvasWidth + 'px';
         this.canvas.style.height = newCanvasHeight + 'px';
         this.canvas.width = newCanvasWidth;
         this.canvas.height = newCanvasHeight;
-
         this.context.configure({device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied'});
-
         if (this.writeTexture) this.writeTexture.destroy();
         this.writeTexture = this.device.createTexture({
             size: [newCanvasWidth, newCanvasHeight],
