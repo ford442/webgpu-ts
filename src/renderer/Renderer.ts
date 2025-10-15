@@ -7,23 +7,17 @@ export class Renderer {
     private device!: GPUDevice;
     private context!: GPUCanvasContext;
     private presentationFormat!: GPUTextureFormat;
-
-    // --- Core Modular Components ---
     private activePipeline: GPURenderPipeline | GPUComputePipeline | null = null;
     private displayPipeline!: GPURenderPipeline; // A simple pipeline to display the output of compute shaders
     private universalBindGroupLayout!: GPUBindGroupLayout;
     private universalBindGroup!: GPUBindGroup;
     private uniformBuffer!: GPUBuffer;
-
-    // --- Universal Resources ---
     private primaryTexture!: GPUTexture;   // The main input image/video
     private utilityTexture1!: GPUTexture;  // For data like depth maps
     private utilityTexture2!: GPUTexture;  // For ping-ponging or other data
     private storageTexture!: GPUTexture;   // Writable texture for compute shaders
     private linearSampler!: GPUSampler;
     private nearestSampler!: GPUSampler;
-
-    // --- State & Parameters ---
     private imageUrls: string[] = [];
     private uniforms = new Float32Array(256); // Increased size for ripple data
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
@@ -43,13 +37,11 @@ export class Renderer {
             console.error("WebGPU not supported on this browser.");
             return false;
         }
-
         const adapter = await navigator.gpu.requestAdapter();
         if (!adapter) {
             console.error("Failed to get GPU adapter.");
             return false;
         }
-
         this.device = await adapter.requestDevice();
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
@@ -58,11 +50,9 @@ export class Renderer {
             format: this.presentationFormat,
             alphaMode: 'premultiplied'
         });
-
         await this.createUniversalResources();
         await this.fetchImageUrls();
         await this.loadRandomImage(); // Load an initial image
-
         return true;
     }
 
@@ -75,41 +65,31 @@ export class Renderer {
             size: this.uniforms.byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-
-        // Create standard samplers.
         this.linearSampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
         this.nearestSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
-
         const placeholder: GPUTextureDescriptor = { 
-    size: [1, 1], 
-    format: 'rgba8unorm', 
-    usage: GPUTextureUsage.TEXTURE_BINDING 
-};
-this.primaryTexture = this.device.createTexture(placeholder);
-this.utilityTexture1 = this.device.createTexture(placeholder);
-this.utilityTexture2 = this.device.createTexture(placeholder);
-        
-        // The storage texture needs to be sized to the canvas.
+            size: [1, 1], 
+            format: 'rgba8unorm', 
+            usage: GPUTextureUsage.TEXTURE_BINDING 
+        };
+        this.primaryTexture = this.device.createTexture(placeholder);
+        this.utilityTexture1 = this.device.createTexture(placeholder);
+        this.utilityTexture2 = this.device.createTexture(placeholder);
         this.storageTexture = this.device.createTexture({
             size: [this.canvas.width, this.canvas.height],
-            format: 'rgba8unorm', // A common format for storage textures
+            format: 'rgba8unorm',
             usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         });
-        
-        // Define the standardized layout that all shaders MUST follow.
         this.universalBindGroupLayout = this.device.createBindGroupLayout({
-    // FIX: Explicitly cast the array to the correct type.
-    entries: [
-        { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, sampler: {} },
-        { binding: 1, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
-        { binding: 2, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: {} },
-        { binding: 3, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: {} },
-        { binding: 4, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: {} },
-        { binding: 5, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba8unorm' } },
-    ] as GPUBindGroupLayoutEntry[] // <-- Add this type assertion
-});
-
-        // Create a simple pipeline just to draw the result of a compute shader to the screen.
+        entries: [
+            { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, sampler: {} },
+            { binding: 1, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+            { binding: 2, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: {} },
+            { binding: 3, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: {} },
+            { binding: 4, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: {} },
+            { binding: 5, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba8unorm' } },
+        ] as GPUBindGroupLayoutEntry[]
+        });
         const displayShaderModule = this.device.createShaderModule({
             code: `
                 @group(0) @binding(0) var u_sampler: sampler;
@@ -134,8 +114,6 @@ this.utilityTexture2 = this.device.createTexture(placeholder);
             fragment: { module: displayShaderModule, entryPoint: 'fs_main', targets: [{ format: this.presentationFormat }] },
             primitive: { topology: 'triangle-strip' },
         });
-
-        // Create the initial bind group with placeholder textures.
         this.createOrUpdateBindGroup();
     }
     
@@ -150,7 +128,6 @@ this.utilityTexture2 = this.device.createTexture(placeholder);
             const shaderCode = await fetch(shaderUrl).then(res => res.text());
             const shaderModule = this.device.createShaderModule({ code: shaderCode });
             const layout = this.device.createPipelineLayout({ bindGroupLayouts: [this.universalBindGroupLayout] });
-
             if (effectType === 'render') {
                 this.activePipeline = await this.device.createRenderPipelineAsync({
                     layout,
@@ -172,7 +149,7 @@ this.utilityTexture2 = this.device.createTexture(placeholder);
         }
     }
     
-public addRipplePoint(x: number, y: number) {
+    public addRipplePoint(x: number, y: number) {
         this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
         if (this.ripplePoints.length > this.MAX_RIPPLES) {
             this.ripplePoints.shift(); // Remove the oldest ripple
@@ -215,13 +192,11 @@ public addRipplePoint(x: number, y: number) {
      * Loads a new primary image, creates a texture, and updates the bind group.
      */
     public async loadRandomImage(): Promise<string | undefined> {
-        // ... (fetchImageUrls logic remains the same)
         try {
             if (this.imageUrls.length === 0) return;
             const imageUrl = this.imageUrls[Math.floor(Math.random() * this.imageUrls.length)];
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
-
             if (this.primaryTexture) this.primaryTexture.destroy();
             this.primaryTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
@@ -229,8 +204,6 @@ public addRipplePoint(x: number, y: number) {
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.primaryTexture }, [imageBitmap.width, imageBitmap.height]);
-            
-            // Crucially, we update the bind group so the new texture is used.
             this.createOrUpdateBindGroup();
             return imageUrl;
         } catch (e) {
@@ -250,28 +223,20 @@ public addRipplePoint(x: number, y: number) {
 
     public updateDepthMap(data: Float32Array, width: number, height: number): void {
         if (!this.device) return;
-
-        // If the old utility texture exists and has a different size, destroy it.
         if (this.utilityTexture1 && (this.utilityTexture1.width !== width || this.utilityTexture1.height !== height)) {
             this.utilityTexture1.destroy();
         }
-        
-        // Create the new depth map texture in the utilityTexture1 slot.
         this.utilityTexture1 = this.device.createTexture({
             size: [width, height],
             format: 'r32float', // Depth maps use a single float channel.
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         });
-
-        // Write the AI model's output data to the new texture.
         this.device.queue.writeTexture(
             { texture: this.utilityTexture1 },
             data,
             { bytesPerRow: width * 4 },
             [width, height]
         );
-
-        // Crucially, we must rebuild the bind group so the shaders can see the new texture.
         this.createOrUpdateBindGroup();
     }
     
@@ -280,57 +245,37 @@ public addRipplePoint(x: number, y: number) {
      */
     public render(): void {
         if (!this.device || !this.activePipeline || !this.universalBindGroup) return;
-
         const currentTime = performance.now() / 1000.0;
-        
-        // --- Update Uniforms ---
         this.uniforms[0] = currentTime; // time
-        
-        // --- Ripple Data Logic ---
-        // Filter out old ripples
         this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
         this.uniforms[10] = this.ripplePoints.length; // Store ripple count at index 10
-        
         const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
         this.ripplePoints.forEach((p, i) => {
             rippleData.set([p.x, p.y, p.startTime], i * 4);
         });
-        
-        // Write ripple data to a specific part of the uniform buffer
-        this.uniforms.set(rippleData, 12); // Start writing at index 12
-
-        // Write all uniform data to the GPU
+        this.uniforms.set(rippleData, 12);
         this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniforms);
-
         const commandEncoder = this.device.createCommandEncoder();
-
         if (this.isComputeEffect) {
-            // --- COMPUTE PASS ---
             const computePass = commandEncoder.beginComputePass();
             computePass.setPipeline(this.activePipeline as GPUComputePipeline);
             computePass.setBindGroup(0, this.universalBindGroup);
-            // Dynamic dispatch size based on canvas/texture dimensions
             const workgroupSize = 8; // Assuming 8x8 workgroups in WGSL
             computePass.dispatchWorkgroups(
                 Math.ceil(this.canvas.width / workgroupSize),
                 Math.ceil(this.canvas.height / workgroupSize)
             );
             computePass.end();
-
-            // --- RENDER PASS (to display compute result) ---
             const textureView = this.context.getCurrentTexture().createView();
             const renderPass = commandEncoder.beginRenderPass({
-            // FIX: Explicitly cast the loadOp and storeOp strings
             colorAttachments: [{ 
                 view: textureView, 
                 loadOp: 'clear' as GPULoadOp, 
                 storeOp: 'store' as GPUStoreOp, 
                 clearValue: [0, 0, 0, 1] 
             }]
-        });
+            });
             renderPass.setPipeline(this.displayPipeline);
-            // We need a specific bind group for the display shader
-            // that correctly binds the storageTexture to binding 2 for sampling.
             const displayBindGroup = this.device.createBindGroup({
                 layout: this.universalBindGroupLayout,
                 entries: [
@@ -345,14 +290,11 @@ public addRipplePoint(x: number, y: number) {
             renderPass.setBindGroup(0, displayBindGroup);
             renderPass.draw(4);
             renderPass.end();
-
         } else {
-            // --- RENDER PASS (for fragment shader effects) ---
             const textureView = this.context.getCurrentTexture().createView();
             const renderPass = commandEncoder.beginRenderPass({
             colorAttachments: [{ 
                 view: textureView, 
-                // FIX: And also add them here
                 loadOp: 'clear' as GPULoadOp, 
                 storeOp: 'store' as GPUStoreOp, 
                 clearValue: [0, 0, 0, 1] 
@@ -363,9 +305,8 @@ public addRipplePoint(x: number, y: number) {
             renderPass.draw(4); // Draw a full-screen quad
             renderPass.end();
         }
-
         this.device.queue.submit([commandEncoder.finish()]);
         this.frameCount++;
     }
-
+    
 }
