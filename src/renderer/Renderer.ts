@@ -25,7 +25,7 @@ export class Renderer {
     private bgSpeed: number = 0.01;
     private parallaxStrength: number = 2.0;
     private fogDensity: number = 0.7;
-    private shaderBaseUrl: string = 'shaders/';
+    private shaderBaseUrl: string = './shaders/';
     
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
 
