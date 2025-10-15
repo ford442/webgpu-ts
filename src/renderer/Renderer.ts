@@ -25,7 +25,9 @@ export class Renderer {
 
     // --- State & Parameters ---
     private imageUrls: string[] = [];
-    private uniforms = new Float32Array(64); // A large, generic array for shader parameters
+    private uniforms = new Float32Array(256); // Increased size for ripple data
+    private ripplePoints: { x: number, y: number, startTime: number }[] = [];
+    private readonly MAX_RIPPLES = 50;
     private isComputeEffect: boolean = false;
     private frameCount = 0;
 
