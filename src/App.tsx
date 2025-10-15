@@ -219,7 +219,6 @@ function App() {
             setAutoChangeDelay={setAutoChangeDelay}
             onLoadModel={loadModel}
             isModelLoaded={!!depthEstimator}
-            onLoadEffect={loadEffect}
         />
         <WebGPUCanvas
             rendererRef={rendererRef}
@@ -231,7 +230,6 @@ function App() {
             setMousePosition={setMousePosition}
             isMouseDown={isMouseDown}
             setIsMouseDown={setIsMouseDown}
-            onLoadEffect={loadEffect}
         />
         {depthMapResult && (
             <div className="debug-container">
