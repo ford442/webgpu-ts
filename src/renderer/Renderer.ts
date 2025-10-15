@@ -167,16 +167,17 @@ export class Renderer {
      */
     private createOrUpdateBindGroup(): void {
         this.universalBindGroup = this.device.createBindGroup({
-            layout: this.universalBindGroupLayout,
-            entries: [
-                { binding: 0, resource: this.linearSampler },
-                { binding: 1, resource: { buffer: this.uniformBuffer } },
-                { binding: 2, resource: this.primaryTexture.createView() },
-                { binding: 3, resource: this.utilityTexture1.createView() },
-                { binding: 4, resource: this.utilityTexture2.createView() },
-                { binding: 5, resource: this.storageTexture.createView() },
-            ],
-        });
+        layout: this.universalBindGroupLayout,
+        entries: [
+            { binding: 0, resource: this.linearSampler },
+            { binding: 1, resource: { buffer: this.uniformBuffer } },
+            { binding: 2, resource: this.primaryTexture.createView() },
+            { binding: 3, resource: this.utilityTexture1.createView() },
+            { binding: 4, resource: this.utilityTexture2.createView() },
+            { binding: 5, resource: this.storageTexture.createView() },
+            { binding: 6, resource: this.nearestSampler },
+        ],
+    });
     }
 
     private async fetchImageUrls(): Promise<void> {
