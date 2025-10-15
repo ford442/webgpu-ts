@@ -1,4 +1,4 @@
-// Corrected: public/shaders/vortex.wgsl
+// public/shaders/vortex.wgsl
 
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(6) var nearest_sampler: sampler;
@@ -6,11 +6,10 @@
 struct Uniforms {
     params: array<vec4<f32>, 16>,
 };
+
 @group(0) @binding(1) var<uniform> u: Uniforms;
 @group(0) @binding(2) var primaryTexture: texture_2d<f32>;
-@group(0) @binding(3) var utilityTexture1: texture_2d<f32>;
-
-// BINDING FIX: The writable output texture is now at its correct slot.
+@group(0) @binding(3) var utilityTexture1: texture_2d<f32>; // Depth map for vortex
 @group(0) @binding(5) var outputTexture: texture_storage_2d<rgba8unorm, write>;
 
 fn create_zooming_layer(
