@@ -45,7 +45,7 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     let pattern = mix(color1, color2, smoothstep(0.4, 0.6, sin(length(fragUV - 0.5) * 15.0 + time)));
 
     // Sample the input texture
-    let textureColor = textureSample(inputTexture, u_sampler, fragUV);
+    let textureColor = textureSample(primaryTexture, u_sampler, fragUV); // Correct!
 
     // Mix the generated pattern with the input texture
     let finalColor = mix(pattern, textureColor.rgb, 0.6);
