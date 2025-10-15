@@ -152,9 +152,6 @@ function App() {
   useEffect(() => {
     if (!rendererRef.current) return;
     const uniformData = new Float32Array([
-        zoom,
-        panX,
-        panY,
         mousePosition.x,
         mousePosition.y,
         isMouseDown ? 1.0 : 0.0
