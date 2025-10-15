@@ -165,7 +165,14 @@ export class Renderer {
             console.error(`Failed to load shader from ${shaderUrl}:`, e);
         }
     }
-
+    
+public addRipplePoint(x: number, y: number) {
+        this.ripplePoints.push({ x, y, startTime: performance.now() / 1000.0 });
+        if (this.ripplePoints.length > this.MAX_RIPPLES) {
+            this.ripplePoints.shift(); // Remove the oldest ripple
+        }
+    }
+    
     /**
      * Assembles the universal bind group from the current state of the resources.
      * This should be called whenever a key texture (like primaryTexture) is replaced.
@@ -261,12 +268,25 @@ export class Renderer {
     public render(): void {
         if (!this.device || !this.activePipeline || !this.universalBindGroup) return;
 
+        const currentTime = performance.now() / 1000.0;
+        
         // --- Update Uniforms ---
-        // This is where you would update time, mouse position, etc.
-        // Example:
-        this.uniforms[0] = performance.now() / 1000.0; // time
-        // this.uniforms[1] = mouseX;
-        // this.uniforms[2] = mouseY;
+        this.uniforms[0] = currentTime; // time
+        
+        // --- Ripple Data Logic ---
+        // Filter out old ripples
+        this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
+        this.uniforms[10] = this.ripplePoints.length; // Store ripple count at index 10
+        
+        const rippleData = new Float32Array(this.MAX_RIPPLES * 4);
+        this.ripplePoints.forEach((p, i) => {
+            rippleData.set([p.x, p.y, p.startTime], i * 4);
+        });
+        
+        // Write ripple data to a specific part of the uniform buffer
+        this.uniforms.set(rippleData, 12); // Start writing at index 12
+
+        // Write all uniform data to the GPU
         this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniforms);
 
         const commandEncoder = this.device.createCommandEncoder();
