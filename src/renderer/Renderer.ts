@@ -18,6 +18,7 @@ export class Renderer {
     public imageDimensions = { width: 1, height: 1 };
     private maxTextureSize = 8192;
     private isDeviceLost = false;
+    private v2ComputeUniformBuffer!: GPUBuffer;
 
     private mouseState = { x: 0.5, y: 0.5 };
     private cameraState = {
