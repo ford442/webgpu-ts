@@ -13,7 +13,7 @@ interface WebGPUCanvasProps {
     setIsMouseDown: (down: boolean) => void;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
