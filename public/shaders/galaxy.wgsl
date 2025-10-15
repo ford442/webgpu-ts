@@ -1,3 +1,5 @@
+// public/shaders/liquid-v1.wgsl
+
 @group(0) @binding(0) var u_sampler: sampler;
 
 struct Uniforms {
@@ -6,39 +8,20 @@ struct Uniforms {
 
 @group(0) @binding(1) var<uniform> u: Uniforms;
 @group(0) @binding(2) var primaryTexture: texture_2d<f32>;
+@group(0) @binding(3) var utilityTexture1: texture_2d<f32>; // Depth map
+@group(0) @binding(5) var outputTexture: texture_storage_2d<rgba8unorm, write>;
 
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) fragUV: vec2<f32>,
-};
-
-@vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
-    var output: VertexOutput;
-    // Create a full-screen quad
-    let x = f32(in_vertex_index / 2u) * 4.0 - 1.0;
-    let y = f32(in_vertex_index % 2u) * 4.0 - 1.0;
-    output.position = vec4<f32>(x, -y, 0.0, 1.0);
-
-    // Create base UV coordinates (0.0 to 1.0)
-    var uv = vec2<f32>((x + 1.0) * 0.5, (y + 1.0) * 0.5);
-    output.fragUV = uv;
-    return output;
-}
-
-@fragment
-fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
-    let time = u.params[0];
-    // Create a simple animated color pattern
-    let color1 = vec3<f32>(sin(fragUV.x * 20.0 + time), cos(fragUV.y * 20.0 + time), 0.5);
-    let color2 = vec3<f32>(0.1, 0.2, 0.4);
-    let pattern = mix(color1, color2, smoothstep(0.4, 0.6, sin(length(fragUV - 0.5) * 15.0 + time)));
-
-    // Sample the input texture
-    let textureColor = textureSample(primaryTexture, u_sampler, fragUV); // Correct!
-
-    // Mix the generated pattern with the input texture
-    let finalColor = mix(pattern, textureColor.rgb, 0.6);
-    
-    return vec4<f32>(finalColor, 1.0);
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let time = u.params[0].x;
+    let resolution = u.params[2].xy; // Assuming resolution is stored here
+    let uv = vec2<f32>(global_id.xy) / resolution;
+    // Simple liquid effect
+    let strength = 0.02;
+    let frequency = 15.0;
+    let d1 = sin(uv.x * frequency + time) * strength;
+    let d2 = cos(uv.y * frequency * 0.7 + time) * strength;
+    let displacedUV = uv + vec2<f32>(d1, d2);
+    let color = textureSampleLevel(primaryTexture, u_sampler, displacedUV, 0.0);
+    textureStore(outputTexture, global_id.xy, color);
 }
