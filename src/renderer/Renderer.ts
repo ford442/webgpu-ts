@@ -213,16 +213,16 @@ export class Renderer {
         this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.filteringSampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
         this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.filteringSampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
         this.bindGroups.set('computeV1', this.device.createBindGroup({
-    layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0),
-    entries: [
-        { binding: 0, resource: this.filteringSampler },
-        { binding: 1, resource: this.imageTexture.createView() },
-        { binding: 2, resource: this.writeTexture.createView() },
-        { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } },
-        { binding: 4, resource: this.depthTextureRead.createView() },
-        { binding: 5, resource: this.nonFilteringSampler },
-    ]
-}));
+            layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: this.filteringSampler },
+                { binding: 1, resource: this.imageTexture.createView() },
+                { binding: 2, resource: this.writeTexture.createView() },
+                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } },
+                { binding: 4, resource: this.depthTextureRead.createView() },
+                { binding: 5, resource: this.nonFilteringSampler },
+            ]
+        }));
         const computeLayout = this.pipelines.get('compute')!.getBindGroupLayout(0);
         const computeEntries = [
             { binding: 0, resource: this.filteringSampler },
@@ -234,11 +234,14 @@ export class Renderer {
             { binding: 6, resource: this.depthTextureWrite.createView() },
         ];
         this.bindGroups.set('compute', this.device.createBindGroup({ layout: computeLayout, entries: computeEntries }));
+        
         const computeZoomPipeline = this.pipelines.get('computeZoom');
         if (computeZoomPipeline) {
+            // THIS IS THE FIX: Filter out binding 0 specifically for the zoom shader.
+            const computeZoomEntries = computeEntries.filter(entry => entry.binding !== 0);
             this.bindGroups.set('computeZoom', this.device.createBindGroup({
                 layout: computeZoomPipeline.getBindGroupLayout(0),
-                entries: computeEntries
+                entries: computeZoomEntries
             }));
         }
 
@@ -257,7 +260,6 @@ export class Renderer {
                 entries: computeEntries
             }));
         }
-
     }
 
     private swapDepthTextures() {
