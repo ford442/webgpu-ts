@@ -6,15 +6,15 @@
 @group(0) @binding(5) var staticDepthTexture: texture_2d<f32>;
 
 struct Uniforms {
-  resolutions: vec4<f32>,
-  time_zoom: vec4<f32>,
-  config: vec4<f32>,
-  depth_map_res: vec4<f32>,
-  color_map_res: vec4<f32>, 
-  effect_params: vec4<f32>, // x: parallax_strength, y: (unused), z: chromatic_aberration_strength
-  zoom_range: vec2<f32>,
-  layer_speeds: vec4<f32>,
-  layer_depths: vec4<f32>,
+  resolutions: vec4<f32>,     // align 16
+  time_zoom: vec4<f32>,       // align 16
+  config: vec4<f32>,          // align 16
+  depth_map_res: vec4<f32>,   // align 16
+  color_map_res: vec4<f32>,   // align 16
+  effect_params: vec4<f32>,   // align 16
+  layer_speeds: vec4<f32>,    // align 16
+  layer_depths: vec4<f32>,    // align 16
+  zoom_range: vec2<f32>,      // align 8
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
