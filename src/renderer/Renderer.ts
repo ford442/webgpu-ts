@@ -7,7 +7,7 @@ export class Renderer {
     private presentationFormat!: GPUTextureFormat;
     private pipelines = new Map<string, GPURenderPipeline | GPUComputePipeline>();
     private bindGroups = new Map<string, GPUBindGroup>();
-    private sampler!: GPUSampler;
+    private filteringSampler!: GPUSampler;
     private nonFilteringSampler!: GPUSampler;
     private imageUrls: string[] = [];
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
@@ -124,8 +124,18 @@ export class Renderer {
 
     private async createResources(): Promise<void> {
         const { width, height } = this.canvas;
-        this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
-        this.nonFilteringSampler = this.device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
+const filteringSampler = device.createSampler({
+    magFilter: 'linear',    // How to filter when the texture is magnified (zoomed in).
+    minFilter: 'linear',    // How to filter when the texture is minified (zoomed out).
+    addressModeU: 'repeat', // Repeats the texture horizontally if UVs go outside 0-1.
+    addressModeV: 'repeat', // Repeats the texture vertically.
+});
+        const nonFilteringSampler = device.createSampler({
+    magFilter: 'nearest',
+    minFilter: 'nearest',
+    addressModeU: 'repeat',
+    addressModeV: 'repeat',
+});
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -205,7 +215,7 @@ this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RI
         this.bindGroups.set('computeV1', this.device.createBindGroup({
     layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0),
     entries: [
-        { binding: 0, resource: this.sampler },
+        { binding: 0, resource: this.filteringSampler },
         { binding: 1, resource: this.imageTexture.createView() },
         { binding: 2, resource: this.writeTexture.createView() },
         { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } },
@@ -215,7 +225,7 @@ this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RI
 }));
         const computeLayout = this.pipelines.get('compute')!.getBindGroupLayout(0);
         const computeEntries = [
-            { binding: 0, resource: this.sampler },
+            { binding: 0, resource: this.filteringSampler },
             { binding: 1, resource: this.imageTexture.createView() },
             { binding: 2, resource: this.writeTexture.createView() },
             { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
