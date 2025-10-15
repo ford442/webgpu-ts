@@ -145,7 +145,7 @@ function App() {
         isRendererReady={isRendererReady}
         parallaxStrength={parallaxStrength} setParallaxStrength={setParallaxStrength}
       />
-      <div style={{ width: '90vw', height: '80vh', maxWidth: '1600px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div style={{ width: '1280px', height: '1280px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <WebGPUCanvas
           rendererRef={rendererRef}
           mode={mode}
