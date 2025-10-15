@@ -1,15 +1,13 @@
-@group(0) @binding(0) var u_sampler: sampler; // Sampler at binding 0
+@group(0) @binding(0) var u_sampler: sampler;
 
 struct Uniforms {
     params: array<f32, 64>,
 };
-@group(0) @binding(1) var<uniform> u: Uniforms; // Uniforms at binding 1
 
-@group(0) @binding(2) var primaryTexture: texture_2d<f32>; // The main image to read from
-@group(0) @binding(3) var utilityTexture1: texture_2d<f32>; // The depth map
+@group(0) @binding(1) var<uniform> u: Uniforms;
+@group(0) @binding(2) var primaryTexture: texture_2d<f32>;
+@group(0) @binding(3) var utilityTexture1: texture_2d<f32>;
 // @binding(4) is unused by this shader.
-
-// The output texture for a compute shader is always the storage texture.
 @group(0) @binding(5) var outputTexture: texture_storage_2d<rgba8unorm, write>;
 
 @compute @workgroup_size(8, 8, 1)
@@ -18,11 +16,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let uv = vec2<f32>(global_id.xy) / resolution;
   let currentTime = u.config.x;
   let center_depth = textureSampleLevel(utilityTexture1, non_filtering_sampler, uv, 0.0).r;
-
   // --- Ambient Displacement (Background Only) ---
   var ambientDisplacement = vec2<f32>(0.0, 0.0);
   let background_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
-
   if (background_factor > 0.0) {
     let time = currentTime * 0.5;
     let base_ambient_strength = 0.004;
@@ -30,7 +26,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
     ambientDisplacement = motion * base_ambient_strength * background_factor;
   }
-  
   // --- Mouse-driven Ripples ---
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
   let rippleCount = u32(u.config.y);
@@ -51,14 +46,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       }
     }
   }
-  
-  // --- Final Output ---
   let totalDisplacement = mouseDisplacement + ambientDisplacement;
   let colorDisplacedUV = uv + totalDisplacement;
   let color = textureSampleLevel(primaryTexture, u_sampler, colorDisplacedUV, 0.0);
   textureStore(outputTexture, global_id.xy, color);
-
-  // Update depth texture for next frame
   let depthDisplacedUV = uv + mouseDisplacement;
   let displacedDepth = textureSampleLevel(utilityTexture1, non_filtering_sampler, depthDisplacedUV, 0.0).r;
   textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
