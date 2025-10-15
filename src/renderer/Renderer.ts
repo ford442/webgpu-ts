@@ -124,22 +124,22 @@ export class Renderer {
 
     private async createResources(): Promise<void> {
         const { width, height } = this.canvas;
-const filteringSampler = device.createSampler({
-    magFilter: 'linear',    // How to filter when the texture is magnified (zoomed in).
-    minFilter: 'linear',    // How to filter when the texture is minified (zoomed out).
-    addressModeU: 'repeat', // Repeats the texture horizontally if UVs go outside 0-1.
-    addressModeV: 'repeat', // Repeats the texture vertically.
-});
-        const nonFilteringSampler = device.createSampler({
-    magFilter: 'nearest',
-    minFilter: 'nearest',
-    addressModeU: 'repeat',
-    addressModeV: 'repeat',
-});
+        this.filteringSampler = this.device.createSampler({
+            magFilter: 'linear',
+            minFilter: 'linear',
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+        });
+        this.nonFilteringSampler = this.device.createSampler({
+            magFilter: 'nearest',
+            minFilter: 'nearest',
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+        });
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
             format: 'r32float',
@@ -207,11 +207,11 @@ this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RI
     private createBindGroups(): void {
         if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite) return;
         if (this.videoTexture) {
-            this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.sampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
-            this.bindGroups.set('video', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.videoTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
+            this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.filteringSampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
+            this.bindGroups.set('video', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.filteringSampler }, { binding: 1, resource: this.videoTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
         }
-        this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
-        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.sampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
+        this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.filteringSampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
+        this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.filteringSampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
         this.bindGroups.set('computeV1', this.device.createBindGroup({
     layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0),
     entries: [
@@ -236,11 +236,9 @@ this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RI
         this.bindGroups.set('compute', this.device.createBindGroup({ layout: computeLayout, entries: computeEntries }));
         const computeZoomPipeline = this.pipelines.get('computeZoom');
         if (computeZoomPipeline) {
-            // FIX: Create a separate entries array for the zoom shader that doesn't have the sampler at binding 0
-            const computeZoomEntries = computeEntries.filter(entry => entry.binding !== 0);
             this.bindGroups.set('computeZoom', this.device.createBindGroup({
                 layout: computeZoomPipeline.getBindGroupLayout(0),
-                entries: computeZoomEntries
+                entries: computeEntries
             }));
         }
 
