@@ -77,8 +77,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let horizon_depth = 0.25;
   let midground_depth = 0.8;
 
-  // --- STEP 1: Calculate all layers as usual ---
-
   // 1. Horizon Layer
   let slowest_speed = 0.00;
   let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
@@ -97,9 +95,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
   let blended_foreground = mix(fg1, fg2, fg2.a);
 
-
-  // --- STEP 2: Compose the final image with a hard cutout ---
-  
   // First, create the background by blending the horizon and midground together.
   var background_color = mix(vec4(0.0), blended_horizon, blended_horizon.a);
   background_color = mix(background_color, blended_midground, blended_midground.a);
