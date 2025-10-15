@@ -350,8 +350,14 @@ public addRipplePoint(x: number, y: number) {
             // --- RENDER PASS (for fragment shader effects) ---
             const textureView = this.context.getCurrentTexture().createView();
             const renderPass = commandEncoder.beginRenderPass({
-                colorAttachments: [{ view: textureView, loadOp: 'clear', storeOp: 'store', clearValue: [0,0,0,1] }]
-            });
+            colorAttachments: [{ 
+                view: textureView, 
+                // FIX: And also add them here
+                loadOp: 'clear' as GPULoadOp, 
+                storeOp: 'store' as GPUStoreOp, 
+                clearValue: [0, 0, 0, 1] 
+            }]
+        });
             renderPass.setPipeline(this.activePipeline as GPURenderPipeline);
             renderPass.setBindGroup(0, this.universalBindGroup);
             renderPass.draw(4); // Draw a full-screen quad
