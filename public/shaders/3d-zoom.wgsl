@@ -79,9 +79,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let slowest_speed = 0.025;
   let stop_speed = 0.0;
   let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, stop_speed, 0.0, 0.0);
-  let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
+//  let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
   let blended_horizon = mix(horizon1, horizon2, horizon2.a);
-  final_color = mix(final_color, blended_horizon, blended_horizon.a);
+  final_color = horizon1;
+  // final_color = mix(final_color, blended_horizon, blended_horizon.a);
   // 2. The Mid-ground Layer (now starts from the new horizon_depth)
   let slow_speed = 0.05; // Slightly increase mid-ground speed as well
   let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
