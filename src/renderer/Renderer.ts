@@ -92,8 +92,9 @@ export class Renderer {
             { binding: 3, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: {} },
             { binding: 4, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: {} },
             { binding: 5, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba8unorm' } },
+            { binding: 6, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' } },
         ] as GPUBindGroupLayoutEntry[]
-        });
+    });
         const displayShaderModule = this.device.createShaderModule({
             code: `
                 @group(0) @binding(0) var u_sampler: sampler;
