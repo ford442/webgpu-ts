@@ -26,7 +26,8 @@ const Controls: React.FC<ControlsProps> = ({
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
-    onLoadModel, isModelLoaded
+    onLoadModel, isModelLoaded,
+    onLoadEffect // <-- ADD THIS
 }) => {
     // The previous logic for `isImageMode` is no longer needed since you are always showing these controls.
 
