@@ -24,10 +24,10 @@ const Controls: React.FC<ControlsProps> = ({
         <div className="controls">
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
-            <button onClick={() => onLoadEffect('https://glsl.1ink.us/effects/shaders/galaxy.wgsl', 'render')}>
+            <button onClick={() => onLoadEffect('https://glsl.1ink.us/effects/galaxy.wgsl', 'render')}>
                 Load Galaxy (Render)
             </button>
-            <button onClick={() => onLoadEffect('https://glsl.1ink.us/effects/shaders/liquid.wgsl', 'compute')}>
+            <button onClick={() => onLoadEffect('https://glsl.1ink.us/effects/liquid.wgsl', 'compute')}>
                 Load Liquid (Compute)
             </button>
             <button onClick={() => onLoadEffect('https://glsl.1ink.us/effects/vortex.wgsl', 'compute')}>
