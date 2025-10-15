@@ -74,24 +74,47 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let zoom_time = u.time_zoom.x;
   let zoom_center = u.time_zoom.yz;
 
+  let horizon_depth = 0.25;
   let midground_depth = 0.8;
 
-  // Start with a transparent black canvas
-  var final_color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+  // --- STEP 1: Calculate all layers as usual ---
 
-  // --- Horizon and Mid-ground layers are skipped for this test ---
+  // 1. Horizon Layer
+  let slowest_speed = 0.00;
+  let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
+  let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
+  let blended_horizon = mix(horizon1, horizon2, horizon2.a);
 
-  // --- FOREGROUND ONLY ---
-  // We calculate only the foreground layer to see its zoom effect.
+  // 2. Mid-ground Layer
+  let slow_speed = 0.08;
+  let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
+  let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
+  let blended_midground = mix(mid1, mid2, mid2.a);
+
+  // 3. Foreground Layer
   let fast_speed = 0.16;
   let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
   let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
   let blended_foreground = mix(fg1, fg2, fg2.a);
 
-  // Blend the foreground onto our transparent background.
-  final_color = mix(final_color, blended_foreground, blended_foreground.a);
 
-  // Apply atmospheric fog as usual
+  // --- STEP 2: Compose the final image with a hard cutout ---
+  
+  // First, create the background by blending the horizon and midground together.
+  var background_color = mix(vec4(0.0), blended_horizon, blended_horizon.a);
+  background_color = mix(background_color, blended_midground, blended_midground.a);
+
+  // Next, create a binary (0.0 or 1.0) mask from the foreground's alpha.
+  // step(0.01, x) returns 0.0 if x < 0.01, and 1.0 otherwise.
+  let foreground_mask = step(0.01, blended_foreground.a);
+
+  // Finally, use the mask to choose between the background and the opaque foreground.
+  // This avoids blending and creates a sharp, solid cutout.
+  var final_color = mix(background_color, vec4(blended_foreground.rgb, 1.0), foreground_mask);
+
+
+  // --- Apply Fog ---
+  // Note: Fog is applied to the final composed image.
   let fog_depth_uv = get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy);
   let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fog_depth_uv, 0.0).r;
   let fog_color = u.config.xyz;
