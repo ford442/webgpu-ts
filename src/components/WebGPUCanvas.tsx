@@ -2,35 +2,42 @@ import React, { useRef, useEffect } from 'react';
 import { Renderer } from '../renderer/Renderer';
 
 interface WebGPUCanvasProps {
-    rendererRef: React.MutableRefObject<Renderer | null>;
+    onReady: (renderer: Renderer) => void;
     setMousePosition: (pos: { x: number, y: number }) => void;
     setIsMouseDown: (down: boolean) => void;
     isMouseDown: boolean;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef, setMousePosition, setIsMouseDown, isMouseDown }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ onReady, setMousePosition, setIsMouseDown, isMouseDown }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationFrameId = useRef<number>(0);
     const lastMouseAddTime = useRef(0);
-    const videoRef = useRef<HTMLVideoElement | null>(null); // Keep video ref for potential future use
+    const rendererRef = useRef<Renderer | null>(null); // Internal ref for animation and events
 
+    // Effect for initializing the renderer
     useEffect(() => {
-        if (!canvasRef.current || rendererRef.current) return;
+        if (!canvasRef.current) return;
+        
         const renderer = new Renderer(canvasRef.current);
+        let isCancelled = false;
+
         (async () => {
             const success = await renderer.init();
-            if (success) {
-                rendererRef.current = renderer;
-                renderer.loadEffect('https://glsl.1ink.us/effects/liquid.wgsl', 'compute'); 
+            if (success && !isCancelled) {
+                rendererRef.current = renderer; // Set internal ref
+                onReady(renderer);              // Notify parent that the renderer is ready
             }
         })();
+
         return () => {
+            isCancelled = true;
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
             }
         };
-    }, [rendererRef]); 
+    }, [onReady]); 
     
+    // Effect for running the animation loop
     useEffect(() => {
         let active = true;
         const animate = () => {
@@ -43,9 +50,9 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef, setMousePositi
             active = false; 
             cancelAnimationFrame(animationFrameId.current); 
         };
-    }, [rendererRef]);
+    }, []); // Runs once after mount and uses the internal ref
 
-     const updateMousePosition = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const updateMousePosition = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const rect = canvas.getBoundingClientRect();
@@ -60,7 +67,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef, setMousePositi
     };
     
     const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!rendererRef.current) return;
+        if (!rendererRef.current) return; // Use internal ref
         const canvas = canvasRef.current!;
         const rect = canvas.getBoundingClientRect();
         const x = (event.clientX - rect.left) / canvas.width;
