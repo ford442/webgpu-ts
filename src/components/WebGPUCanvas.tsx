@@ -21,26 +21,13 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = (props) => {
     useEffect(() => {
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
-        const container = canvas.parentElement;
-        if (!container) return;
         const renderer = new Renderer(canvas);
-
         const initRenderer = async () => {
             const success = await renderer.init();
             if (success) {
                 props.rendererRef.current = renderer;
                 props.onRendererReady();
-                
-                // Initial resize
                 renderer.handleResize();
-                // Setup observer for future resizes
-                const observer = new ResizeObserver(() => {
-                    renderer.handleResize();
-                });
-                observer.observe(container);
-
-                // Cleanup observer on component unmount
-                return () => observer.disconnect();
             }
         };
         initRenderer();
