@@ -73,7 +73,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let uv = vec2<f32>(global_id.xy) / canvas_res;
   let zoom_time = u.time_zoom.x;
   let zoom_center = u.time_zoom.yz;
-let horizon_depth = 0.4; // Horizon now covers the furthest 30% of the scene.
+let horizon_depth = 0.25; // Horizon now covers the furthest 30% of the scene.
 let midground_depth = 0.7; // Mid-ground covers the next 30%.
 var final_color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 let slowest_speed = 0.00;
@@ -82,7 +82,7 @@ let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0,
 let blended_horizon = mix(horizon1, horizon2, horizon2.a);
 final_color = mix(final_color, blended_horizon, blended_horizon.a);
 // 2. The Mid-ground Layer (now starts from the new horizon_depth)
-let slow_speed = 0.005; // Slightly increase mid-ground speed as well
+let slow_speed = 0.08; // Slightly increase mid-ground speed as well
 let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
 let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
 let blended_midground = mix(mid1, mid2, mid2.a);
