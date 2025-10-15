@@ -11,9 +11,6 @@ env.backends.onnx.logLevel = 'warning';
 const model_loc = 'Xenova/dpt-hybrid-midas'
 
 function App() {
-  const [zoom, setZoom] = useState(1.0);
-  const [panX, setPanX] = useState(0.5);
-  const [panY, setPanY] = useState(0.5);
   const [autoChangeEnabled, setAutoChangeEnabled] = useState(false);
   const [autoChangeDelay, setAutoChangeDelay] = useState(10);
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
@@ -22,45 +19,24 @@ function App() {
   const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
   const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 });
   const [isMouseDown, setIsMouseDown] = useState(false);
-
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
-
+  
   useEffect(() => {
-    // This effect runs whenever any of these values change.
     if (!rendererRef.current) return;
-
-    // We pack all our dynamic data into a Float32Array.
-    // The order MUST match what your shaders expect.
-    // Example mapping:
-    // uniform[0] = time (set inside renderer)
-    // uniform[1] = zoom
-    // uniform[2] = panX
-    // uniform[3] = panY
-    // uniform[4] = mouseX
-    // uniform[5] = mouseY
-    // uniform[6] = isMouseDown (1.0 or 0.0)
-    
     const uniformData = new Float32Array([
-        zoom,
-        panX,
-        panY,
         mousePosition.x,
         mousePosition.y,
         isMouseDown ? 1.0 : 0.0
     ]);
-
-    // We write this data to the uniform buffer starting at index 1
-    // (since index 0 is reserved for time).
     rendererRef.current.updateUniforms(uniformData, 1);
-
-}, [zoom, panX, panY, mousePosition, isMouseDown]);
-
+  }, [mousePosition, isMouseDown]);
+  
   const loadEffect = useCallback((shaderUrl: string, type: 'render' | 'compute') => {
     if (rendererRef.current) {
         rendererRef.current.loadEffect(shaderUrl, type);
     }
-}, []); // Note: This uses useCallback for optimization
+  }, []);
   
   const loadModel = async () => {
         if (depthEstimator) { setStatus('Model already loaded.'); return; }
@@ -83,7 +59,7 @@ function App() {
             console.error(e);
             setStatus(`Failed to load model: ${e.message}`);
         }
-    };
+  };
 
   const runDepthAnalysis = useCallback(async (imageUrl: string) => {
       if (!depthEstimator || !rendererRef.current) return;
@@ -101,7 +77,6 @@ function App() {
               }
               if (v > max) max = v;
           });
-
           const farthestY = Math.floor(minIndex / width);
           const farthestX = minIndex % width;
           setFarthestPoint({ x: farthestX / width, y: farthestY / height });
@@ -137,9 +112,9 @@ function App() {
       } else {
           setStatus('Failed to load a random image.');
       }
-  }, [depthEstimator, runDepthAnalysis]);
+    }, [depthEstimator, runDepthAnalysis]);
 
-  useEffect(() => {
+    useEffect(() => {
       let intervalId: NodeJS.Timeout | null = null;
       if (autoChangeEnabled) {
           intervalId = setInterval(handleNewImage, autoChangeDelay * 1000);
@@ -175,20 +150,7 @@ function App() {
   }, [depthMapResult]);
 
   useEffect(() => {
-    // This effect runs whenever any of these values change.
     if (!rendererRef.current) return;
-
-    // We pack all our dynamic data into a Float32Array.
-    // The order MUST match what your shaders expect.
-    // Example mapping:
-    // uniform[0] = time (set inside renderer)
-    // uniform[1] = zoom
-    // uniform[2] = panX
-    // uniform[3] = panY
-    // uniform[4] = mouseX
-    // uniform[5] = mouseY
-    // uniform[6] = isMouseDown (1.0 or 0.0)
-    
     const uniformData = new Float32Array([
         zoom,
         panX,
@@ -197,21 +159,13 @@ function App() {
         mousePosition.y,
         isMouseDown ? 1.0 : 0.0
     ]);
-
-    // We write this data to the uniform buffer starting at index 1
-    // (since index 0 is reserved for time).
     rendererRef.current.updateUniforms(uniformData, 1);
-
-}, [zoom, panX, panY, mousePosition, isMouseDown]);
-  
-  return (
+}, [mousePosition, isMouseDown]);
+return (
     <div id="app-container">
         <h1>WebGPU Liquid + Depth Effect</h1>
         <p><strong>Status:</strong> {status}</p>
         <Controls
-            zoom={zoom} setZoom={setZoom}
-            panX={panX} setPanX={setPanX}
-            panY={panY} setPanY={setPanY}
             onNewImage={handleNewImage}
             autoChangeEnabled={autoChangeEnabled}
             setAutoChangeEnabled={setAutoChangeEnabled}
@@ -219,7 +173,7 @@ function App() {
             setAutoChangeDelay={setAutoChangeDelay}
             onLoadModel={loadModel}
             isModelLoaded={!!depthEstimator}
-            onLoadEffect={loadEffect} // <-- ADD THIS LINE
+            onLoadEffect={loadEffect}
         />
         <WebGPUCanvas
     rendererRef={rendererRef}
@@ -229,7 +183,7 @@ function App() {
 />
         {depthMapResult && (
             <div className="debug-container">
-                <h2>AI Model Output (Debug Depth Map)</h2>
+                <h2>AI Model Output (Depth Map)</h2>
                 <canvas ref={debugCanvasRef} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
             </div>
         )}
