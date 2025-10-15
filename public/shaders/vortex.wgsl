@@ -13,7 +13,6 @@ struct Uniforms {
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
-// --- Helper function to calculate a zooming foreground layer ---
 fn create_zooming_layer(
     uv: vec2<f32>,
     zoom_time: f32,
@@ -22,27 +21,14 @@ fn create_zooming_layer(
 ) -> vec4<f32> {
     let zoom_speed = 0.15;
     let zoom_progress = fract(zoom_time * zoom_speed + cycle_offset);
-
-    // --- CHANGE #1: Make the layer zoom completely past ---
-    // The scale now goes from 1.5 down to almost 0, creating a much larger zoom.
     let fg_scale = 1.5 - (zoom_progress * 1.49);
-    
     let repeating_uv = fract((uv - zoom_center) * fg_scale + zoom_center);
     let depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, repeating_uv, 0.0).r;
     let parallax_offset = (repeating_uv - 0.5) * depth * 0.4;
     let parallax_uv = repeating_uv + parallax_offset;
-
-    // --- CHANGE #2: Fix texture tearing artifacts ---
-    // By wrapping the final UV coordinate with fract(), we ensure it never goes
-    // out of bounds, which prevents the "missing texture" issue at the edges.
     let foreground_color = textureSampleLevel(readTexture, u_sampler, fract(parallax_uv), 0.0);
-
-    // --- CHANGE #3: Replace dissolve with a simple fade-in ---
-    // This makes the layer fade in smoothly at the start and then stay fully
-    // visible as it zooms past the camera, instead of dissolving away.
     let fade_in_duration = 0.25;
     let final_alpha = smoothstep(0.0, fade_in_duration, zoom_progress);
-
     return vec4(foreground_color.rgb, final_alpha);
 }
 
@@ -52,11 +38,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let uv = vec2<f32>(global_id.xy) / resolution;
     let zoom_time = u.zoom_config.x;
     let zoom_center = u.zoom_config.yz;
-
-    // --- MODIFIED: Liquid/ripple logic is removed ---
     let displaced_uv = uv; // We now use the original, unmodified UV coordinates.
-
-    // --- Continuous Zoom Logic (un-distorted) ---
     let bg_scale = pow(0.95, zoom_time);
     let bg_uv = (displaced_uv - zoom_center) * bg_scale + zoom_center;
     let background_color = textureSampleLevel(readTexture, u_sampler, fract(bg_uv), 0.0);
@@ -65,8 +47,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let blended_foreground = mix(foreground1, foreground2, foreground2.a);
     let final_color = mix(background_color, blended_foreground, blended_foreground.a);
     textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
-
-    // Update the depth texture for the next frame
     let main_zoom_progress = fract(zoom_time * 0.15);
     let main_fg_scale = 1.5 - main_zoom_progress;
     let main_repeating_uv = fract((displaced_uv - zoom_center) * main_fg_scale + zoom_center);
