@@ -250,22 +250,29 @@ public addRipplePoint(x: number, y: number) {
 
     public updateDepthMap(data: Float32Array, width: number, height: number): void {
         if (!this.device) return;
-        if (this.depthTextureRead && (this.depthTextureRead.width !== width || this.depthTextureRead.height !== height)) {
-            this.depthTextureRead.destroy();
-            this.depthTextureWrite.destroy();
+
+        // If the old utility texture exists and has a different size, destroy it.
+        if (this.utilityTexture1 && (this.utilityTexture1.width !== width || this.utilityTexture1.height !== height)) {
+            this.utilityTexture1.destroy();
         }
-        if (!this.depthTextureRead || this.depthTextureRead.width !== width || this.depthTextureRead.height !== height) {
-            const depthTextureDescriptor: GPUTextureDescriptor = {
-                size: [width, height],
-                format: 'r32float',
-                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
-            };
-            this.depthTextureRead = this.device.createTexture(depthTextureDescriptor);
-            this.depthTextureWrite = this.device.createTexture(depthTextureDescriptor);
-        }
-        this.device.queue.writeTexture({ texture: this.depthTextureRead }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
-        this.device.queue.writeTexture({ texture: this.depthTextureWrite }, data, { bytesPerRow: width * 4, rowsPerImage: height }, [width, height]);
-        this.createBindGroups();
+        
+        // Create the new depth map texture in the utilityTexture1 slot.
+        this.utilityTexture1 = this.device.createTexture({
+            size: [width, height],
+            format: 'r32float', // Depth maps use a single float channel.
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        });
+
+        // Write the AI model's output data to the new texture.
+        this.device.queue.writeTexture(
+            { texture: this.utilityTexture1 },
+            data,
+            { bytesPerRow: width * 4 },
+            [width, height]
+        );
+
+        // Crucially, we must rebuild the bind group so the shaders can see the new texture.
+        this.createOrUpdateBindGroup();
     }
     
     /**
