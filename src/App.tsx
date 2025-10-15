@@ -32,7 +32,7 @@ function App() {
   const [displacementScale, setDisplacementScale] = useState(0.3);
   const [ambientLight, setAmbientLight] = useState(0.2);
   const [smoothness, setSmoothness] = useState(1.0);
-  const [pointSize, setPointSize] = useState(3.0);
+  const [pointSize, setPointSize] = useState(1.0);
     
   // This useEffect correctly updates the parallax params when they change
   useEffect(() => {
@@ -207,7 +207,7 @@ function App() {
       {depthMapResult && (
            <div className="debug-container">
           <h2>AI Model Output (Debug Depth Map)</h2>
-          <canvas ref={debugCanvasRef} style={{ maxWidth: '100%', height: 'auto', border: '1px solid grey' }} />
+          <canvas ref={debugCanvasRef} style={{ maxWidth: '1280px', height: '1280px', border: '1px solid grey' }} />
         </div>
       )}
     </div>
