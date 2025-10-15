@@ -320,8 +320,14 @@ public addRipplePoint(x: number, y: number) {
             // --- RENDER PASS (to display compute result) ---
             const textureView = this.context.getCurrentTexture().createView();
             const renderPass = commandEncoder.beginRenderPass({
-                colorAttachments: [{ view: textureView, loadOp: 'clear', storeOp: 'store', clearValue: [0,0,0,1] }]
-            });
+            // FIX: Explicitly cast the loadOp and storeOp strings
+            colorAttachments: [{ 
+                view: textureView, 
+                loadOp: 'clear' as GPULoadOp, 
+                storeOp: 'store' as GPUStoreOp, 
+                clearValue: [0, 0, 0, 1] 
+            }]
+        });
             renderPass.setPipeline(this.displayPipeline);
             // We need a specific bind group for the display shader
             // that correctly binds the storageTexture to binding 2 for sampling.
