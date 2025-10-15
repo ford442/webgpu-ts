@@ -67,7 +67,7 @@ export class Renderer {
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
-                format: 'rgba16float',
+                format: 'rgba32float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
@@ -99,7 +99,7 @@ export class Renderer {
         if (this.writeTexture) this.writeTexture.destroy();
         this.writeTexture = this.device.createTexture({
             size: [newCanvasWidth, newCanvasHeight],
-            format: 'rgba16float',
+            format: 'rgba32float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
         this.createBindGroups();
@@ -140,7 +140,7 @@ export class Renderer {
         
         this.writeTexture = this.device.createTexture({
             size: [this.canvas.width, this.canvas.height],
-            format: 'rgba16float',
+            format: 'rgba32float',
             // --- THIS IS THE FIX ---
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
         });
