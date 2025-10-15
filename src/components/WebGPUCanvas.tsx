@@ -11,7 +11,6 @@ interface WebGPUCanvasProps {
     imageDimensions: { width: number; height: number };
     depthLevels: number;
     depthDimensions: { width: number; height: number };
-    // --- FIXED: Add missing props and correct fogColor type ---
     fogColor: string;
     fogDensity: number;
     parallaxStrength: number;
@@ -26,7 +25,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
     imageDimensions,
     depthLevels,
     depthDimensions,
-    // --- FIXED: Add missing props to destructuring ---
     fogColor,
     fogDensity,
     parallaxStrength
@@ -34,14 +32,12 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationFrameId = useRef<number>(0);
 
-    // This useEffect for initialization is correct and does not need changes
     useEffect(() => {
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const container = canvas.parentElement;
         if (!container) return;
         const renderer = new Renderer(canvas);
-
         const initRenderer = async () => {
             const success = await renderer.init();
             if (success) {
@@ -49,8 +45,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
                     (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
                 }
                 renderer.handleResize(); // Initial resize
-                const observer = new ResizeObserver(() => renderer.handleResize());
-                observer.observe(container);
             }
         };
         initRenderer();
@@ -64,14 +58,12 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({
         const animate = () => {
             if (!active) return;
             if (rendererRef.current) {
-                // The render call now has all its arguments
                 rendererRef.current.render(mode, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels, depthDimensions, fogColor, fogDensity, parallaxStrength);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    // The dependency array is now correct
     }, [mode, farthestPoint, depthThreshold, edgeHardness, imageDimensions, depthLevels, depthDimensions, fogColor, fogDensity, parallaxStrength, rendererRef]);
 
     return (
