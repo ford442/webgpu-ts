@@ -15,6 +15,49 @@ struct Uniforms {
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
 
+/**
+ * Creates a symmetrical, repeating "road" or "tunnel" effect.
+ * - uv: The original screen UV coordinate.
+ * - time: The global animation time for scrolling.
+ * Returns the color for the background pixel.
+ */
+fn create_road_layer(uv: vec2<f32>, time: f32) -> vec4<f32> {
+    // --- Parameters to tweak the effect ---
+    let scroll_speed = -3.0;
+    let texture_scale = 0.2; // Smaller numbers zoom the texture out
+    let horizon_y = 0.5;   // Moves the vanishing point up/down (0.5 is center)
+
+    // Remap coordinates so (0.0, 0.0) is the center of the horizon line.
+    // Y is now our distance, from 0.0 (at the horizon) to 1.0 (bottom of screen).
+    var p_uv = vec2(uv.x - 0.5, uv.y - horizon_y);
+
+    // Don't render anything above the horizon line.
+    if (p_uv.y < 0.0) {
+        return vec4(0.0, 0.0, 0.0, 1.0); // Return solid black
+    }
+
+    // This is the core of the perspective calculation.
+    // We create an inverse distance, which gets huge as we approach the horizon.
+    let perspective = 1.0 / p_uv.y;
+
+    // Create the final texture coordinates for sampling.
+    var road_uv = vec2(
+        p_uv.x * perspective,            // Horizontal coord is stretched by perspective
+        time * scroll_speed + perspective  // Vertical coord scrolls with time & perspective
+    );
+
+    // --- The Mirror Effect ---
+    // We use the absolute value of the horizontal coordinate. This samples the
+    // left side of the texture for the left side of the screen, and ALSO
+    // samples the left side of the texture for the right side of the screen,
+    // creating a perfect mirror image.
+    road_uv.x = abs(road_uv.x);
+    // Sample the main texture using our new perspective coordinates.
+    // fract() makes it repeat forever.
+    let color = textureSampleLevel(readTexture, u_sampler, fract(road_uv * texture_scale), 0.0);
+    return vec4(color.rgb, 1.0);
+}
+
 fn get_corrected_uvs(uv: vec2<f32>, canvas_res: vec2<f32>, texture_res: vec2<f32>) -> vec2<f32> {
     let canvas_aspect = canvas_res.x / canvas_res.y;
     let texture_aspect = texture_res.x / texture_res.y;
@@ -74,19 +117,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let zoom_time = u.time_zoom.x;
   let zoom_center = u.time_zoom.yz;
 
-  let horizon_depth = 0.25;
   let midground_depth = 0.8;
 
-  // 1. Horizon Layer
-  let slowest_speed = 0.00;
-  let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
-  let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
-  let blended_horizon = mix(horizon1, horizon2, horizon2.a);
+  // 1. NEW: Generate the Road Rash background instead of the static horizon.
+  let road_background = create_road_layer(uv, zoom_time);
 
-  // 2. Mid-ground Layer
+  // 2. Mid-ground Layer (you can keep this or comment it out)
   let slow_speed = 0.08;
-  let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
-  let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, horizon_depth, midground_depth);
+  let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, 0.0, midground_depth);
+  let mid2 = create_layer(uv, zoom_time, zoom_center, 0.5, slow_speed, 0.0, midground_depth);
   let blended_midground = mix(mid1, mid2, mid2.a);
 
   // 3. Foreground Layer
@@ -95,20 +134,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
   let blended_foreground = mix(fg1, fg2, fg2.a);
 
-  // First, create the background by blending the horizon and midground together.
-  var background_color = mix(vec4(0.0), blended_horizon, blended_horizon.a);
+  // Start with the new road effect as the base layer.
+  var background_color = road_background;
+  
+  // Blend the midground over the top.
   background_color = mix(background_color, blended_midground, blended_midground.a);
 
-  // Next, create a binary (0.0 or 1.0) mask from the foreground's alpha.
-  // step(0.01, x) returns 0.0 if x < 0.01, and 1.0 otherwise.
+  // Apply the foreground as a hard cutout.
   let foreground_mask = step(0.01, blended_foreground.a);
-
-  // Finally, use the mask to choose between the background and the opaque foreground.
-  // This avoids blending and creates a sharp, solid cutout.
   var final_color = mix(background_color, vec4(blended_foreground.rgb, 1.0), foreground_mask);
 
   // --- Apply Fog ---
-  // Note: Fog is applied to the final composed image.
   let fog_depth_uv = get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy);
   let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fog_depth_uv, 0.0).r;
   let fog_color = u.config.xyz;
