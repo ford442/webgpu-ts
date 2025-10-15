@@ -21,7 +21,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef, setMousePositi
             const success = await renderer.init();
             if (success) {
                 rendererRef.current = renderer;
-                renderer.loadEffect('https://storage.googleapis.com/my-sd35-space-images-2025/shaders/liquid.wgsl', 'compute'); 
+                renderer.loadEffect('https://glsl.1ink.us/effects/liquid.wgsl', 'compute'); 
             }
         })();
         return () => {
