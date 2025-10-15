@@ -100,7 +100,7 @@ export class Renderer {
         this.writeTexture = this.device.createTexture({
             size: [newCanvasWidth, newCanvasHeight],
             format: 'rgba32float',
-            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,,
         });
         this.createBindGroups();
     }
