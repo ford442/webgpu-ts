@@ -159,7 +159,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fog_depth_uv, 0.0).r;
   let distance = 1.0 - base_depth;
   let fog_amount = 1.0 - exp(-distance * distance * fog_density);
-  final_color.rgb = mix(final_color.rgb, fog_color, fog_amount);
+  final_color.r = mix(final_color.r, fog_color, fog_amount);
+  final_color.g = mix(final_color.g, fog_color, fog_amount);
+  final_color.b = mix(final_color.b, fog_color, fog_amount);
 
   // B. NEW: Chromatic Aberration
   let ca_strength = u.effect_params.z;
