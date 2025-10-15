@@ -73,38 +73,32 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let uv = vec2<f32>(global_id.xy) / canvas_res;
   let zoom_time = u.time_zoom.x;
   let zoom_center = u.time_zoom.yz;
-let horizon_depth = 0.25; // Horizon now covers the furthest 30% of the scene.
-let midground_depth = 0.7; // Mid-ground covers the next 30%.
-var final_color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
-let slowest_speed = 0.00;
-let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
-let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
-let blended_horizon = mix(horizon1, horizon2, horizon2.a);
-final_color = mix(final_color, blended_horizon, blended_horizon.a);
-// 2. The Mid-ground Layer (now starts from the new horizon_depth)
-let slow_speed = 0.08; // Slightly increase mid-ground speed as well
-let mid1 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
-let mid2 = create_layer(uv, zoom_time, zoom_center, 0.0, slow_speed, horizon_depth, midground_depth);
-let blended_midground = mix(mid1, mid2, mid2.a);
-final_color = mix(final_color, blended_midground, blended_midground.a);
-// 3. The Foreground Layer (starts from the new midground_depth)
-let fast_speed = 0.08;
-let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
-let fg2 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
-let blended_foreground = mix(fg1, fg2, fg2.a);
-final_color = mix(final_color, blended_foreground, blended_foreground.a);
-  // --- IMPROVEMENT 3: ATMOSPHERIC FOG ---
-  // We need a single depth value for the fog calculation. Let's use the static
-  // depth map at the original, un-zoomed UV as a baseline.
-let fog_depth_uv = get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy);
-let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fog_depth_uv, 0.0).r;
-let fog_color = u.config.xyz;
-let fog_density = u.config.w;
-// The distance into the scene is 1.0 (far) - base_depth (near)
-let distance = 1.0 - base_depth; 
-// The standard exponential fog formula gives a much smoother, more natural falloff.
-let fog_amount = exp(-distance * fog_density);
-let mixed_rgb = mix(fog_color, final_color.rgb, fog_amount);
-final_color = vec4<f32>(mixed_rgb, final_color.a);
-  textureStore(writeTexture, global_id.xy, vec4(final_color.rgb, 1.0));
+
+  let midground_depth = 0.8;
+
+  // Start with a transparent black canvas
+  var final_color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+
+  // --- Horizon and Mid-ground layers are skipped for this test ---
+
+  // --- FOREGROUND ONLY ---
+  // We calculate only the foreground layer to see its zoom effect.
+  let fast_speed = 0.16;
+  let fg1 = create_layer(uv, zoom_time, zoom_center, 0.0, fast_speed, midground_depth, 1.0);
+  let fg2 = create_layer(uv, zoom_time, zoom_center, 0.5, fast_speed, midground_depth, 1.0);
+  let blended_foreground = mix(fg1, fg2, fg2.a);
+
+  // Blend the foreground onto our transparent background.
+  final_color = mix(final_color, blended_foreground, blended_foreground.a);
+
+  // Apply atmospheric fog as usual
+  let fog_depth_uv = get_corrected_uvs(uv, canvas_res, u.depth_map_res.xy);
+  let base_depth = textureSampleLevel(staticDepthTexture, non_filtering_sampler, fog_depth_uv, 0.0).r;
+  let fog_color = u.config.xyz;
+  let fog_density = u.config.w;
+  let distance = 1.0 - base_depth;
+  let fog_amount = 1.0 - exp(-distance * distance * fog_density);
+  let mixed_rgb = mix(final_color.rgb, fog_color, fog_amount);
+
+  textureStore(writeTexture, global_id.xy, vec4<f32>(mixed_rgb, 1.0));
 }
