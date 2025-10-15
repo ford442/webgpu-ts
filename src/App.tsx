@@ -41,7 +41,7 @@ function App() {
                     }
                 },
             // quantized: false // Correct: Use this to load the FP32 model
-            dtype: fp32 // Correct: Use this to load the FP32 model
+            dtype: 'fp32' // Correct: Use this to load the FP32 model
             });
             setDepthEstimator(() => estimator);
             setStatus('Model Loaded. Processing initial image...');
