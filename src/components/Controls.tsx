@@ -24,13 +24,13 @@ const Controls: React.FC<ControlsProps> = ({
         <div className="controls">
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
-            <button onClick={() => onLoadEffect('/shaders/galaxy.wgsl', 'render')}>
+            <button onClick={() => onLoadEffect('https://storage.googleapis.com/my-sd35-space-images-2025/shaders/galaxy.wgsl', 'render')}>
                 Load Galaxy (Render)
             </button>
-            <button onClick={() => onLoadEffect('/shaders/liquid.wgsl', 'compute')}>
+            <button onClick={() => onLoadEffect('https://storage.googleapis.com/my-sd35-space-images-2025/shaders/liquid.wgsl', 'compute')}>
                 Load Liquid (Compute)
             </button>
-            <button onClick={() => onLoadEffect('/shaders/vortex.wgsl', 'compute')}>
+            <button onClick={() => onLoadEffect('https://storage.googleapis.com/my-sd35-space-images-2025/shaders/vortex.wgsl', 'compute')}>
                 Load Vortex (Compute)
             </button>
             </div>
