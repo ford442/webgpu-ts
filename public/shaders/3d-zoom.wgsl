@@ -1,6 +1,6 @@
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(1) var readTexture: texture_2d<f32>;
-@group(0) @binding(2) var writeTexture: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(2) var writeTexture: texture_storage_2d<rgba32float, write>;
 @group(0) @binding(4) var non_filtering_sampler: sampler;
 @group(0) @binding(5) var staticDepthTexture: texture_2d<f32>;
 
@@ -93,7 +93,8 @@ let midground_depth = 0.6; // Mid-ground covers the next 30%.
 var final_color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
   
 let slowest_speed = 0.025;
-let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, slowest_speed, 0.0, horizon_depth);
+let stop_speed = 0.0;
+let horizon1 = create_layer(uv, zoom_time, zoom_center, 0.0, stop_speed, 0.0, 0.0);
 let horizon2 = create_layer(uv, zoom_time, zoom_center, 0.5, slowest_speed, 0.0, horizon_depth);
 let blended_horizon = mix(horizon1, horizon2, horizon2.a);
 final_color = mix(final_color, blended_horizon, blended_horizon.a);
