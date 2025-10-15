@@ -141,7 +141,6 @@ export class Renderer {
         this.writeTexture = this.device.createTexture({
             size: [this.canvas.width, this.canvas.height],
             format: 'rgba32float',
-            // --- THIS IS THE FIX ---
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
         });
         
