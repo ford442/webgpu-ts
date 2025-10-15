@@ -6,6 +6,11 @@ import { RenderMode } from './renderer/types';
 import { pipeline } from '@huggingface/transformers';
 import './style.css';
 
+env.allowLocalModels = false;
+env.backends.onnx.executionProviders = ['webgpu'];
+env.backends.onnx.logLevel = 'warning';
+const model_loc = 'Xenova/dpt-hybrid-midas'
+
 function App() {
   const [mode, setMode] = useState<RenderMode>('3d-zoom');
   const [status, setStatus] = useState('Ready. Click "Load AI Model" for depth effects.');
@@ -23,21 +28,28 @@ function App() {
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
   
-  const loadModel = async () => {
-    if (depthEstimator) {
-      setStatus('AI model is already loaded.');
-      return;
-    }
-    try {
-      setStatus('Loading AI model (this may take a minute)...');
-      const estimator = await pipeline('depth-estimation', 'Xenova/dpt-hybrid-midas');
-      setDepthEstimator(() => estimator);
-      setStatus('AI Model Loaded. New images will now have depth effects.');
-    } catch (e: any) {
-      console.error(e);
-      setStatus(`Failed to load AI model: ${e.message}`);
-    }
-  };
+   const loadModel = async () => {
+        if (depthEstimator) { setStatus('Model already loaded.'); return; }
+        try {
+            setStatus('Loading model...');
+            const estimator = await pipeline('depth-estimation', model_loc, {
+                 progress_callback: (progress: any) => {
+                    if (progress.status === 'progress' && typeof progress.progress === 'number') {
+                        setStatus(`Loading model... ${progress.progress.toFixed(2)}%`);
+                    } else {
+                        setStatus(progress.status);
+                    }
+                },
+            // quantized: false // Correct: Use this to load the FP32 model
+            dtype: fp32 // Correct: Use this to load the FP32 model
+            });
+            setDepthEstimator(() => estimator);
+            setStatus('Model Loaded. Processing initial image...');
+        } catch (e: any) {
+            console.error(e);
+            setStatus(`Failed to load model: ${e.message}`);
+        }
+    };
 
    const findOptimalThreshold = (data: Float32Array): number => {
     const binCount = 256;
