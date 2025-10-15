@@ -32,28 +32,21 @@ export class Renderer {
         if (!navigator.gpu) return false;
         const adapter = await navigator.gpu.requestAdapter();
         if (!adapter) return false;
-
-        // --- FIXED: Restore the feature request logic ---
         const requiredFeatures: GPUFeatureName[] = [];
         if (adapter.features.has('float32-filterable')) {
             requiredFeatures.push('float32-filterable');
         } else {
             console.warn("Device does not support 'float32-filterable'. Some effects may not work as intended.");
         }
-
         this.device = await adapter.requestDevice({
             requiredFeatures,
         });
-        // --- End of fix ---
-
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         this.context.configure({ device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied' });
-
         await this.fetchImageUrls();
         await this.createResources();
         await this.createPipelines();
-
         return true;
     }
 
@@ -78,11 +71,10 @@ export class Renderer {
             const response = await fetch(imageUrl);
             const imageBitmap = await createImageBitmap(await response.blob());
             this.imageDimensions = { width: imageBitmap.width, height: imageBitmap.height };
-
             if (this.imageTexture) this.imageTexture.destroy();
             this.imageTexture = this.device.createTexture({
                 size: [imageBitmap.width, imageBitmap.height],
-                format: 'rgba16float',
+                format: 'rgba32float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
             this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture: this.imageTexture }, [imageBitmap.width, imageBitmap.height]);
@@ -108,7 +100,7 @@ export class Renderer {
         if (this.writeTexture) this.writeTexture.destroy();
         this.writeTexture = this.device.createTexture({
             size: [newCanvasWidth, newCanvasHeight],
-            format: 'rgba16float',
+            format: 'rgba32float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
         this.createBindGroups();
@@ -151,7 +143,7 @@ export class Renderer {
 
         this.writeTexture = this.device.createTexture({
             size: [this.canvas.width, this.canvas.height],
-            format: 'rgba16float',
+            format: 'rgba32float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
         await this.loadRandomImage();
