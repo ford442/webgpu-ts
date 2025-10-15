@@ -17,16 +17,13 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef, setMousePositi
     useEffect(() => {
         if (!canvasRef.current || rendererRef.current) return;
         const renderer = new Renderer(canvasRef.current);
-        
         (async () => {
             const success = await renderer.init();
             if (success) {
                 rendererRef.current = renderer;
-                // You can initialize a default effect here if you want
                 renderer.loadEffect('/shaders/liquid.wgsl', 'compute'); 
             }
         })();
-        
         return () => {
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
@@ -42,7 +39,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef, setMousePositi
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
-
         return () => { 
             active = false; 
             cancelAnimationFrame(animationFrameId.current); 
@@ -75,7 +71,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef, setMousePositi
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
         setIsMouseDown(true);
         updateMousePosition(event);
-        // FIX: The conditional logic is removed. Always add a ripple.
         addRippleAtMouseEvent(event);
     };
 
@@ -83,7 +78,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ rendererRef, setMousePositi
 
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
         updateMousePosition(event);
-        // FIX: The conditional logic is removed. Add ripples if dragging.
         if (isMouseDown) {
             const now = performance.now();
             if (now - lastMouseAddTime.current < 50) return; // small delay to prevent too many points
