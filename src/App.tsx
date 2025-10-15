@@ -3,7 +3,7 @@ import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
 import { Renderer } from './renderer/Renderer';
 import { RenderMode } from './renderer/types';
-import { pipeline } from '@huggingface/transformers';
+import { pipeline, env } from '@huggingface/transformers';
 import './style.css';
 
 env.allowLocalModels = false;
