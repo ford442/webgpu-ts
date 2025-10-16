@@ -1,13 +1,18 @@
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(1) var readTexture: texture_2d<f32>;
 @group(0) @binding(2) var writeTexture: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(4) var readDepthTexture: texture_2d<f32>;
+@group(0) @binding(5) var non_filtering_sampler: sampler;
 
 struct Uniforms {
-    time: f32,
-    resolutionX: f32,
-    resolutionY: f32,
+  time: f32,
+  resolutionX: f32,
+  resolutionY: f32,
 };
+
 @group(0) @binding(3) var<uniform> u: Uniforms;
+
+
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
