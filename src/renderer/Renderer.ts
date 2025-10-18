@@ -25,7 +25,7 @@ export class Renderer {
     private bgSpeed: number = 0.01;
     private parallaxStrength: number = 2.0;
     private fogDensity: number = 0.7;
-    private shaderBaseUrl: string = 'https://glsl.1ink.us/effects/';
+    private shaderBaseUrl: string = '/effects/';
     private currentComputePipelineKey: string = ''; // Add this property to track the active compute shader
     
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
@@ -70,20 +70,23 @@ export class Renderer {
 
     public async fetchShaderFiles(): Promise<string[]> {
         try {
-            const response = await fetch(this.shaderBaseUrl);
-            if (!response.ok) throw new Error(`API error: ${response.status}`);
-            const html = await response.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const links = Array.from(doc.querySelectorAll('a'));
-            const shaderFiles = links
-                .map(link => link.href)
-                .filter(href => href.endsWith('.wgsl'))
-                .map(href => href.substring(href.lastIndexOf('/') + 1));
+            // Fetch the JSON file that lists all shader files.
+            // This is more robust than parsing an HTML directory listing.
+            const response = await fetch('/shader-list.json');
+            if (!response.ok) {
+                throw new Error(`Failed to fetch shader-list.json: ${response.status}`);
+            }
+            const shaderFiles = await response.json();
+
+            // Basic validation to ensure we received an array of strings.
+            if (!Array.isArray(shaderFiles) || !shaderFiles.every(item => typeof item === 'string')) {
+                throw new Error('Invalid format for shader-list.json; expected an array of strings.');
+            }
+
             return shaderFiles;
         } catch (e) {
-            console.error("Failed to fetch shader files:", e);
-            return [];
+            console.error("Failed to fetch or parse shader files:", e);
+            return []; // Return an empty array on failure.
         }
     }
 

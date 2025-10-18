@@ -27,22 +27,42 @@ function App() {
   const [allShaders, setAllShaders] = useState<string[]>([]);
   const [shaderVariations, setShaderVariations] = useState<string[]>([]);
   const [selectedShader, setSelectedShader] = useState<string>('');
+  const [isRendererInitialized, setIsRendererInitialized] = useState(false);
 
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (allShaders.length > 0) {
-        const variations = allShaders.filter(shader => shader.startsWith(mode));
-        setShaderVariations(variations);
-        if (variations.length > 0 && !variations.includes(selectedShader)) {
-            const defaultShader = variations.find(v => v === `${mode}.wgsl`) || variations[0];
-            setSelectedShader(defaultShader);
-        } else if (variations.length === 0) {
-            setSelectedShader('');
-        }
+    // This effect hook now correctly handles the filtering of shader variations
+    // based on the current render mode. It ensures that when the mode changes,
+    // the list of available shaders is updated, and a sensible default is chosen.
+
+    // Filter the shaders that are relevant to the current render mode.
+    const variations = allShaders.filter(shader => shader.startsWith(mode));
+    setShaderVariations(variations);
+
+    // If there are variations, select a default. Prioritize the exact match
+    // (e.g., 'liquid.wgsl' for 'liquid' mode), otherwise, pick the first
+    // available variation. This prevents the dropdown from being empty or
+    // showing an unrelated shader.
+    if (variations.length > 0) {
+        const defaultShader = variations.find(v => v === `${mode}.wgsl`) || variations[0];
+        setSelectedShader(defaultShader);
+    } else {
+        // If there are no variations for the current mode, clear the selection.
+        setSelectedShader('');
     }
-}, [mode, allShaders, selectedShader]);
+}, [mode, allShaders]);
+
+  useEffect(() => {
+    const fetchShaders = async () => {
+        if (isRendererInitialized && rendererRef.current) {
+            const shaders = await rendererRef.current.fetchShaderFiles();
+            setAllShaders(shaders);
+        }
+    };
+    fetchShaders();
+  }, [isRendererInitialized]);
 
   const loadModel = async () => {
         if (depthEstimator) { setStatus('Model already loaded.'); return; }
@@ -183,8 +203,6 @@ function App() {
             shaderVariations={shaderVariations}
             selectedShader={selectedShader}
             setSelectedShader={setSelectedShader}
-            setAllShaders={setAllShaders}
-            rendererRef={rendererRef}
         />
         <WebGPUCanvas
             rendererRef={rendererRef}
@@ -198,6 +216,7 @@ function App() {
             setMousePosition={setMousePosition}
             isMouseDown={isMouseDown}
             setIsMouseDown={setIsMouseDown}
+            onRendererInitialized={() => setIsRendererInitialized(true)}
         />
         {depthMapResult && (
             <div className="debug-container">

@@ -21,8 +21,6 @@ interface ControlsProps {
     shaderVariations: string[];
     selectedShader: string;
     setSelectedShader: (shader: string) => void;
-    setAllShaders: (shaders: string[]) => void;
-    rendererRef: React.RefObject<Renderer | null>;
 }
 
 const Controls: React.FC<ControlsProps> = ({
@@ -34,19 +32,8 @@ const Controls: React.FC<ControlsProps> = ({
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
     onLoadModel, isModelLoaded,
-    shaderVariations, selectedShader, setSelectedShader,
-    setAllShaders, rendererRef
+    shaderVariations, selectedShader, setSelectedShader
 }) => {
-    useEffect(() => {
-        const fetchShaders = async () => {
-            if (rendererRef.current) {
-                const shaders = await rendererRef.current.fetchShaderFiles();
-                setAllShaders(shaders);
-            }
-        };
-        fetchShaders();
-    }, [rendererRef, setAllShaders]);
-
     return (
         <div className="controls">
             <div className="control-group">

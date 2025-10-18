@@ -14,9 +14,10 @@ interface WebGPUCanvasProps {
     setMousePosition: (pos: { x: number, y: number }) => void;
     isMouseDown: boolean;
     setIsMouseDown: (down: boolean) => void;
+    onRendererInitialized: () => void;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, selectedShader, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, selectedShader, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown, onRendererInitialized }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
@@ -41,10 +42,11 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, selectedShader, zoom,
                 videoRef.current.autoplay = true;
                 videoRef.current.playsInline = true;
                 await videoRef.current.play().catch(console.error);
+                onRendererInitialized();
             }
         })();
         return () => cancelAnimationFrame(animationFrameId.current);
-    }, [rendererRef]);
+    }, [rendererRef, onRendererInitialized]);
     
     useEffect(() => {
         if (rendererRef.current && selectedShader) {
