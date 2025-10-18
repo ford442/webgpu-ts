@@ -25,7 +25,7 @@ export class Renderer {
     private bgSpeed: number = 0.01;
     private parallaxStrength: number = 2.0;
     private fogDensity: number = 0.7;
-    private shaderBaseUrl: string = './effects/';
+    private shaderBaseUrl: string = 'https://glsl.1ink.us/effects/';
     private currentComputePipelineKey: string = ''; // Add this property to track the active compute shader
     
     constructor(canvas: HTMLCanvasElement) { this.canvas = canvas; }
