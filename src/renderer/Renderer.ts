@@ -289,15 +289,16 @@ export class Renderer {
 
          // Compute Pipelines (Defaults - adjust if needed)
          const computeModules = [
-             { name: 'liquid-v1.wgsl', key: 'compute-liquid-v1' }, // Ensure key matches potential mode
-             { name: 'liquid.wgsl', key: 'compute-liquid.wgsl' },     // Use full name for default too
-             { name: 'liquid-zoom.wgsl', key: 'compute-liquid-zoom.wgsl' },
-             { name: 'liquid-perspective.wgsl', key: 'compute-liquid-perspective.wgsl' },
-             { name: 'vortex.wgsl', key: 'compute-vortex.wgsl' }
-         ];
+                 // The key MUST match the 'compute-${shaderName}' pattern
+                 { name: 'liquid-v1.wgsl', key: 'compute-liquid-v1.wgsl' }, // FIX: Was 'compute-liquid-v1'
+                 { name: 'liquid.wgsl', key: 'compute-liquid.wgsl' },
+                 { name: 'liquid-zoom.wgsl', key: 'compute-liquid-zoom.wgsl' },
+                 { name: 'liquid-perspective.wgsl', key: 'compute-liquid-perspective.wgsl' },
+                 { name: 'vortex.wgsl', key: 'compute-vortex.wgsl' }
+             ];
 
-         for (const { name, key } of computeModules) {
-             const module = moduleMap.get(name);
+             for (const { name, key } of computeModules) {
+                 const module = moduleMap.get(name);
              if (module) {
                  pipelinePromises.push(
                      this.device.createComputePipelineAsync({
@@ -488,7 +489,6 @@ public render(mode: RenderMode, selectedShader: string, videoElement: HTMLVideoE
                         console.warn(`Shader ${selectedShader} not found or loaded, falling back to ${defaultKey}`);
                         computePipelineKey = defaultKey;
                         computeBindGroupKey = defaultKey;
-                        this.currentComputePipelineKey = defaultKey; // Update tracked key
                    } else {
                         console.error(`Neither specific shader ${specificPipelineKey} nor default ${defaultKey} pipeline found for mode ${mode}. Skipping compute pass.`);
                    }
