@@ -24,9 +24,25 @@ function App() {
   const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
   const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 });
   const [isMouseDown, setIsMouseDown] = useState(false);
+  const [allShaders, setAllShaders] = useState<string[]>([]);
+  const [shaderVariations, setShaderVariations] = useState<string[]>([]);
+  const [selectedShader, setSelectedShader] = useState<string>('');
 
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (allShaders.length > 0) {
+        const variations = allShaders.filter(shader => shader.startsWith(mode));
+        setShaderVariations(variations);
+        if (variations.length > 0 && !variations.includes(selectedShader)) {
+            const defaultShader = variations.find(v => v === `${mode}.wgsl`) || variations[0];
+            setSelectedShader(defaultShader);
+        } else if (variations.length === 0) {
+            setSelectedShader('');
+        }
+    }
+}, [mode, allShaders, selectedShader]);
 
   const loadModel = async () => {
         if (depthEstimator) { setStatus('Model already loaded.'); return; }
@@ -164,10 +180,16 @@ function App() {
             setAutoChangeDelay={setAutoChangeDelay}
             onLoadModel={loadModel}
             isModelLoaded={!!depthEstimator}
+            shaderVariations={shaderVariations}
+            selectedShader={selectedShader}
+            setSelectedShader={setSelectedShader}
+            setAllShaders={setAllShaders}
+            rendererRef={rendererRef}
         />
         <WebGPUCanvas
             rendererRef={rendererRef}
             mode={mode}
+            selectedShader={selectedShader}
             zoom={zoom}
             panX={panX}
             panY={panY}

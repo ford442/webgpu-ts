@@ -4,6 +4,7 @@ import { RenderMode } from '../renderer/types';
 
 interface WebGPUCanvasProps {
     mode: RenderMode;
+    selectedShader: string;
     zoom: number;
     panX: number;
     panY: number;
@@ -15,7 +16,7 @@ interface WebGPUCanvasProps {
     setIsMouseDown: (down: boolean) => void;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, selectedShader, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
@@ -43,21 +44,26 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
             }
         })();
         return () => cancelAnimationFrame(animationFrameId.current);
-    }, [rendererRef]); 
+    }, [rendererRef]);
     
- useEffect(() => {
+    useEffect(() => {
+        if (rendererRef.current && selectedShader) {
+            rendererRef.current.loadShader(selectedShader, mode);
+        }
+    }, [selectedShader, mode, rendererRef]);
+
+    useEffect(() => {
         let active = true;
         const animate = () => {
             if (!active) return;
             if (rendererRef.current && videoRef.current) {
-                // --- THIS IS THE CORRECTED LINE ---
-                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown);
+                rendererRef.current.render(mode, selectedShader, videoRef.current, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown, rendererRef]); // Added isMouseDown and rendererRef
+    }, [mode, selectedShader, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown, rendererRef]);
 
      const updateMousePosition = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!canvasRef.current) return;

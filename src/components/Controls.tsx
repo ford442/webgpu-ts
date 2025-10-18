@@ -1,11 +1,10 @@
-// src/components/Controls.tsx
-
-import React from 'react';
+import React, { useEffect } from 'react';
 import { RenderMode } from '../renderer/types';
+import { Renderer } from '../renderer/Renderer';
 
 interface ControlsProps {
-    mode: RenderMode; // ADD THIS LINE
-    setMode: (mode: RenderMode) => void; // ADD THIS LINE
+    mode: RenderMode;
+    setMode: (mode: RenderMode) => void;
     zoom: number;
     setZoom: (zoom: number) => void;
     panX: number;
@@ -19,37 +18,62 @@ interface ControlsProps {
     setAutoChangeDelay: (delay: number) => void;
     onLoadModel: () => void;
     isModelLoaded: boolean;
+    shaderVariations: string[];
+    selectedShader: string;
+    setSelectedShader: (shader: string) => void;
+    setAllShaders: (shaders: string[]) => void;
+    rendererRef: React.RefObject<Renderer | null>;
 }
 
 const Controls: React.FC<ControlsProps> = ({
-    mode, setMode, // ADD THIS LINE
+    mode, setMode,
     zoom, setZoom,
     panX, setPanX,
     panY, setPanY,
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
-    onLoadModel, isModelLoaded
+    onLoadModel, isModelLoaded,
+    shaderVariations, selectedShader, setSelectedShader,
+    setAllShaders, rendererRef
 }) => {
-    // The previous logic for `isImageMode` is no longer needed since you are always showing these controls.
+    useEffect(() => {
+        const fetchShaders = async () => {
+            if (rendererRef.current) {
+                const shaders = await rendererRef.current.fetchShaderFiles();
+                setAllShaders(shaders);
+            }
+        };
+        fetchShaders();
+    }, [rendererRef, setAllShaders]);
 
     return (
         <div className="controls">
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
-                 <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
-    <option value="vortex">Clean Vortex</option> {/* ADD THIS */}
-    <option value="liquid-perspective">Liquid Perspective</option>
-    <option value="liquid-vortex">Liquid Vortex</option>
-    <option value="liquid">Liquid (Interactive)</option>
-    <option value="liquid-zoom">Liquid Zoom</option>
-    <option value="shader">Galaxy Shader</option>
+                <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
+                    <option value="vortex">Clean Vortex</option>
+                    <option value="liquid-perspective">Liquid Perspective</option>
+                    <option value="liquid-vortex">Liquid Vortex</option>
+                    <option value="liquid">Liquid (Interactive)</option>
+                    <option value="liquid-zoom">Liquid Zoom</option>
+                    <option value="shader">Galaxy Shader</option>
                     <option value="image">Static Image</option>
                     <option value="ripple">Ripple Effect</option>
                     <option value="video">Video Texture</option>
                     <option value="liquid-v1">Liquid (Ambient)</option>
                 </select>
             </div>
+            {shaderVariations.length > 0 && (
+                <div className="control-group">
+                    <label htmlFor="shader-select">Shader Variation:</label>
+                    <select id="shader-select" value={selectedShader} onChange={(e) => setSelectedShader(e.target.value)}>
+                        {shaderVariations.map(shader => (
+                            <option key={shader} value={shader}>{shader.replace('.wgsl', '').replace(mode + '-', '')}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
             <div className="control-group">
                 <button onClick={onLoadModel} disabled={isModelLoaded}>
                     {isModelLoaded ? 'AI Model Loaded' : 'Load AI Model'}

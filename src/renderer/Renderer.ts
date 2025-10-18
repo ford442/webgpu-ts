@@ -67,6 +67,44 @@ export class Renderer {
         return true;
     }
 
+    public async fetchShaderFiles(): Promise<string[]> {
+        try {
+            const response = await fetch(this.shaderBaseUrl);
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            const html = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const links = Array.from(doc.querySelectorAll('a'));
+            const shaderFiles = links
+                .map(link => link.href)
+                .filter(href => href.endsWith('.wgsl'))
+                .map(href => href.substring(href.lastIndexOf('/') + 1));
+            return shaderFiles;
+        } catch (e) {
+            console.error("Failed to fetch shader files:", e);
+            return [];
+        }
+    }
+
+    public async loadShader(shaderName: string, mode: RenderMode): Promise<void> {
+        try {
+            const response = await fetch(`${this.shaderBaseUrl}${shaderName}`);
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            const code = await response.text();
+            const module = this.device.createShaderModule({ code });
+
+            const pipeline = await this.device.createComputePipelineAsync({
+                layout: 'auto',
+                compute: { module, entryPoint: 'main' },
+            });
+
+            this.pipelines.set(`compute-${mode}`, pipeline);
+            this.createBindGroups();
+        } catch (e) {
+            console.error(`Failed to load shader: ${shaderName}`, e);
+        }
+    }
+
     private async fetchImageUrls(): Promise<void> {
         const bucketName = 'my-sd35-space-images-2025';
         const apiUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}/o`;
@@ -268,7 +306,7 @@ export class Renderer {
         this.depthTextureWrite = temp;
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, mousePosition: { x: number, y: number }, isMouseDown: boolean): void {
+    public render(mode: RenderMode, selectedShader: string, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: { x: number, y: number }, mousePosition: { x: number, y: number }, isMouseDown: boolean): void {
         if (!this.device || !this.imageTexture) return;
         const currentTime = performance.now() / 1000.0;
         if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
@@ -332,7 +370,14 @@ export class Renderer {
 
         this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
     }
-                if (mode === 'vortex' && computeVortexBG) {
+                const dynamicPipeline = this.pipelines.get(`compute-${mode}`);
+                if (dynamicPipeline) {
+                    computePass.setPipeline(dynamicPipeline as GPUComputePipeline);
+                    const bindGroup = this.bindGroups.get('compute');
+                    if (bindGroup) {
+                        computePass.setBindGroup(0, bindGroup);
+                    }
+                } else if (mode === 'vortex' && computeVortexBG) {
                     computePass.setPipeline(this.pipelines.get('computeVortex') as GPUComputePipeline);
                     computePass.setBindGroup(0, computeVortexBG);
                 } else if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) {
