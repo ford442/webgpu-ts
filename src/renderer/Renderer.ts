@@ -495,11 +495,6 @@ public render(mode: RenderMode, selectedShader: string, videoElement: HTMLVideoE
               }
          }
          // Add other non-dynamic compute modes if necessary (like liquid-v1)
-         else if (mode === 'liquid-v1') {
-             computePipelineKey = 'compute-liquid-v1';
-             computeBindGroupKey = 'computeV1'; // Uses the specific bind group key set earlier
-         }
-
 
          // Run compute pass if a valid pipeline key was determined
          if (computePipelineKey && (mode.startsWith('liquid') || mode === 'vortex' || mode === 'liquid-v1')) {
