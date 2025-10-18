@@ -52,7 +52,7 @@ function App() {
         // If there are no variations for the current mode, clear the selection.
         setSelectedShader('');
     }
-}, [mode, allShaders]);
+  }, [mode, allShaders]); // Dependencies: runs when mode or the list of all shaders changes
 
   useEffect(() => {
     const fetchShaders = async () => {
