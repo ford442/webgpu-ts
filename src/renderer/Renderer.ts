@@ -239,8 +239,8 @@ export class Renderer {
                 { binding: 6, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'r32float' as GPUTextureFormat } },
                 
                 // --- MODIFIED/ADDED LINES ---
-                { binding: 7, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
-                { binding: 8, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
+                { binding: 7, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
+                { binding: 8, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
                 { binding: 9, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // dataTextureC
                 { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } }, // extraBuffer (moved)
                 { binding: 11, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'comparison' as GPUSamplerBindingType } }, // comparisonSampler (moved)
