@@ -21,7 +21,9 @@ export class Renderer {
     private writeTexture!: GPUTexture;
     private depthTextureRead!: GPUTexture;
     private depthTextureWrite!: GPUTexture;
-    private dataTexture!: GPUTexture;
+    private dataTextureA!: GPUTexture; // Renamed from dataTexture
+    private dataTextureB!: GPUTexture; // ADDED
+    private dataTextureC!: GPUTexture; // ADDED
     private extraBuffer!: GPUBuffer;
     private fgSpeed: number = 0.05;
     private bgSpeed: number = 0.01;
@@ -177,11 +179,14 @@ export class Renderer {
             format: 'rgba32float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
-        this.dataTexture = this.device.createTexture({
+        const dataTextureDescriptor: GPUTextureDescriptor = {
             size: [width, height],
             format: 'rgba32float',
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-        });
+        };
+        this.dataTextureA = this.device.createTexture(dataTextureDescriptor); // Renamed
+        this.dataTextureB = this.device.createTexture(dataTextureDescriptor); // ADDED
+        this.dataTextureC = this.device.createTexture(dataTextureDescriptor); // ADDED
         // Create a 1KB storage buffer as an example
         const initialExtraData = new Float32Array(256); // 256 floats * 4 bytes/float = 1024 bytes
         this.extraBuffer = this.device.createBuffer({
@@ -227,9 +232,14 @@ export class Renderer {
                 { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } },
                 { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' as GPUSamplerBindingType } },
                 { binding: 6, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'r32float' as GPUTextureFormat } },
-                { binding: 7, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } },
-                { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } },
-                { binding: 9, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'comparison' as GPUSamplerBindingType } },
+                
+                // --- MODIFIED/ADDED LINES ---
+                { binding: 7, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // dataTextureA
+                { binding: 8, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // dataTextureB
+                { binding: 9, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // dataTextureC
+                { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } }, // extraBuffer (moved)
+                { binding: 11, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'comparison' as GPUSamplerBindingType } }, // comparisonSampler (moved)
+                // --- END MODIFICATION ---
             ],
         });
 
@@ -352,9 +362,14 @@ if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler |
             {binding: 4, resource: this.depthTextureRead.createView()},
             {binding: 5, resource: this.nonFilteringSampler},
             {binding: 6, resource: this.depthTextureWrite.createView()},
-            {binding: 7, resource: this.dataTexture.createView()},
-            {binding: 8, resource: {buffer: this.extraBuffer}},
-            {binding: 9, resource: this.comparisonSampler},
+
+            // --- MODIFIED/ADDED LINES ---
+            {binding: 7, resource: this.dataTextureA.createView()},
+            {binding: 8, resource: this.dataTextureB.createView()},
+            {binding: 9, resource: this.dataTextureC.createView()},
+            {binding: 10, resource: {buffer: this.extraBuffer}},
+            {binding: 11, resource: this.comparisonSampler},
+            // --- END MODIFICATION ---
         ];
 
         const computeBindGroup = this.device.createBindGroup({
