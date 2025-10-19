@@ -314,7 +314,7 @@ export class Renderer {
     }
 
     private createBindGroups(): void {
-if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTexture || !this.extraBuffer || !this.computeUniformBuffer) return;
+if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTextureA|| !this.dataTextureB || !this.dataTextureC || !this.extraBuffer || !this.computeUniformBuffer) return;
         // --- Render Bind Groups (no change) ---
         if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({
