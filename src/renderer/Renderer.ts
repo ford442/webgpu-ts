@@ -182,9 +182,14 @@ export class Renderer {
         const dataStorageTextureDescriptor: GPUTextureDescriptor = {
             size: [width, height],
             format: 'rgba32float',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING,
+        };
+        const dataTextureDescriptor: GPUTextureDescriptor = {
+            size: [width, height],
+            format: 'rgba32float',
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         };
-        this.dataTextureA = this.device.createTexture(writeTexture); // Renamed
+        this.dataTextureA = this.device.createTexture(dataStorageTextureDescriptor); // Renamed
         this.dataTextureB = this.device.createTexture(dataTextureDescriptor); // ADDED
         this.dataTextureC = this.device.createTexture(dataTextureDescriptor); // ADDED
         // Create a 1KB storage buffer as an example
