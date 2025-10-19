@@ -9,6 +9,7 @@ export class Renderer {
     private bindGroups = new Map<string, GPUBindGroup>();
     private filteringSampler!: GPUSampler;
     private nonFilteringSampler!: GPUSampler;
+    private comparisonSampler!: GPUSampler;
     private imageUrls: string[] = [];
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
     private MAX_RIPPLES = 100;
@@ -147,6 +148,9 @@ export class Renderer {
             addressModeU: 'repeat',
             addressModeV: 'repeat',
         });
+        this.comparisonSampler = this.device.createSampler({
+            compare: 'less', // Used for shadow mapping (e.g., is fragment depth < shadow map depth?)
+        });
         this.galaxyUniformBuffer = this.device.createBuffer({
             size: 16,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
@@ -216,15 +220,16 @@ export class Renderer {
         // 1. Create ONE shared bind group layout for ALL compute shaders
         const computeBindGroupLayout = this.device.createBindGroupLayout({
             entries: [
-                { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'filtering' as GPUSamplerBindingType } }, // <-- FIX
-                { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // <-- FIX
-                { binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } }, // <-- FIX
-                { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' as GPUBufferBindingType } }, // <-- FIX
-                { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // <-- FIX
-                { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' as GPUSamplerBindingType } }, // <-- FIX
-                { binding: 6, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'r32float' as GPUTextureFormat } }, // <-- FIX
-                { binding: 7, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } }, // <-- FIX
-                { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } }, // <-- FIX
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'filtering' as GPUSamplerBindingType } },
+                { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } },
+                { binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
+                { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' as GPUBufferBindingType } },
+                { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } },
+                { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' as GPUSamplerBindingType } },
+                { binding: 6, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'r32float' as GPUTextureFormat } },
+                { binding: 7, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
+                { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } },
+                { binding: 9, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'comparison' as GPUSamplerBindingType } },
             ],
         });
 
@@ -299,8 +304,7 @@ export class Renderer {
     }
 
     private createBindGroups(): void {
-        if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTexture || !this.extraBuffer || !this.computeUniformBuffer) return;
-
+if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTexture || !this.extraBuffer || !this.computeUniformBuffer) return;
         // --- Render Bind Groups (no change) ---
         if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({
@@ -344,12 +348,13 @@ export class Renderer {
             {binding: 0, resource: this.filteringSampler},
             {binding: 1, resource: this.imageTexture.createView()},
             {binding: 2, resource: this.writeTexture.createView()},
-            {binding: 3, resource: {buffer: this.computeUniformBuffer}}, // The unified buffer
+            {binding: 3, resource: {buffer: this.computeUniformBuffer}},
             {binding: 4, resource: this.depthTextureRead.createView()},
             {binding: 5, resource: this.nonFilteringSampler},
             {binding: 6, resource: this.depthTextureWrite.createView()},
-            {binding: 7, resource: this.dataTexture.createView()}, // New
-            {binding: 8, resource: {buffer: this.extraBuffer}}, // New
+            {binding: 7, resource: this.dataTexture.createView()},
+            {binding: 8, resource: {buffer: this.extraBuffer}},
+            {binding: 9, resource: this.comparisonSampler},
         ];
 
         const computeBindGroup = this.device.createBindGroup({
