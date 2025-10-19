@@ -216,19 +216,19 @@ export class Renderer {
         // 1. Create ONE shared bind group layout for ALL compute shaders
         const computeBindGroupLayout = this.device.createBindGroupLayout({
             entries: [
-                { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'filtering' } },
-                { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' } }, // readTexture
-                { binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba32float' } }, // writeTexture
-                { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } }, // u: Uniforms
-                { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' } }, // readDepthTexture
-                { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' } }, // nonFilteringSampler
-                { binding: 6, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'r32float' } }, // writeDepthTexture
-                { binding: 7, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba32float' } }, // dataTexture
-                { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }, // extraBuffer
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'filtering' as GPUSamplerBindingType } }, // <-- FIX
+                { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // <-- FIX
+                { binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } }, // <-- FIX
+                { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' as GPUBufferBindingType } }, // <-- FIX
+                { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // <-- FIX
+                { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' as GPUSamplerBindingType } }, // <-- FIX
+                { binding: 6, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'r32float' as GPUTextureFormat } }, // <-- FIX
+                { binding: 7, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } }, // <-- FIX
+                { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } }, // <-- FIX
             ],
         });
 
-        // 2. Create a shared pipeline layout (THIS IS THE VARIABLE THAT WAS MISSING)
+        // 2. Create a shared pipeline layout
         const computePipelineLayout = this.device.createPipelineLayout({
             bindGroupLayouts: [computeBindGroupLayout],
         });
@@ -266,7 +266,7 @@ export class Renderer {
             computePerspective, computeVortex
         ] = await Promise.all([
             this.device.createComputePipelineAsync({
-                layout: computePipelineLayout, // Now this variable exists
+                layout: computePipelineLayout, 
                 compute: {module: liquidV1Module, entryPoint: 'main'}
             }),
             this.device.createComputePipelineAsync({
