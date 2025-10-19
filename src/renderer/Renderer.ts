@@ -13,7 +13,7 @@ export class Renderer {
     private imageUrls: string[] = [];
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
     private MAX_RIPPLES = 100;
-    private computeUniformBuffer!: GPUBuffer; // Renamed from v2ComputeUniformBuffer
+    private computeUniformBuffer!: GPUBuffer;
     private imageVideoUniformBuffer!: GPUBuffer;
     private galaxyUniformBuffer!: GPUBuffer;
     private videoTexture!: GPUTexture;
@@ -21,8 +21,8 @@ export class Renderer {
     private writeTexture!: GPUTexture;
     private depthTextureRead!: GPUTexture;
     private depthTextureWrite!: GPUTexture;
-    private dataTexture!: GPUTexture; // ADDED
-    private extraBuffer!: GPUBuffer; // ADDED
+    private dataTexture!: GPUTexture;
+    private extraBuffer!: GPUBuffer;
     private fgSpeed: number = 0.05;
     private bgSpeed: number = 0.01;
     private parallaxStrength: number = 2.0;
