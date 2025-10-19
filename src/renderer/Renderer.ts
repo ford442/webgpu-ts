@@ -210,6 +210,30 @@ export class Renderer {
         const textureModule = this.device.createShaderModule({code: textureCode});
         const liquidPerspectiveModule = this.device.createShaderModule({code: liquidPerspectiveCode});
         const vortexModule = this.device.createShaderModule({code: vortexCode});
+
+        // --- CORRECTED LOGIC ---
+
+        // 1. Create ONE shared bind group layout for ALL compute shaders
+        const computeBindGroupLayout = this.device.createBindGroupLayout({
+            entries: [
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'filtering' } },
+                { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' } }, // readTexture
+                { binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba32float' } }, // writeTexture
+                { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } }, // u: Uniforms
+                { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' } }, // readDepthTexture
+                { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' } }, // nonFilteringSampler
+                { binding: 6, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'r32float' } }, // writeDepthTexture
+                { binding: 7, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba32float' } }, // dataTexture
+                { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }, // extraBuffer
+            ],
+        });
+
+        // 2. Create a shared pipeline layout (THIS IS THE VARIABLE THAT WAS MISSING)
+        const computePipelineLayout = this.device.createPipelineLayout({
+            bindGroupLayouts: [computeBindGroupLayout],
+        });
+
+        // 3. Create render pipelines
         const commonConfig = {
             vertex: {module: imageVideoModule, entryPoint: 'vs_main'},
             fragment: {targets: [{format: this.presentationFormat}]},
@@ -217,9 +241,7 @@ export class Renderer {
         };
 
         const [
-            galaxyPipeline, imageVideoPipeline, liquidPipeline,
-            computeV1, compute, computeZoom,
-            computePerspective, computeVortex
+            galaxyPipeline, imageVideoPipeline, liquidPipeline
         ] = await Promise.all([
             this.device.createRenderPipelineAsync({
                 layout: 'auto', ...commonConfig,
@@ -236,8 +258,15 @@ export class Renderer {
                 vertex: {module: textureModule, entryPoint: 'vs_main'},
                 fragment: {...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main'}
             }),
+        ]);
+
+        // 4. Create ALL compute pipelines using the SHARED layout
+        const [
+            computeV1, compute, computeZoom,
+            computePerspective, computeVortex
+        ] = await Promise.all([
             this.device.createComputePipelineAsync({
-                layout: computePipelineLayout,
+                layout: computePipelineLayout, // Now this variable exists
                 compute: {module: liquidV1Module, entryPoint: 'main'}
             }),
             this.device.createComputePipelineAsync({
@@ -257,6 +286,7 @@ export class Renderer {
                 compute: {module: vortexModule, entryPoint: 'main'}
             })
         ]);
+        // --- END CORRECTION ---
 
         this.pipelines.set('galaxy', galaxyPipeline);
         this.pipelines.set('imageVideo', imageVideoPipeline);
@@ -270,6 +300,8 @@ export class Renderer {
 
     private createBindGroups(): void {
         if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTexture || !this.extraBuffer || !this.computeUniformBuffer) return;
+
+        // --- Render Bind Groups (no change) ---
         if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({
                 layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0),
@@ -300,51 +332,39 @@ export class Renderer {
                 resource: this.writeTexture.createView()
             }]
         }));
-        const computePipeline = this.pipelines.get('compute'); // Get any compute pipeline
+
+        // --- CORRECTED LOGIC: Create ONE Compute Bind Group ---
+        
+        // Get any compute pipeline to borrow its layout (they all share one)
+        const computePipeline = this.pipelines.get('compute') || this.pipelines.get('computeV1');
         if (!computePipeline) return; // Pipelines not ready
 
+        // Define the entries for the one bind group
+        const computeEntries = [
+            {binding: 0, resource: this.filteringSampler},
+            {binding: 1, resource: this.imageTexture.createView()},
+            {binding: 2, resource: this.writeTexture.createView()},
+            {binding: 3, resource: {buffer: this.computeUniformBuffer}}, // The unified buffer
+            {binding: 4, resource: this.depthTextureRead.createView()},
+            {binding: 5, resource: this.nonFilteringSampler},
+            {binding: 6, resource: this.depthTextureWrite.createView()},
+            {binding: 7, resource: this.dataTexture.createView()}, // New
+            {binding: 8, resource: {buffer: this.extraBuffer}}, // New
+        ];
+
         const computeBindGroup = this.device.createBindGroup({
-            layout: computePipeline.getBindGroupLayout(0), // Get layout from any
-            entries: [
-                {binding: 0, resource: this.filteringSampler},
-                {binding: 1, resource: this.imageTexture.createView()},
-                {binding: 2, resource: this.writeTexture.createView()},
-                {binding: 3, resource: {buffer: this.computeUniformBuffer}}, // The new unified buffer
-                {binding: 4, resource: this.depthTextureRead.createView()},
-                {binding: 5, resource: this.nonFilteringSampler},
-                {binding: 6, resource: this.depthTextureWrite.createView()},
-                {binding: 7, resource: this.dataTexture.createView()}, // New
-                {binding: 8, resource: {buffer: this.extraBuffer}}, // New
-            ],
+            layout: computePipeline.getBindGroupLayout(0), // Get layout from any compute pipeline
+            entries: computeEntries,
         });
 
+        // Delete all old/stale compute bind groups
+        this.bindGroups.delete('computeV1');
+        this.bindGroups.delete('computeZoom');
+        this.bindGroups.delete('computePerspective');
+        this.bindGroups.delete('computeVortex');
+        
+        // Set the ONE compute bind group
         this.bindGroups.set('compute', computeBindGroup);
-
-        const computeZoomPipeline = this.pipelines.get('computeZoom');
-        if (computeZoomPipeline) {
-            // THIS IS THE FIX: Filter out binding 0 specifically for the zoom shader.
-            const computeZoomEntries = computeEntries.filter(entry => entry.binding !== 0);
-            this.bindGroups.set('computeZoom', this.device.createBindGroup({
-                layout: computeZoomPipeline.getBindGroupLayout(0),
-                entries: computeZoomEntries
-            }));
-        }
-
-        const computePerspectivePipeline = this.pipelines.get('computePerspective');
-        if (computePerspectivePipeline) {
-            this.bindGroups.set('computePerspective', this.device.createBindGroup({
-                layout: computePerspectivePipeline.getBindGroupLayout(0),
-                entries: computeEntries
-            }));
-        }
-
-        const computeVortexPipeline = this.pipelines.get('computeVortex');
-        if (computeVortexPipeline) {
-            this.bindGroups.set('computeVortex', this.device.createBindGroup({
-                layout: computeVortexPipeline.getBindGroupLayout(0),
-                entries: computeEntries
-            }));
-        }
     }
 
     private swapDepthTextures() {
