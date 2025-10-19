@@ -182,7 +182,7 @@ export class Renderer {
         const dataStorageTextureDescriptor: GPUTextureDescriptor = {
             size: [width, height],
             format: 'rgba32float',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING,
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
         };
         const dataTextureDescriptor: GPUTextureDescriptor = {
             size: [width, height],
