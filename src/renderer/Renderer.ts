@@ -12,8 +12,7 @@ export class Renderer {
     private imageUrls: string[] = [];
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
     private MAX_RIPPLES = 50;
-    private v2ComputeUniformBuffer!: GPUBuffer;
-    private v1ComputeUniformBuffer!: GPUBuffer;
+    private computeUniformBuffer!: GPUBuffer; // Renamed from v2ComputeUniformBuffer
     private imageVideoUniformBuffer!: GPUBuffer;
     private galaxyUniformBuffer!: GPUBuffer;
     private videoTexture!: GPUTexture;
@@ -21,6 +20,8 @@ export class Renderer {
     private writeTexture!: GPUTexture;
     private depthTextureRead!: GPUTexture;
     private depthTextureWrite!: GPUTexture;
+    private dataTexture!: GPUTexture; // ADDED
+    private extraBuffer!: GPUBuffer; // ADDED
     private fgSpeed: number = 0.05;
     private bgSpeed: number = 0.01;
     private parallaxStrength: number = 2.0;
@@ -138,8 +139,10 @@ export class Renderer {
         });
         this.galaxyUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.imageVideoUniformBuffer = this.device.createBuffer({ size: 32 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.v1ComputeUniformBuffer = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.v2ComputeUniformBuffer = this.device.createBuffer({ size: 48 + (this.MAX_RIPPLES * 16), usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.computeUniformBuffer = this.device.createBuffer({ 
+            size: 48 + (this.MAX_RIPPLES * 16), // 3*vec4 + 50*vec4 = 848 bytes
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST 
+        });
         const placeholderDepthDescriptor: GPUTextureDescriptor = {
             size: [1, 1],
             format: 'r32float',
@@ -154,6 +157,20 @@ export class Renderer {
             format: 'rgba32float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
+        this.dataTexture = this.device.createTexture({
+            size: [width, height],
+            format: 'rgba32float',
+            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        });
+        // Create a 1KB storage buffer as an example
+        const initialExtraData = new Float32Array(256); // 256 floats * 4 bytes/float = 1024 bytes
+        this.extraBuffer = this.device.createBuffer({
+            size: initialExtraData.byteLength,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+            mappedAtCreation: true,
+        });
+        new Float32Array(this.extraBuffer.getMappedRange()).set(initialExtraData);
+        this.extraBuffer.unmap();
         await this.loadRandomImage();
     }
 
@@ -187,11 +204,11 @@ export class Renderer {
             this.device.createRenderPipelineAsync({ layout: 'auto', ...commonConfig, vertex: { module: galaxyModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: galaxyModule, entryPoint: 'fs_main' }, primitive: { topology: 'triangle-list' as GPUPrimitiveTopology } }),
             this.device.createRenderPipelineAsync({ layout: 'auto', ...commonConfig, fragment: { ...commonConfig.fragment, module: imageVideoModule, entryPoint: 'fs_main' } }),
             this.device.createRenderPipelineAsync({ layout: 'auto', ...commonConfig, vertex: { module: textureModule, entryPoint: 'vs_main' }, fragment: { ...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main' } }),
-            this.device.createComputePipelineAsync({ layout: 'auto', compute: { module: liquidV1Module, entryPoint: 'main' } }),
-            this.device.createComputePipelineAsync({ layout: 'auto', compute: { module: liquidModule, entryPoint: 'main' } }),
-            this.device.createComputePipelineAsync({ layout: 'auto', compute: { module: liquidZoomModule, entryPoint: 'main' } }),
-            this.device.createComputePipelineAsync({ layout: 'auto', compute: { module: liquidPerspectiveModule, entryPoint: 'main' } }),
-            this.device.createComputePipelineAsync({ layout: 'auto', compute: { module: vortexModule, entryPoint: 'main' } })
+            this.device.createComputePipelineAsync({ layout: computePipelineLayout, compute: { module: liquidV1Module, entryPoint: 'main' } }),
+            this.device.createComputePipelineAsync({ layout: computePipelineLayout, compute: { module: liquidModule, entryPoint: 'main' } }),
+            this.device.createComputePipelineAsync({ layout: computePipelineLayout, compute: { module: liquidZoomModule, entryPoint: 'main' } }),
+            this.device.createComputePipelineAsync({ layout: computePipelineLayout, compute: { module: liquidPerspectiveModule, entryPoint: 'main' } }),
+            this.device.createComputePipelineAsync({ layout: computePipelineLayout, compute: { module: vortexModule, entryPoint: 'main' } })
         ]);
 
         this.pipelines.set('galaxy', galaxyPipeline);
@@ -205,35 +222,32 @@ export class Renderer {
     }
 
     private createBindGroups(): void {
-        if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite) return;
+if (!this.imageTexture || !this.nonFilteringSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTexture || !this.extraBuffer || !this.computeUniformBuffer) return;
         if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({ layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.galaxyUniformBuffer } }, { binding: 1, resource: this.filteringSampler }, { binding: 2, resource: this.videoTexture.createView() }] }));
             this.bindGroups.set('video', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.filteringSampler }, { binding: 1, resource: this.videoTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
         }
         this.bindGroups.set('image', this.device.createBindGroup({ layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.filteringSampler }, { binding: 1, resource: this.imageTexture.createView() }, { binding: 2, resource: { buffer: this.imageVideoUniformBuffer } }] }));
         this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries: [{ binding: 0, resource: this.filteringSampler }, { binding: 1, resource: this.writeTexture.createView() }] }));
-        this.bindGroups.set('computeV1', this.device.createBindGroup({
-            layout: this.pipelines.get('computeV1')!.getBindGroupLayout(0),
+       const computePipeline = this.pipelines.get('compute'); // Get any compute pipeline
+        if (!computePipeline) return; // Pipelines not ready
+        
+        const computeBindGroup = this.device.createBindGroup({
+            layout: computePipeline.getBindGroupLayout(0), // Get layout from any
             entries: [
                 { binding: 0, resource: this.filteringSampler },
                 { binding: 1, resource: this.imageTexture.createView() },
                 { binding: 2, resource: this.writeTexture.createView() },
-                { binding: 3, resource: { buffer: this.v1ComputeUniformBuffer } },
+                { binding: 3, resource: { buffer: this.computeUniformBuffer } }, // The new unified buffer
                 { binding: 4, resource: this.depthTextureRead.createView() },
                 { binding: 5, resource: this.nonFilteringSampler },
-            ]
-        }));
-        const computeLayout = this.pipelines.get('compute')!.getBindGroupLayout(0);
-        const computeEntries = [
-            { binding: 0, resource: this.filteringSampler },
-            { binding: 1, resource: this.imageTexture.createView() },
-            { binding: 2, resource: this.writeTexture.createView() },
-            { binding: 3, resource: { buffer: this.v2ComputeUniformBuffer } },
-            { binding: 4, resource: this.depthTextureRead.createView() },
-            { binding: 5, resource: this.nonFilteringSampler },
-            { binding: 6, resource: this.depthTextureWrite.createView() },
-        ];
-        this.bindGroups.set('compute', this.device.createBindGroup({ layout: computeLayout, entries: computeEntries }));
+                { binding: 6, resource: this.depthTextureWrite.createView() },
+                { binding: 7, resource: this.dataTexture.createView() }, // New
+                { binding: 8, resource: { buffer: this.extraBuffer } }, // New
+            ],
+        });
+        
+        this.bindGroups.set('compute', computeBindGroup);
         
         const computeZoomPipeline = this.pipelines.get('computeZoom');
         if (computeZoomPipeline) {
@@ -282,73 +296,75 @@ export class Renderer {
         const commandEncoder = this.device.createCommandEncoder();
         if (mode.startsWith('liquid') || mode === 'vortex') {
             const computePass = commandEncoder.beginComputePass();
-            const computeV1BG = this.bindGroups.get('computeV1');
-            const computeBG = this.bindGroups.get('compute');
-            const computeZoomBG = this.bindGroups.get('computeZoom');
-            const computePerspectiveBG = this.bindGroups.get('computePerspective');
-            const computeVortexBG = this.bindGroups.get('computeVortex');
-            if (mode === 'liquid-v1' && computeV1BG) {
-                 this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 0, new Float32Array([
-                currentTime, this.canvas.width, this.canvas.height
-            ]));
-                this.device.queue.writeBuffer(this.v1ComputeUniformBuffer, 12, new Float32Array([isMouseDown ? 1.0 : 0.0])); // Write mouseDown state
-                computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
-                computePass.setBindGroup(0, computeV1BG);
-                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
-            } else if ((mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex') && computeBG) {
-                this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
-                if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
-                const rippleDataArr = new Float32Array(this.MAX_RIPPLES * 4);
-                for (let i = 0; i < this.ripplePoints.length; i++) {
-                    const point = this.ripplePoints[i];
-                    rippleDataArr.set([point.x, point.y, point.startTime], i * 4);
-                }
-                if (mode === 'liquid' || mode === 'liquid-perspective') {
-                    const uniformArray = new Float32Array(4 + this.MAX_RIPPLES * 4);
+            const computeBG = this.bindGroups.get('compute'); // Get the ONE bind group
+
+            if (computeBG) {
+                // --- 1. Uniform Buffer Updates ---
+                if (mode === 'liquid-v1') {
+                    // liquid-v1 only needs config: [time, 0, resX, resY]
+                    const configData = new Float32Array([
+                        currentTime, 0, this.canvas.width, this.canvas.height
+                    ]);
+                    // Write only the first vec4 (16 bytes)
+                    this.device.queue.writeBuffer(this.computeUniformBuffer, 0, configData, 0, 4);
+                } else {
+                    // All other compute shaders use the full uniform struct
+                    this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
+                    if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
+                    
+                    const rippleDataArr = new Float32Array(this.MAX_RIPPLES * 4);
+                    for (let i = 0; i < this.ripplePoints.length; i++) {
+                        const point = this.ripplePoints[i];
+                        rippleDataArr.set([point.x, point.y, point.startTime], i * 4);
+                    }
+                    
+                    // Create the full 848-byte array
+                    const uniformArray = new Float32Array(12 + this.MAX_RIPPLES * 4);
+                    
+                    // config (offset 0)
                     uniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
-                    uniformArray.set(rippleDataArr, 4);
-                    this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
-                } else {
-        // MODIFIED: Removed vortex_params, reverted array size and offsets
-        const uniformArray = new Float32Array(12 + this.MAX_RIPPLES * 4);
+                    
+                    // zoom_config (offset 4)
+                    uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
 
-        // Set config uniforms (offset 0)
-        uniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
-        
-        // Set zoom_config uniforms (offset 4)
-        uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
+                    // zoom_params (offset 8) - Use class properties
+                    const zoomParams = new Float32Array([
+                        this.fgSpeed,
+                        this.bgSpeed,
+                        this.parallaxStrength,
+                        this.fogDensity
+                    ]);
+                    uniformArray.set(zoomParams, 8);
+                    
+                    // ripples (offset 12)
+                    uniformArray.set(rippleDataArr, 12);
 
-        // Set zoom_params uniform data (offset 8)
-        const zoomParams = new Float32Array([
-    0.1,   // fg_speed: How fast the foreground zooms.
-    -0.02, // bg_speed: Negative for "Vertigo", positive for parallax.
-    0.1,   // parallax_str: Additional lateral parallax shift strength.
-    0.6    // fg_depth_cutoff: The depth value where the foreground ends.
-]);
-        uniformArray.set(zoomParams, 8);
-
-        // MODIFIED: Update offset for ripple data back to 12
-        uniformArray.set(rippleDataArr, 12);
-
-        this.device.queue.writeBuffer(this.v2ComputeUniformBuffer, 0, uniformArray);
-    }
-                if (mode === 'vortex' && computeVortexBG) {
-                    computePass.setPipeline(this.pipelines.get('computeVortex') as GPUComputePipeline);
-                    computePass.setBindGroup(0, computeVortexBG);
-                } else if ((mode === 'liquid-zoom' || mode === 'liquid-vortex') && computeZoomBG) {
-                    computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
-                    computePass.setBindGroup(0, computeZoomBG);
-                } else if (mode === 'liquid-perspective' && computePerspectiveBG) {
-                    computePass.setPipeline(this.pipelines.get('computePerspective') as GPUComputePipeline);
-                    computePass.setBindGroup(0, computePerspectiveBG);
-                } else {
-                    computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
-                    computePass.setBindGroup(0, computeBG);
+                    this.device.queue.writeBuffer(this.computeUniformBuffer, 0, uniformArray);
                 }
+
+                // --- 2. Set Bind Group ONCE ---
+                computePass.setBindGroup(0, computeBG);
+
+                // --- 3. Switch Pipeline ---
+                if (mode === 'liquid-v1') {
+                    computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
+                } else if (mode === 'vortex') {
+                    computePass.setPipeline(this.pipelines.get('computeVortex') as GPUComputePipeline);
+                } else if (mode === 'liquid-zoom' || mode === 'liquid-vortex') {
+                    computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
+                } else if (mode === 'liquid-perspective') {
+                    computePass.setPipeline(this.pipelines.get('computePerspective') as GPUComputePipeline);
+                } else { // 'liquid'
+                    computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
+                }
+                
+                // --- 4. Dispatch ---
                 computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
             }
             computePass.end();
-if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex') {
+
+            // swapDepthTextures logic is unchanged
+            if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex') {
                 this.swapDepthTextures();
             }
         }
