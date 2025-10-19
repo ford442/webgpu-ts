@@ -179,12 +179,12 @@ export class Renderer {
             format: 'rgba32float',
             usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
         });
-        const dataTextureDescriptor: GPUTextureDescriptor = {
+        const dataStorageTextureDescriptor: GPUTextureDescriptor = {
             size: [width, height],
             format: 'rgba32float',
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
         };
-        this.dataTextureA = this.device.createTexture(dataTextureDescriptor); // Renamed
+        this.dataTextureA = this.device.createTexture(writeTexture); // Renamed
         this.dataTextureB = this.device.createTexture(dataTextureDescriptor); // ADDED
         this.dataTextureC = this.device.createTexture(dataTextureDescriptor); // ADDED
         // Create a 1KB storage buffer as an example
@@ -234,7 +234,7 @@ export class Renderer {
                 { binding: 6, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'r32float' as GPUTextureFormat } },
                 
                 // --- MODIFIED/ADDED LINES ---
-                { binding: 7, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // dataTextureA
+                { binding: 7, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
                 { binding: 8, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // dataTextureB
                 { binding: 9, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // dataTextureC
                 { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } }, // extraBuffer (moved)
