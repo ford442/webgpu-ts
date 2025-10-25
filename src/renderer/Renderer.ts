@@ -66,7 +66,7 @@ export class Renderer {
         });
         this.context = this.canvas.getContext('webgpu')!;
         this.presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-        this.context.configure({device: this.device, format: this.presentationFormat, alphaMode: 'premultiplied'});
+        this.context.configure({device: this.device, colorSpace: "display-p3",format: this.presentationFormat, alphaMode: 'premultiplied',toneMapping: {mode: "extended"}});
         await this.fetchImageUrls();
         await this.createResources();
         await this.createPipelines();
