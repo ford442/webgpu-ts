@@ -23,6 +23,26 @@ struct VertexOutput {
 
 const GRID_SIZE = 1024u;
 
+
+const sRGB_to_P3_matrix: mat3x3f = mat3x3f(
+  0.8224621, 0.0331941, 0.0170826, // Column 1
+  0.1775380, 0.9668059, 0.0724108, // Column 2
+  0.0,       0.0,       0.9105066  // Column 3
+);
+
+// Converts a non-linear (gamma-encoded) sRGB color
+// into a linear Display P3 color suitable for output.
+
+fn srgb_to_p3(srgb_color: vec3f) -> vec3f {
+  // 1. Decode sRGB to linear sRGB (using gamma 2.2 approximation)
+  let linear_srgb = pow(srgb_color, vec3f(2.2));
+
+  // 2. Transform from linear sRGB to linear Display P3
+  let linear_p3 = sRGB_to_P3_matrix * linear_srgb;
+
+  return linear_p3;
+}
+
 fn sample_depth(uv: vec2<f32>) -> f32 {
     // ... (This helper function is unchanged)
     var smoothedDepth = 0.0;
@@ -117,5 +137,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let lighting = u.ambientLight + diffuse;
 
     let finalColor = textureColor * lighting;
+    finalColor = srgb_to_p3(finalColor);
     return vec4<f32>(finalColor, 1.0);
 }
