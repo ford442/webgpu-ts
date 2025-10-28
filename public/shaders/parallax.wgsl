@@ -137,6 +137,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let lighting = u.ambientLight + diffuse;
 
     let finalColor = textureColor * lighting;
-    finalColor = srgb_to_p3(finalColor);
-    return vec4<f32>(finalColor, 1.0);
+    let p3_color = srgb_to_p3(finalColor);
+    return vec4<f32>(p3_color, 1.0);
 }
