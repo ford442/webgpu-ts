@@ -101,7 +101,7 @@ export class Renderer {
                 format: 'rgba32float',
                 usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
             });
-            this.device.queue.copyExternalImageToTexture({source: imageBitmap}, {texture: this.imageTexture},{destination:{colorSpace:"display-p3"}, [imageBitmap.width, imageBitmap.height]);
+            this.device.queue.copyExternalImageToTexture({source: imageBitmap}, {texture: this.imageTexture, colorSpace:"display-p3"}, [imageBitmap.width, imageBitmap.height]);
             this.createBindGroups();
             return imageUrl;
         } catch (e) {
