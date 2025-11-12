@@ -5,9 +5,14 @@ async function main() {
     const renderer = new Renderer(canvas);
     await renderer.init();
 
+    const shaderSelector = document.getElementById('shader-selector') as HTMLSelectElement;
     const zoomSlider = document.getElementById('zoom-slider') as HTMLInputElement;
     const panXSlider = document.getElementById('pan-x-slider') as HTMLInputElement;
     const panYSlider = document.getElementById('pan-y-slider') as HTMLInputElement;
+
+    shaderSelector.addEventListener('change', () => {
+        renderer.setShader(shaderSelector.value);
+    });
 
     zoomSlider.addEventListener('input', () => {
         renderer.setZoom(parseFloat(zoomSlider.value) / 100);

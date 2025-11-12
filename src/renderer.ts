@@ -1,4 +1,6 @@
 import galaxyShader from './shaders/galaxy.wgsl';
+import wavesShader from './shaders/waves.wgsl';
+import fractalShader from './shaders/fractal.wgsl';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -9,10 +11,17 @@ export class Renderer {
     private uniformBindGroup!: GPUBindGroup;
     private videoTexture!: GPUTexture;
     private sampler!: GPUSampler;
+    private currentShader: string = galaxyShader;
 
     private zoom: number = 1.0;
     private panX: number = 0.5;
     private panY: number = 0.5;
+
+    private shaders: Map<string, string> = new Map([
+        ['galaxy', galaxyShader],
+        ['waves', wavesShader],
+        ['fractal', fractalShader],
+    ]);
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -63,7 +72,7 @@ export class Renderer {
     }
 
     private createPipeline(): void {
-        const shaderModule = this.device.createShaderModule({ code: galaxyShader });
+        const shaderModule = this.device.createShaderModule({ code: this.currentShader });
 
         this.pipeline = this.device.createRenderPipeline({
             layout: 'auto',
@@ -101,6 +110,18 @@ export class Renderer {
 
     public setPanY(value: number): void {
         this.panY = value;
+    }
+
+    public setShader(shaderName: string): void {
+        const shader = this.shaders.get(shaderName);
+        if (shader && shader !== this.currentShader) {
+            this.currentShader = shader;
+            this.createPipeline();
+        }
+    }
+
+    public getShaderNames(): string[] {
+        return Array.from(this.shaders.keys());
     }
 
     public render(): void {
