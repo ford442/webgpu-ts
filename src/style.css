@@ -38,3 +38,22 @@ label {
 input[type="range"] {
     width: 200px;
 }
+
+select {
+    padding: 5px 10px;
+    font-size: 16px;
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    border: 1px solid #3480D7;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+select:hover {
+    background-color: #3a3a3a;
+}
+
+select:focus {
+    outline: none;
+    border-color: #5090E7;
+}

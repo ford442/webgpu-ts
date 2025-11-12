@@ -11,6 +11,12 @@
         <h1>WebGPU Galaxy Spiral</h1>
         <canvas id="webgpu-canvas" width="800" height="600"></canvas>
         <div id="controls">
+            <label for="shader-selector">Shader:</label>
+            <select id="shader-selector">
+                <option value="galaxy">Galaxy Spiral</option>
+                <option value="waves">Waves</option>
+                <option value="fractal">Fractal</option>
+            </select>
             <label for="zoom-slider">Zoom:</label>
             <input type="range" id="zoom-slider" min="50" max="200" value="100">
             <label for="pan-x-slider">Pan X:</label>
