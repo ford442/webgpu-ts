@@ -5,9 +5,9 @@
 @group(0) @binding(5) var non_filtering_sampler: sampler;
 
 struct Uniforms {
-  time: f32;
-  resolutionX: f32;
-  resolutionY: f32;
+  time: f32,
+  resolutionX: f32,
+  resolutionY: f32,
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;

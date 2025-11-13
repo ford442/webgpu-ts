@@ -8,7 +8,7 @@
 struct Uniforms {
   config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
   ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
-};
+}
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
 

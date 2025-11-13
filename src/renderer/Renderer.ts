@@ -55,6 +55,7 @@ export class Renderer {
     private stainedEdgeWidth: number = 0.06;
     private stainedRefraction: number = 0.02;
     private zoomPreset: number = 1;
+    private musicGuiRectsBuffer!: GPUBuffer; // holds 6 vec4<f32> rects in UV space
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -429,7 +430,49 @@ export class Renderer {
         });
         new Float32Array(this.extraBuffer.getMappedRange()).set(initialExtraData);
         this.extraBuffer.unmap();
+
+        // Create rects buffer for music-gui (6 * vec4 * 4 bytes = 96 bytes)
+        this.musicGuiRectsBuffer = this.device.createBuffer({
+            size: 6 * 16,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            mappedAtCreation: false,
+        });
         await this.loadRandomImage();
+    }
+
+    // Public API: provide pixel rects [[x0,y0,x1,y1], ...] and image dimensions to compute UVs and upload to GPU
+    public async setMusicGuiRectsFromPixelRects(rectsPixels: Array<[number,number,number,number]>, imageWidth: number, imageHeight: number) {
+        if (!this.device) return;
+        const uvRects = new Float32Array  (6 * 4);
+        for (let i = 0; i < 6; ++i) {
+            const r = rectsPixels[i] || [0,0,0,0];
+            // convert pixel coords to UV (0..1)
+            const x0 = r[0] / imageWidth;
+            const y0 = r[1] / imageHeight;
+            const x1 = r[2] / imageWidth;
+            const y1 = r[3] / imageHeight;
+            uvRects.set([x0, y0, x1, y1], i * 4);
+        }
+        this.device.queue.writeBuffer(this.musicGuiRectsBuffer, 0, uvRects.buffer as ArrayBuffer);
+        this.createBindGroups();
+    }
+
+    // Try to load an optional manifest at 'shaders/music-gui.json' with pixel rects and image size
+    public async loadMusicGuiRectsFromJson(): Promise<boolean> {
+        try {
+            const r = await fetch('shaders/music-gui.json');
+            if (!r.ok) return false;
+            const j = await r.json();
+            const rects = j.rects as Array<[number,number,number,number]>;
+            const w = j.width as number;
+            const h = j.height as number;
+            if (!rects || !w || !h) return false;
+            await this.setMusicGuiRectsFromPixelRects(rects, w, h);
+            return true;
+        } catch (e) {
+            console.warn('Failed to load music-gui.json', e);
+            return false;
+        }
     }
 
     private async createPipelines(): Promise<void> {
@@ -649,14 +692,14 @@ export class Renderer {
                     resource: this.filteringSampler
                 }, {binding: 2, resource: this.videoTexture.createView()}]
             }));
-            // Use shared videoBindGroupLayout for both imageVideo and videoEffect
-            const videoBindGroupLayout = this.pipelines.get('imageVideo')!.getBindGroupLayout(0);
-            this.bindGroups.set('video', this.device.createBindGroup({
-                layout: videoBindGroupLayout,
+            // Music GUI video bind (includes rects buffer at binding 3)
+            this.bindGroups.set('musicGui', this.device.createBindGroup({
+                layout: this.pipelines.get('musicGui')!.getBindGroupLayout(0),
                 entries: [
-                    {binding: 0, resource: this.filteringSampler},
-                    {binding: 1, resource: this.videoTexture.createView()},
-                    {binding: 2, resource: {buffer: this.imageVideoUniformBuffer}}
+                    {binding: 0, resource: {buffer: this.galaxyUniformBuffer}},
+                    {binding: 1, resource: this.filteringSampler},
+                    {binding: 2, resource: this.videoTexture.createView()},
+                    {binding: 3, resource: {buffer: this.musicGuiRectsBuffer}}
                 ]
             }));
         }
@@ -664,6 +707,16 @@ export class Renderer {
         this.bindGroups.set('galaxyAltImage', this.device.createBindGroup({
             layout: this.pipelines.get('galaxyAlt')!.getBindGroupLayout(0),
             entries: [{binding: 0, resource: {buffer: this.galaxyUniformBuffer}}, {binding: 1, resource: this.filteringSampler}, {binding: 2, resource: this.imageTexture.createView()}]
+        }));
+        // Music GUI image bind (includes rects buffer)
+        this.bindGroups.set('musicGuiImage', this.device.createBindGroup({
+            layout: this.pipelines.get('musicGui')!.getBindGroupLayout(0),
+            entries: [
+                {binding: 0, resource: {buffer: this.galaxyUniformBuffer}},
+                {binding: 1, resource: this.filteringSampler},
+                {binding: 2, resource: this.imageTexture.createView()},
+                {binding: 3, resource: {buffer: this.musicGuiRectsBuffer}}
+            ]
         }));
         this.bindGroups.set('image', this.device.createBindGroup({
             layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0),
