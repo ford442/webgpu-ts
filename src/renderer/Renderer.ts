@@ -609,6 +609,8 @@ export class Renderer {
             primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology }
         });
         this.pipelines.set('videoStained', videoStainedPipeline);
+        // Now that pipelines exist, create bind groups so compute bind group can be constructed
+        this.createBindGroups();
     }
 
     private createBindGroups(): void {
@@ -801,7 +803,9 @@ export class Renderer {
                 }
 
                 // --- 4. Dispatch ---
-                computePass.dispatchWorkgroups(this.canvas.width / 8, this.canvas.height / 8, 1);
+                const wx = Math.ceil(this.canvas.width / 8);
+                const wy = Math.ceil(this.canvas.height / 8);
+                computePass.dispatchWorkgroups(wx, wy, 1);
             }
             computePass.end();
 
