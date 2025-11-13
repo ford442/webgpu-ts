@@ -248,6 +248,8 @@ export class Renderer {
             return true;
         } catch (e) {
             console.warn('Auto-bind group creation failed:', e);
+            // Log diagnostics to help debug which bindings were expected vs provided
+            this.logBindGroupDiagnostics(pipelineKey, entries);
             return false;
         }
     }
@@ -678,60 +680,70 @@ export class Renderer {
         if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTextureA|| !this.dataTextureB || !this.dataTextureC || !this.extraBuffer || !this.computeUniformBuffer) return;
         // --- Render Bind Groups (no change) ---
         if (this.videoTexture) {
-            this.bindGroups.set('galaxy', this.device.createBindGroup({
-                layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0),
-                entries: [{binding: 0, resource: {buffer: this.galaxyUniformBuffer}}, {
-                    binding: 1,
-                    resource: this.filteringSampler
-                }, {binding: 2, resource: this.videoTexture.createView()}]
-            }));
-            this.bindGroups.set('galaxyAlt', this.device.createBindGroup({
-                layout: this.pipelines.get('galaxyAlt')!.getBindGroupLayout(0),
-                entries: [{binding: 0, resource: {buffer: this.galaxyUniformBuffer}}, {
-                    binding: 1,
-                    resource: this.filteringSampler
-                }, {binding: 2, resource: this.videoTexture.createView()}]
-            }));
+            {
+                const entries = [
+                    { binding: 0, resource: this.filteringSampler },
+                    { binding: 1, resource: this.videoTexture.createView() },
+                    { binding: 2, resource: this.videoTexture.createView() },
+                    { binding: 3, resource: { buffer: this.galaxyUniformBuffer } }
+                ];
+                this.logBindGroupDiagnostics('galaxy', entries as any);
+                this.bindGroups.set('galaxy', this.device.createBindGroup({layout: this.pipelines.get('galaxy')!.getBindGroupLayout(0), entries}));
+            }
+            {
+                const entries = [
+                    { binding: 0, resource: this.filteringSampler },
+                    { binding: 1, resource: this.videoTexture.createView() },
+                    { binding: 2, resource: this.videoTexture.createView() },
+                    { binding: 3, resource: { buffer: this.galaxyUniformBuffer } }
+                ];
+                this.logBindGroupDiagnostics('galaxyAlt', entries as any);
+                this.bindGroups.set('galaxyAlt', this.device.createBindGroup({layout: this.pipelines.get('galaxyAlt')!.getBindGroupLayout(0), entries}));
+            }
             // Music GUI video bind (includes rects buffer at binding 3)
-            this.bindGroups.set('musicGui', this.device.createBindGroup({
-                layout: this.pipelines.get('musicGui')!.getBindGroupLayout(0),
-                entries: [
+            {
+                const entries = [
                     {binding: 0, resource: {buffer: this.galaxyUniformBuffer}},
                     {binding: 1, resource: this.filteringSampler},
                     {binding: 2, resource: this.videoTexture.createView()},
                     {binding: 3, resource: {buffer: this.musicGuiRectsBuffer}}
-                ]
-            }));
+                ];
+                this.logBindGroupDiagnostics('musicGui', entries as any);
+                this.bindGroups.set('musicGui', this.device.createBindGroup({layout: this.pipelines.get('musicGui')!.getBindGroupLayout(0), entries}));
+            }
         }
         // Also create galaxyAlt bind for image fallback
-        this.bindGroups.set('galaxyAltImage', this.device.createBindGroup({
-            layout: this.pipelines.get('galaxyAlt')!.getBindGroupLayout(0),
-            entries: [{binding: 0, resource: {buffer: this.galaxyUniformBuffer}}, {binding: 1, resource: this.filteringSampler}, {binding: 2, resource: this.imageTexture.createView()}]
-        }));
+        {
+            const entries = [
+                { binding: 0, resource: this.filteringSampler },
+                { binding: 1, resource: this.imageTexture.createView() },
+                { binding: 2, resource: this.imageTexture.createView() },
+                { binding: 3, resource: { buffer: this.galaxyUniformBuffer } }
+            ];
+            this.logBindGroupDiagnostics('galaxyAltImage', entries as any);
+            this.bindGroups.set('galaxyAltImage', this.device.createBindGroup({layout: this.pipelines.get('galaxyAlt')!.getBindGroupLayout(0), entries}));
+        }
         // Music GUI image bind (includes rects buffer)
-        this.bindGroups.set('musicGuiImage', this.device.createBindGroup({
-            layout: this.pipelines.get('musicGui')!.getBindGroupLayout(0),
-            entries: [
+        {
+            const entries = [
                 {binding: 0, resource: {buffer: this.galaxyUniformBuffer}},
                 {binding: 1, resource: this.filteringSampler},
                 {binding: 2, resource: this.imageTexture.createView()},
                 {binding: 3, resource: {buffer: this.musicGuiRectsBuffer}}
-            ]
-        }));
-        this.bindGroups.set('image', this.device.createBindGroup({
-            layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0),
-            entries: [{binding: 0, resource: this.filteringSampler}, {
-                binding: 1,
-                resource: this.imageTexture.createView()
-            }, {binding: 2, resource: {buffer: this.imageVideoUniformBuffer}}]
-        }));
-        this.bindGroups.set('liquid', this.device.createBindGroup({
-            layout: this.pipelines.get('liquid')!.getBindGroupLayout(0),
-            entries: [{binding: 0, resource: this.filteringSampler}, {
-                binding: 1,
-                resource: this.writeTexture.createView()
-            }]
-        }));
+            ];
+            this.logBindGroupDiagnostics('musicGuiImage', entries as any);
+            this.bindGroups.set('musicGuiImage', this.device.createBindGroup({layout: this.pipelines.get('musicGui')!.getBindGroupLayout(0), entries}));
+        }
+        {
+            const entries = [{binding: 0, resource: this.filteringSampler}, {binding: 1, resource: this.imageTexture.createView()}, {binding: 2, resource: {buffer: this.imageVideoUniformBuffer}}];
+            this.logBindGroupDiagnostics('image', entries as any);
+            this.bindGroups.set('image', this.device.createBindGroup({layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries}));
+        }
+        {
+            const entries = [{binding: 0, resource: this.filteringSampler}, {binding: 1, resource: this.writeTexture.createView()}];
+            this.logBindGroupDiagnostics('liquid', entries as any);
+            this.bindGroups.set('liquid', this.device.createBindGroup({layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries}));
+        }
 
         // --- Attempt AUTO-binding for compute pipelines (fallback to manual mega bind group if auto fails) ---
         const computePipeline = this.pipelines.get('compute') || this.pipelines.get('computeV1');
@@ -771,6 +783,7 @@ export class Renderer {
             // --- END MODIFICATION ---
         ];
 
+        this.logBindGroupDiagnostics('compute', computeEntries as any);
         const computeBindGroup = this.device.createBindGroup({
             layout: computePipeline.getBindGroupLayout(0), // Get layout from any compute pipeline
             entries: computeEntries,
@@ -1022,5 +1035,46 @@ export class Renderer {
         }
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
+    }
+
+    private logBindGroupDiagnostics(pipelineKey: string, entries: Array<{binding: number, resource: GPUBindingResource}>) {
+        try {
+            const code = this.shaderSources.get(pipelineKey) || '';
+            const parsed = code ? this.parseWGSLBindings(code).filter(p => p.group === 0) : [];
+            const expectedMap = new Map<number, string>();
+            for (const p of parsed) expectedMap.set(p.binding, p.kind);
+
+            const providedMap = new Map<number, any>();
+            for (const e of entries) providedMap.set(e.binding, e.resource);
+
+            console.groupCollapsed(`[Renderer] BindGroup diagnostics for '${pipelineKey}'`);
+            console.log('Expected bindings (from WGSL parse):');
+            if (parsed.length === 0) console.log('(none parsed)');
+            else parsed.forEach(p => console.log(`  binding ${p.binding}: ${p.kind}`));
+
+            console.log('Provided bindings (created entries):');
+            if (entries.length === 0) console.log('(no entries)');
+            else entries.forEach(e => console.log(`  binding ${e.binding}: resource =`, e.resource));
+
+            // Report mismatches
+            for (const [b, kind] of expectedMap) {
+                const present = providedMap.has(b);
+                if (!present) console.warn(`[Renderer] Shader expects binding ${b} (${kind}) but no entry provided.`);
+            }
+            for (const [b, res] of providedMap) {
+                if (!expectedMap.has(b)) console.warn(`[Renderer] Provided binding ${b} was not expected by shader '${pipelineKey}'.`);
+            }
+
+            // Helpful hint for common case: sampler expected but not provided
+            for (const p of parsed) {
+                if (p.kind === 'sampler' && !providedMap.has(p.binding)) {
+                    console.warn(`[Renderer] Sampler expected at binding ${p.binding} but missing. Ensure you pass a GPUSampler (e.g. filteringSampler) when creating the bind group.`);
+                }
+            }
+
+            console.groupEnd();
+        } catch (err) {
+            console.error('[Renderer] Failed to run bind-group diagnostics', err);
+        }
     }
 }

@@ -9,7 +9,7 @@ struct Uniforms {
   config: vec4<f32>,      // time, rippleCount, mode, unused
   stainedParams: vec4<f32>, // cellSize, edgeWidth, refraction, colorStrength
   // ripples follow in buffer (we don't read them here)
-};
+}
 @group(0) @binding(2) var<uniform> u : Uniforms;
 
 struct VertexOutput {
