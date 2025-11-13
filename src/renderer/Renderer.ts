@@ -50,6 +50,11 @@ export class Renderer {
         11: 'comparisonSampler'
     };
 
+    private colorStrength: number = 1.0; // fallback
+    private stainedCellSize: number = 0.035;
+    private stainedEdgeWidth: number = 0.06;
+    private stainedRefraction: number = 0.02;
+
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
     }
@@ -260,6 +265,13 @@ export class Renderer {
         if (params.bgSpeed !== undefined) this.bgSpeed = params.bgSpeed;
         if (params.parallaxStrength !== undefined) this.parallaxStrength = params.parallaxStrength;
         if (params.fogDensity !== undefined) this.fogDensity = params.fogDensity;
+    }
+
+    public setStainedParams(cellSize: number, edgeWidth: number, refraction: number, colorStrength: number) {
+        this.stainedCellSize = cellSize;
+        this.stainedEdgeWidth = edgeWidth;
+        this.stainedRefraction = refraction;
+        this.colorStrength = colorStrength;
     }
 
     public async init(): Promise<boolean> {
@@ -799,58 +811,73 @@ export class Renderer {
                 }
                 break;
             case 'image':
-            case 'ripple':
+            case 'ripple': {
                 if (imageVideoPipeline && this.bindGroups.has('image')) {
-                    const uniformArray = new Float32Array(8 + this.MAX_RIPPLES * 4);
+                    const uniformArray = new Float32Array(12 + this.MAX_RIPPLES * 4);
+                    // resolutions
                     uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
+                    // config
                     uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0, 0.0], 4);
+                    // stained params (cellSize, edgeWidth, refraction, colorStrength)
+                    uniformArray.set([this.stainedCellSize, this.stainedEdgeWidth, this.stainedRefraction, this.colorStrength], 8);
+                    // ripples start at offset 12
                     for (let i = 0; i < this.ripplePoints.length; i++) {
                         const point = this.ripplePoints[i];
-                        uniformArray.set([point.x, point.y, point.startTime, 0.0], 8 + i * 4);
+                        uniformArray.set([point.x, point.y, point.startTime, 0.0], 12 + i * 4);
                     }
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
+
                     passEncoder.setPipeline(imageVideoPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('image')!);
                     passEncoder.draw(4);
                 }
                 break;
-            case 'video':
+            }
+            case 'video': {
                 if (imageVideoPipeline && this.bindGroups.has('video')) {
-                    const uniformArray = new Float32Array(8);
+                    const uniformArray = new Float32Array(12);
                     uniformArray.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
                     uniformArray.set([currentTime, 0, 0, 0], 4);
+                    uniformArray.set([this.stainedCellSize, this.stainedEdgeWidth, this.stainedRefraction, this.colorStrength], 8);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
+
                     passEncoder.setPipeline(imageVideoPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
                     passEncoder.draw(4);
                 }
                 break;
+            }
             case 'video-stained': {
                 const videoStainedPipeline = this.pipelines.get('videoStained') as GPURenderPipeline | undefined;
                 if (videoStainedPipeline && this.bindGroups.has('video')) {
-                    const ua = new Float32Array(8);
+                    const ua = new Float32Array(12);
                     ua.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
                     ua.set([currentTime, 0, 0, 0], 4);
+                    ua.set([this.stainedCellSize, this.stainedEdgeWidth, this.stainedRefraction, this.colorStrength], 8);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, ua);
+
                     passEncoder.setPipeline(videoStainedPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
                     passEncoder.draw(4);
                 }
-            }
                 break;
-            case 'video-effect':
+            }
+            case 'video-effect': {
                 // Use the dedicated videoEffect pipeline but reuse the same bind group/uniform layout as 'video'
                 const videoEffectPipeline = this.pipelines.get('videoEffect') as GPURenderPipeline | undefined;
                 if (videoEffectPipeline && this.bindGroups.has('video')) {
-                    const ua = new Float32Array(8);
+                    const ua = new Float32Array(12);
                     ua.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
                     ua.set([currentTime, 0, 0, 0], 4);
+                    ua.set([this.stainedCellSize, this.stainedEdgeWidth, this.stainedRefraction, this.colorStrength], 8);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, ua);
+
                     passEncoder.setPipeline(videoEffectPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
                     passEncoder.draw(4);
                 }
                 break;
+            }
             case 'liquid-v1':
             case 'liquid':
             case 'liquid-zoom':

@@ -19,6 +19,15 @@ interface ControlsProps {
     setAutoChangeDelay: (delay: number) => void;
     onLoadModel: () => void;
     isModelLoaded: boolean;
+    // Stained glass tunables
+    cellSize: number;
+    setCellSize: (v: number) => void;
+    edgeWidth: number;
+    setEdgeWidth: (v: number) => void;
+    refraction: number;
+    setRefraction: (v: number) => void;
+    colorStrength: number;
+    setColorStrength: (v: number) => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({
@@ -29,7 +38,11 @@ const Controls: React.FC<ControlsProps> = ({
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
-    onLoadModel, isModelLoaded
+    onLoadModel, isModelLoaded,
+    cellSize, setCellSize,
+    edgeWidth, setEdgeWidth,
+    refraction, setRefraction,
+    colorStrength, setColorStrength,
 }) => {
     // The previous logic for `isImageMode` is no longer needed since you are always showing these controls.
 
@@ -86,6 +99,22 @@ const Controls: React.FC<ControlsProps> = ({
             <div className="control-group">
                 <label htmlFor="pan-y-slider">Pan Y:</label>
                 <input type="range" id="pan-y-slider" min="0" max="200" value={panY * 100} onChange={(e) => setPanY(parseFloat(e.target.value) / 100)} />
+            </div>
+            <div className="control-group">
+                <label htmlFor="cell-size">Stained Cell Size: {cellSize.toFixed(3)}</label>
+                <input id="cell-size" type="range" min="0.01" max="0.15" step="0.001" value={cellSize} onChange={(e) => setCellSize(Number(e.target.value))} />
+            </div>
+            <div className="control-group">
+                <label htmlFor="edge-width">Lead Edge Width: {edgeWidth.toFixed(3)}</label>
+                <input id="edge-width" type="range" min="0.0" max="0.2" step="0.001" value={edgeWidth} onChange={(e) => setEdgeWidth(Number(e.target.value))} />
+            </div>
+            <div className="control-group">
+                <label htmlFor="refraction">Refraction Strength: {refraction.toFixed(3)}</label>
+                <input id="refraction" type="range" min="0.0" max="0.06" step="0.001" value={refraction} onChange={(e) => setRefraction(Number(e.target.value))} />
+            </div>
+            <div className="control-group">
+                <label htmlFor="color-strength">Color Strength: {colorStrength.toFixed(2)}</label>
+                <input id="color-strength" type="range" min="0.0" max="2.0" step="0.01" value={colorStrength} onChange={(e) => setColorStrength(Number(e.target.value))} />
             </div>
         </div>
     );

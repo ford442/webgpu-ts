@@ -25,6 +25,12 @@ function App() {
   const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 });
   const [isMouseDown, setIsMouseDown] = useState(false);
 
+  // Stained-glass tunables
+  const [cellSize, setCellSize] = useState(0.035);
+  const [edgeWidth, setEdgeWidth] = useState(0.06);
+  const [refraction, setRefraction] = useState(0.02);
+  const [colorStrength, setColorStrength] = useState(1.0);
+
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -147,6 +153,12 @@ function App() {
       }
   }, [depthMapResult]);
 
+  useEffect(() => {
+      if (rendererRef.current) {
+          rendererRef.current.setStainedParams(cellSize, edgeWidth, refraction, colorStrength);
+      }
+  }, [cellSize, edgeWidth, refraction, colorStrength]);
+
   return (
     <div id="app-container">
         <h1>WebGPU Liquid + Depth Effect</h1>
@@ -164,6 +176,14 @@ function App() {
             setAutoChangeDelay={setAutoChangeDelay}
             onLoadModel={loadModel}
             isModelLoaded={!!depthEstimator}
+            cellSize={cellSize}
+            setCellSize={setCellSize}
+            edgeWidth={edgeWidth}
+            setEdgeWidth={setEdgeWidth}
+            refraction={refraction}
+            setRefraction={setRefraction}
+            colorStrength={colorStrength}
+            setColorStrength={setColorStrength}
         />
         <WebGPUCanvas
             rendererRef={rendererRef}

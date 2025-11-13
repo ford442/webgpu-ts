@@ -3,7 +3,14 @@
 // Bindings match other video shaders so we can reuse the same bind group
 @group(0) @binding(0) var u_sampler: sampler;
 @group(0) @binding(1) var u_videoTexture: texture_2d<f32>;
-@group(0) @binding(2) var<uniform> u : vec4<f32>; // time in x
+
+struct Uniforms {
+  resolutions: vec4<f32>; // canvas.xy, source.xy
+  config: vec4<f32>;      // time, rippleCount, mode, unused
+  stainedParams: vec4<f32>; // cellSize, edgeWidth, refraction, colorStrength
+  // ripples follow in buffer (we don't read them here)
+};
+@group(0) @binding(2) var<uniform> u : Uniforms;
 
 struct VertexOutput {
   @builtin(position) position: vec4<f32>,
@@ -49,10 +56,15 @@ fn hsv2rgb(c: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
-  let t = u.x;
+  let t = u.config.x;
+
+  // Read stained params from uniform
+  let baseCell = u.stainedParams.x;                         // cell size
+  let edgeWidth = u.stainedParams.y;                        // lead edge width
+  let refractStrength = u.stainedParams.z;                  // refraction amount
+  let colorStrength = u.stainedParams.w;                    // multiplier for color adjustments
 
   // Grid setup (UV space)
-  let baseCell = 0.035;                         // ~28x28 grid on 1.0 UV
   let cellSize = baseCell * (1.0 + 0.15*sin(t)); // breathe subtly
   let uv = fragUV;
 
@@ -69,7 +81,7 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
   // Slight refraction toward the cell center to mimic glass thickness
   let toCenter = cellCenter - uv;
   let distCenter = length(toCenter) / (cellSize*0.5 + 1e-5);
-  let refractAmt = 0.02 * smoothstep(0.0, 1.0, 1.0 - distCenter);
+  let refractAmt = refractStrength * smoothstep(0.0, 1.0, 1.0 - distCenter);
   let refractedUV = clamp(sampleUV + normalize(toCenter) * refractAmt, vec2<f32>(0.0), vec2<f32>(1.0));
 
   // Sample the underlying video at refracted location
@@ -78,14 +90,13 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
   // Per-cell palette tweak: hue and slight saturation boost
   var hsv = rgb2hsv(color);
   let cellHueJ = hash21(cell + vec2<f32>(13.2, 7.1));
-  hsv.x = fract(hsv.x + 0.08*cellHueJ + 0.05*sin(t*0.3 + cellHueJ*6.28318));
-  hsv.y = clamp(hsv.y * (1.0 + 0.15*(cellHueJ - 0.5) + 0.1*sin(t + cellHueJ*5.0)), 0.0, 1.2);
+  hsv.x = fract(hsv.x + 0.08*cellHueJ + 0.05*sin(t*0.3 + cellHueJ*6.28318) * colorStrength);
+  hsv.y = clamp(hsv.y * (1.0 + 0.15*(cellHueJ - 0.5) + 0.1*sin(t + cellHueJ*5.0) * colorStrength), 0.0, 1.2);
   color = hsv2rgb(hsv);
 
   // Soft cell border (lead lines). Thicker near edges of the cell
   let fuv = fract(uv / cellSize);
   let edge = min(min(fuv.x, 1.0 - fuv.x), min(fuv.y, 1.0 - fuv.y));
-  let edgeWidth = 0.06;              // relative to cell
   let line = smoothstep(0.0, edgeWidth, edge) - smoothstep(edgeWidth, edgeWidth*1.6, edge);
   let lead = mix(vec3<f32>(0.05, 0.05, 0.06), vec3<f32>(0.12, 0.12, 0.14), 0.5 + 0.5*sin(t*1.3));
   color = mix(lead, color, clamp(line*10.0, 0.0, 1.0));
@@ -100,4 +111,3 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
 
   return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
-
