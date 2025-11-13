@@ -11,4 +11,5 @@ export type RenderMode =
   'liquid-vortex' |
   'liquid-perspective' |
   'liquid-alt' |
+  'liquid-alt2' |
   'vortex'; // ADD THIS

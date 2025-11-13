@@ -436,6 +436,7 @@ export class Renderer {
         const shaderNames = [
             'galaxy.wgsl', 'imageVideo.wgsl', 'video-effect.wgsl', 'video-stained.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
             'liquid-alt.wgsl',
+            'liquid-alt2.wgsl',
             'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'vortex.wgsl'
         ];
 
@@ -451,7 +452,7 @@ export class Renderer {
         // Fetch shader sources in parallel
         const shaderCodes = await Promise.all(shaderNames.map(fetchShader));
 
-        const [galaxyCode, imageVideoCode, videoEffectCode, videoStainedCode, liquidV1Code, liquidCode, liquidAltCode, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
+        const [galaxyCode, imageVideoCode, videoEffectCode, videoStainedCode, liquidV1Code, liquidCode, liquidAltCode, liquidAlt2Code, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
 
         // Save shader sources for later automatic binding attempts
         this.shaderSources.set('galaxy', galaxyCode);
@@ -461,6 +462,7 @@ export class Renderer {
         this.shaderSources.set('liquidV1', liquidV1Code);
         this.shaderSources.set('liquid', liquidCode);
         this.shaderSources.set('computeAlt', liquidAltCode);
+        this.shaderSources.set('computeAlt2', liquidAlt2Code);
         this.shaderSources.set('compute', liquidCode); // primary compute shader
         this.shaderSources.set('computeV1', liquidV1Code);
         this.shaderSources.set('computeZoom', liquidZoomCode);
@@ -475,6 +477,7 @@ export class Renderer {
         const liquidV1Module = this.device.createShaderModule({code: liquidV1Code});
         const liquidModule = this.device.createShaderModule({code: liquidCode});
         const liquidAltModule = this.device.createShaderModule({code: liquidAltCode});
+        const liquidAlt2Module = this.device.createShaderModule({code: liquidAlt2Code});
         const liquidZoomModule = this.device.createShaderModule({code: liquidZoomCode});
         const textureModule = this.device.createShaderModule({code: textureCode});
         const liquidPerspectiveModule = this.device.createShaderModule({code: liquidPerspectiveCode});
@@ -548,7 +551,7 @@ export class Renderer {
         // 4. Create ALL compute pipelines using the SHARED layout
         const [
             computeV1, compute, computeZoom,
-            computePerspective, computeVortex, computeAlt
+            computePerspective, computeVortex, computeAlt, computeAlt2
         ] = await Promise.all([
             this.device.createComputePipelineAsync({
                 layout: computePipelineLayout,
@@ -573,6 +576,10 @@ export class Renderer {
             this.device.createComputePipelineAsync({
                 layout: computePipelineLayout,
                 compute: {module: liquidAltModule, entryPoint: 'main'}
+            }),
+            this.device.createComputePipelineAsync({
+                layout: computePipelineLayout,
+                compute: {module: liquidAlt2Module, entryPoint: 'main'}
             })
         ]);
 
@@ -582,6 +589,7 @@ export class Renderer {
         this.pipelines.set('computePerspective', computePerspective);
         this.pipelines.set('computeVortex', computeVortex);
         this.pipelines.set('computeAlt', computeAlt);
+        this.pipelines.set('computeAlt2', computeAlt2);
 
         // Create the video-effect render pipeline (separate await to keep Promise lists simple)
         const videoEffectPipeline = await this.device.createRenderPipelineAsync({
@@ -775,8 +783,16 @@ export class Renderer {
                     computePass.setPipeline(this.pipelines.get('computeVortex') as GPUComputePipeline);
                 } else if (mode === 'liquid-zoom' || mode === 'liquid-vortex') {
                     computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
+                } else if (mode === 'liquid-alt2') {
+                    computePass.setPipeline(this.pipelines.get('computeAlt2') as GPUComputePipeline);
                 } else if (mode === 'liquid-perspective') {
                     computePass.setPipeline(this.pipelines.get('computePerspective') as GPUComputePipeline);
+                } else if ((mode as string) === 'liquid-alt') {
+                    computePass.setPipeline(this.pipelines.get('computeAlt') as GPUComputePipeline);
+                } else if ((mode as string) === 'liquid-alt') {
+                    computePass.setPipeline(this.pipelines.get('computeAlt') as GPUComputePipeline);
+                } else if ((mode as string) === 'liquid-alt') {
+                    computePass.setPipeline(this.pipelines.get('computeAlt') as GPUComputePipeline);
                 } else if ((mode as string) === 'liquid-alt') {
                     computePass.setPipeline(this.pipelines.get('computeAlt') as GPUComputePipeline);
                 } else { // 'liquid'

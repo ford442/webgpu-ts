@@ -58,6 +58,7 @@ const Controls: React.FC<ControlsProps> = ({
     <option value="vortex">Clean Vortex</option> {/* ADD THIS */}
     <option value="liquid-perspective">Liquid Perspective</option>
     <option value="liquid-alt">Liquid (Alternate)</option>
+    <option value="liquid-alt2">Liquid (Alternate v2)</option>
     <option value="liquid-vortex">Liquid Vortex</option>
     <option value="liquid">Liquid (Interactive)</option>
     <option value="liquid-zoom">Liquid Zoom</option>
