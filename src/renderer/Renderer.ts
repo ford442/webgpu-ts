@@ -30,10 +30,132 @@ export class Renderer {
     private parallaxStrength: number = 2.0;
     private fogDensity: number = 0.7;
     private shaderBaseUrl: string = 'https://glsl.1ink.us/effects/';
+    // Store shader sources keyed by pipeline key so we can parse WGSL for bindings
+    private shaderSources = new Map<string, string>();
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
     }
+
+    // --- WGSL parsing + auto-bind helpers ---
+    // Very small parser to extract @binding/@group declarations for group 0 and infer resource kind.
+    private parseWGSLBindings(code: string): Array<{binding: number, group: number, kind: string, raw: string}> {
+        const results: Array<{binding: number, group: number, kind: string, raw: string}> = [];
+        if (!code) return results;
+        // Match declarations containing @binding(N) and @group(M) up to the terminating semicolon.
+        const declRegex = /@binding\((\d+)\)\s*@group\((\d+)\)[^;\n]*;?/g;
+        let m: RegExpExecArray | null;
+        while ((m = declRegex.exec(code)) !== null) {
+            const binding = Number(m[1]);
+            const group = Number(m[2]);
+            // Take a small window around the match to inspect the type/token
+            const start = Math.max(0, m.index - 120);
+            const end = Math.min(code.length, m.index + 200);
+            const snippet = code.slice(start, end);
+            let kind = 'unknown';
+            const s = snippet.toLowerCase();
+            if (/texture_storage/.test(s)) kind = 'storageTexture';
+            else if (/texture_2d|texture_3d|texture_cube|texture_multisampled_2d/.test(s)) kind = 'texture';
+            else if (/sampler_comparison/.test(s)) kind = 'comparisonSampler';
+            else if (/\bsampler\b/.test(s)) kind = 'sampler';
+            else if (/var\s*<\s*uniform\s*>/.test(s)) kind = 'uniform';
+            else if (/var\s*<\s*storage\s*>/.test(s)) kind = 'storageBuffer';
+            results.push({binding, group, kind, raw: snippet});
+        }
+        return results;
+    }
+
+    private resolveResourceForParsedBinding(parsed: {binding: number, group: number, kind: string}, pipelineKey: string): GPUBindingResource | null {
+        // Map of available resources
+        const res: Record<string, any> = {
+            filteringSampler: this.filteringSampler,
+            nonFilteringSampler: this.nonFilteringSampler,
+            comparisonSampler: this.comparisonSampler,
+            imageTexture: this.imageTexture,
+            videoTexture: this.videoTexture,
+            writeTexture: this.writeTexture,
+            depthTextureRead: this.depthTextureRead,
+            depthTextureWrite: this.depthTextureWrite,
+            dataTextureA: this.dataTextureA,
+            dataTextureB: this.dataTextureB,
+            dataTextureC: this.dataTextureC,
+            extraBuffer: this.extraBuffer,
+            computeUniformBuffer: this.computeUniformBuffer,
+            imageVideoUniformBuffer: this.imageVideoUniformBuffer,
+            galaxyUniformBuffer: this.galaxyUniformBuffer,
+        };
+
+        const kind = parsed.kind;
+        try {
+            if (kind === 'sampler') {
+                return res.filteringSampler || res.nonFilteringSampler || null;
+            }
+            if (kind === 'comparisonSampler') {
+                return res.comparisonSampler || res.filteringSampler || null;
+            }
+            if (kind === 'texture') {
+                // prefer video/image/write/data textures in that order
+                if (res.videoTexture) return res.videoTexture.createView();
+                if (res.imageTexture) return res.imageTexture.createView();
+                if (res.writeTexture) return res.writeTexture.createView();
+                if (res.dataTextureA) return res.dataTextureA.createView();
+                if (res.dataTextureB) return res.dataTextureB.createView();
+                if (res.dataTextureC) return res.dataTextureC.createView();
+                if (res.depthTextureRead) return res.depthTextureRead.createView();
+                return null;
+            }
+            if (kind === 'storageTexture') {
+                // prefer writeTexture and data textures for storage writes
+                if (res.writeTexture) return res.writeTexture.createView();
+                if (res.dataTextureA) return res.dataTextureA.createView();
+                if (res.dataTextureB) return res.dataTextureB.createView();
+                if (res.dataTextureC) return res.dataTextureC.createView();
+                if (res.depthTextureWrite) return res.depthTextureWrite.createView();
+                return null;
+            }
+            if (kind === 'uniform') {
+                // heuristics: compute pipelines use computeUniformBuffer; render pipelines use imageVideo/galaxy
+                if (pipelineKey.startsWith('compute')) return res.computeUniformBuffer ? {buffer: res.computeUniformBuffer} : null;
+                if (pipelineKey === 'galaxy') return res.galaxyUniformBuffer ? {buffer: res.galaxyUniformBuffer} : null;
+                return res.imageVideoUniformBuffer ? {buffer: res.imageVideoUniformBuffer} : (res.computeUniformBuffer ? {buffer: res.computeUniformBuffer} : null);
+            }
+            if (kind === 'storageBuffer') {
+                return res.extraBuffer ? {buffer: res.extraBuffer} : null;
+            }
+        } catch (e) {
+            // resource may not exist or createView may fail
+            return null;
+        }
+        return null;
+    }
+
+    private tryCreateBindGroupFromShader(bindGroupKey: string, pipelineKey: string): boolean {
+        const pipeline = this.pipelines.get(pipelineKey);
+        if (!pipeline) return false;
+        const code = this.shaderSources.get(pipelineKey);
+        if (!code) return false;
+        const parsed = this.parseWGSLBindings(code).filter(p => p.group === 0);
+        if (parsed.length === 0) return false;
+        const layout = (pipeline as unknown as { getBindGroupLayout(index: number): GPUBindGroupLayout }).getBindGroupLayout(0);
+        const entries: Array<{binding: number, resource: GPUBindingResource}> = [];
+        for (const p of parsed) {
+            const resource = this.resolveResourceForParsedBinding(p, pipelineKey);
+            if (!resource) {
+                // fail fast if we can't satisfy a required binding
+                return false;
+            }
+            entries.push({binding: p.binding, resource});
+        }
+        try {
+            const bg = this.device.createBindGroup({layout, entries});
+            this.bindGroups.set(bindGroupKey, bg);
+            return true;
+        } catch (e) {
+            console.warn('Auto-bind group creation failed:', e);
+            return false;
+        }
+    }
+    // --- end WGSL parsing + auto-bind helpers ---
 
     public addRipplePoint(x: number, y: number) {
         this.ripplePoints.push({x, y, startTime: performance.now() / 1000.0});
@@ -216,6 +338,18 @@ export class Renderer {
 
         const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
 
+        // Save shader sources for later automatic binding attempts
+        this.shaderSources.set('galaxy', galaxyCode);
+        this.shaderSources.set('imageVideo', imageVideoCode);
+        this.shaderSources.set('liquidV1', liquidV1Code);
+        this.shaderSources.set('liquid', liquidCode);
+        this.shaderSources.set('compute', liquidCode); // primary compute shader
+        this.shaderSources.set('computeV1', liquidV1Code);
+        this.shaderSources.set('computeZoom', liquidZoomCode);
+        this.shaderSources.set('texture', textureCode);
+        this.shaderSources.set('liquidPerspective', liquidPerspectiveCode);
+        this.shaderSources.set('vortex', vortexCode);
+
         const galaxyModule = this.device.createShaderModule({code: galaxyCode});
         const imageVideoModule = this.device.createShaderModule({code: imageVideoCode});
         const liquidV1Module = this.device.createShaderModule({code: liquidV1Code});
@@ -352,11 +486,23 @@ if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler |
             }]
         }));
 
-        // --- CORRECTED LOGIC: Create ONE Compute Bind Group ---
-        
-        // Get any compute pipeline to borrow its layout (they all share one)
+        // --- Attempt AUTO-binding for compute pipelines (fallback to manual mega bind group if auto fails) ---
         const computePipeline = this.pipelines.get('compute') || this.pipelines.get('computeV1');
         if (!computePipeline) return; // Pipelines not ready
+
+        // Try automatic bind-group creation using the primary compute shader; if it fails, fall back to manual creation below
+        const autoOk = this.tryCreateBindGroupFromShader('compute', 'compute');
+        if (autoOk) {
+            console.info('Auto bind-group creation succeeded for compute pipeline');
+        }
+        if (autoOk) {
+            // Remove old per-compute bind keys for cleanliness
+            this.bindGroups.delete('computeV1');
+            this.bindGroups.delete('computeZoom');
+            this.bindGroups.delete('computePerspective');
+            this.bindGroups.delete('computeVortex');
+            return;
+        }
 
         // Define the entries for the one bind group
         const computeEntries = [
