@@ -1072,16 +1072,38 @@ export class Renderer {
 
             // Report mismatches (only when we parsed expected bindings from WGSL).
             if (parsed.length === 0) {
-                console.info(`[Renderer] No @binding/@group annotations parsed for shader '${pipelineKey}'. Skipping expected-vs-provided mismatch checks. If the shader uses a pipeline-created layout or annotations are missing, consider adding a manifest to declare bindings.`);
+                console.info(`[Renderer] No @binding/@group annotations parsed for shader '${pipelineKey}'. Attempting lightweight fallback scan for @binding/@group occurrences.`);
+                // Lightweight fallback: list any @binding/@group found and print them for debugging
+                const fallback: Array<{binding:number, group:number, raw:string}> = [];
+                const bindRe = /@binding\((\d+)\)/g;
+                let bm: RegExpExecArray | null;
+                while ((bm = bindRe.exec(code || '')) !== null) {
+                    const bindingNum = Number(bm[1]);
+                    // search back a little for a group declaration
+                    const idx = bm.index || 0;
+                    const snippetStart = Math.max(0, idx - 120);
+                    const snippetEnd = Math.min((code || '').length, idx + 120);
+                    const snippet = (code || '').slice(snippetStart, snippetEnd);
+                    const gm = /@group\((\d+)\)/.exec(snippet);
+                    const groupNum = gm && gm[1] ? Number(gm[1]) : 0;
+                    fallback.push({binding: bindingNum, group: groupNum, raw: snippet});
+                }
+                if (fallback.length) {
+                    console.log('[Renderer] Fallback parsed bindings:');
+                    fallback.forEach(f => console.log(`  binding ${f.binding} group ${f.group}:`, f.raw));
+                } else {
+                    console.log('[Renderer] Fallback scan found no @binding annotations.');
+                }
+                console.info(`[Renderer] Skipping expected-vs-provided mismatch checks for '${pipelineKey}'. Consider adding a per-shader manifest if the pipeline uses an implicit/default layout.`);
             } else {
-                expectedMap.forEach((kind, b) => {
-                    const present = providedMap.has(b);
-                    if (!present) console.warn(`[Renderer] Shader expects binding ${b} (${kind}) but no entry provided.`);
-                });
-                providedMap.forEach((_res, b) => {
-                    if (!expectedMap.has(b)) console.warn(`[Renderer] Provided binding ${b} was not expected by shader '${pipelineKey}'.`);
-                });
-            }
+                 expectedMap.forEach((kind, b) => {
+                     const present = providedMap.has(b);
+                     if (!present) console.warn(`[Renderer] Shader expects binding ${b} (${kind}) but no entry provided.`);
+                 });
+                 providedMap.forEach((_res, b) => {
+                     if (!expectedMap.has(b)) console.warn(`[Renderer] Provided binding ${b} was not expected by shader '${pipelineKey}'.`);
+                 });
+             }
 
             // Helpful hint for common case: sampler expected but not provided
             for (const p of parsed) {
