@@ -66,25 +66,34 @@ export class Renderer {
     private parseWGSLBindings(code: string): Array<{binding: number, group: number, kind: string, raw: string}> {
         const results: Array<{binding: number, group: number, kind: string, raw: string}> = [];
         if (!code) return results;
-        // Match declarations containing @binding(N) and @group(M) up to the terminating semicolon.
-        const declRegex = /@binding\((\d+)\)\s*@group\((\d+)\)[^;\n]*;?/g;
+        // Look for @group(...) and @binding(...) pairs in either order.
+        // This regex captures both "@group(N) ... @binding(M)" and "@binding(M) ... @group(N)" patterns.
+        const pairRegex = /@group\((\d+)\)[\s\S]{0,200}?@binding\((\d+)\)|@binding\((\d+)\)[\s\S]{0,200}?@group\((\d+)\)/g;
         let m: RegExpExecArray | null;
-        while ((m = declRegex.exec(code)) !== null) {
-            const binding = Number(m[1]);
-            const group = Number(m[2]);
+        while ((m = pairRegex.exec(code)) !== null) {
+            // Determine which alternative matched and extract numbers
+            let groupNum: number | null = null;
+            let bindingNum: number | null = null;
+            if (m[1] !== undefined && m[2] !== undefined) {
+                groupNum = Number(m[1]); bindingNum = Number(m[2]);
+            } else if (m[3] !== undefined && m[4] !== undefined) {
+                bindingNum = Number(m[3]); groupNum = Number(m[4]);
+            }
+            if (groupNum === null || bindingNum === null) continue;
+
             // Take a small window around the match to inspect the type/token
-            const start = Math.max(0, m.index - 120);
-            const end = Math.min(code.length, m.index + 200);
+            const start = Math.max(0, (m.index || 0) - 120);
+            const end = Math.min(code.length, (m.index || 0) + 200);
             const snippet = code.slice(start, end);
             let kind = 'unknown';
             const s = snippet.toLowerCase();
-            if (/texture_storage/.test(s)) kind = 'storageTexture';
+            if (/texture_storage/.test(s) || /storage_texture/.test(s)) kind = 'storageTexture';
             else if (/texture_2d|texture_3d|texture_cube|texture_multisampled_2d/.test(s)) kind = 'texture';
             else if (/sampler_comparison/.test(s)) kind = 'comparisonSampler';
             else if (/\bsampler\b/.test(s)) kind = 'sampler';
-            else if (/var\s*<\s*uniform\s*>/.test(s)) kind = 'uniform';
-            else if (/var\s*<\s*storage\s*>/.test(s)) kind = 'storageBuffer';
-            results.push({binding, group, kind, raw: snippet});
+            else if (/var\s*<\s*uniform\s*>/.test(s) || /: *vec|struct/.test(s)) kind = 'uniform';
+            else if (/var\s*<\s*storage\s*>/.test(s) || /storage_buffer/.test(s)) kind = 'storageBuffer';
+            results.push({binding: bindingNum, group: groupNum, kind, raw: snippet});
         }
         return results;
     }
@@ -740,9 +749,14 @@ export class Renderer {
             this.bindGroups.set('image', this.device.createBindGroup({layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries}));
         }
         {
-            const entries = [{binding: 0, resource: this.filteringSampler}, {binding: 1, resource: this.writeTexture.createView()}];
+            // Use binding 2 for the texture view and include a small uniform at binding 3 where pipelines expect it.
+            const entries = [
+                { binding: 0, resource: this.filteringSampler },
+                { binding: 2, resource: this.writeTexture.createView() },
+                { binding: 3, resource: { buffer: this.galaxyUniformBuffer } }
+            ];
             this.logBindGroupDiagnostics('liquid', entries as any);
-            this.bindGroups.set('liquid', this.device.createBindGroup({layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries}));
+            this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries }));
         }
 
         // --- Attempt AUTO-binding for compute pipelines (fallback to manual mega bind group if auto fails) ---
@@ -1056,14 +1070,18 @@ export class Renderer {
             if (entries.length === 0) console.log('(no entries)');
             else entries.forEach(e => console.log(`  binding ${e.binding}: resource =`, e.resource));
 
-            // Report mismatches
-            expectedMap.forEach((kind, b) => {
-                const present = providedMap.has(b);
-                if (!present) console.warn(`[Renderer] Shader expects binding ${b} (${kind}) but no entry provided.`);
-            });
-            providedMap.forEach((_res, b) => {
-                if (!expectedMap.has(b)) console.warn(`[Renderer] Provided binding ${b} was not expected by shader '${pipelineKey}'.`);
-            });
+            // Report mismatches (only when we parsed expected bindings from WGSL).
+            if (parsed.length === 0) {
+                console.info(`[Renderer] No @binding/@group annotations parsed for shader '${pipelineKey}'. Skipping expected-vs-provided mismatch checks. If the shader uses a pipeline-created layout or annotations are missing, consider adding a manifest to declare bindings.`);
+            } else {
+                expectedMap.forEach((kind, b) => {
+                    const present = providedMap.has(b);
+                    if (!present) console.warn(`[Renderer] Shader expects binding ${b} (${kind}) but no entry provided.`);
+                });
+                providedMap.forEach((_res, b) => {
+                    if (!expectedMap.has(b)) console.warn(`[Renderer] Provided binding ${b} was not expected by shader '${pipelineKey}'.`);
+                });
+            }
 
             // Helpful hint for common case: sampler expected but not provided
             for (const p of parsed) {
