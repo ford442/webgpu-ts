@@ -457,6 +457,18 @@ export class Renderer {
         const vortexModule = this.device.createShaderModule({code: vortexCode});
 
         // 1. Create ONE shared bind group layout for ALL compute shaders
+        const videoBindGroupLayout = this.device.createBindGroupLayout({
+            entries: [
+                { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' as GPUSamplerBindingType } },
+                { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' as GPUTextureSampleType } },
+                { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' as GPUBufferBindingType } },
+            ]
+        });
+        const videoPipelineLayout = this.device.createPipelineLayout({
+            bindGroupLayouts: [videoBindGroupLayout]
+        });
+
+        // 1b. Create compute bind group layout and pipeline layout
         const computeBindGroupLayout = this.device.createBindGroupLayout({
             entries: [
                 { binding: 0, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'filtering' as GPUSamplerBindingType } },
@@ -466,16 +478,13 @@ export class Renderer {
                 { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } },
                 { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' as GPUSamplerBindingType } },
                 { binding: 6, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'r32float' as GPUTextureFormat } },
-
                 { binding: 7, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
                 { binding: 8, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
-                { binding: 9, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // dataTextureC
-                { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } }, // extraBuffer
-                { binding: 11, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'comparison' as GPUSamplerBindingType } }, // comparisonSampler
+                { binding: 9, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } },
+                { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } },
+                { binding: 11, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'comparison' as GPUSamplerBindingType } },
             ],
         });
-
-        // 2. Create a shared pipeline layout
         const computePipelineLayout = this.device.createPipelineLayout({
             bindGroupLayouts: [computeBindGroupLayout],
         });
@@ -497,7 +506,7 @@ export class Renderer {
                 primitive: {topology: 'triangle-list' as GPUPrimitiveTopology}
             }),
             this.device.createRenderPipelineAsync({
-                layout: 'auto', ...commonConfig,
+                layout: videoPipelineLayout, ...commonConfig,
                 fragment: {...commonConfig.fragment, module: imageVideoModule, entryPoint: 'fs_main'}
             }),
             this.device.createRenderPipelineAsync({
@@ -552,7 +561,7 @@ export class Renderer {
 
         // Create the video-effect render pipeline (separate await to keep Promise lists simple)
         const videoEffectPipeline = await this.device.createRenderPipelineAsync({
-            layout: 'auto',
+            layout: videoPipelineLayout,
             vertex: { module: imageVideoModule, entryPoint: 'vs_main' },
             fragment: { module: videoEffectModule, entryPoint: 'fs_main', targets: [{ format: this.presentationFormat }] },
             primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology }
@@ -562,7 +571,7 @@ export class Renderer {
     }
 
     private createBindGroups(): void {
-if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTextureA|| !this.dataTextureB || !this.dataTextureC || !this.extraBuffer || !this.computeUniformBuffer) return;
+        if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTextureA|| !this.dataTextureB || !this.dataTextureC || !this.extraBuffer || !this.computeUniformBuffer) return;
         // --- Render Bind Groups (no change) ---
         if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({
@@ -572,12 +581,15 @@ if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler |
                     resource: this.filteringSampler
                 }, {binding: 2, resource: this.videoTexture.createView()}]
             }));
+            // Use shared videoBindGroupLayout for both imageVideo and videoEffect
+            const videoBindGroupLayout = this.pipelines.get('imageVideo')!.getBindGroupLayout(0);
             this.bindGroups.set('video', this.device.createBindGroup({
-                layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0),
-                entries: [{binding: 0, resource: this.filteringSampler}, {
-                    binding: 1,
-                    resource: this.videoTexture.createView()
-                }, {binding: 2, resource: {buffer: this.imageVideoUniformBuffer}}]
+                layout: videoBindGroupLayout,
+                entries: [
+                    {binding: 0, resource: this.filteringSampler},
+                    {binding: 1, resource: this.videoTexture.createView()},
+                    {binding: 2, resource: {buffer: this.imageVideoUniformBuffer}}
+                ]
             }));
         }
         this.bindGroups.set('image', this.device.createBindGroup({
