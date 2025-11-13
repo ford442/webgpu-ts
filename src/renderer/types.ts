@@ -13,4 +13,5 @@ export type RenderMode =
   'liquid-alt' |
   'liquid-alt2' |
   'galaxy-alt' |
+  'music-gui' |
   'vortex'; // ADD THIS

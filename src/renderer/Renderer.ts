@@ -434,7 +434,7 @@ export class Renderer {
 
     private async createPipelines(): Promise<void> {
         const shaderNames = [
-            'galaxy.wgsl', 'galaxy-alt.wgsl', 'imageVideo.wgsl', 'video-effect.wgsl', 'video-stained.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
+            'galaxy.wgsl', 'galaxy-alt.wgsl', 'music-gui.wgsl', 'imageVideo.wgsl', 'video-effect.wgsl', 'video-stained.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
             'liquid-alt.wgsl',
             'liquid-alt2.wgsl',
             'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'vortex.wgsl'
@@ -452,11 +452,12 @@ export class Renderer {
         // Fetch shader sources in parallel
         const shaderCodes = await Promise.all(shaderNames.map(fetchShader));
 
-        const [galaxyCode, galaxyAltCode, imageVideoCode, videoEffectCode, videoStainedCode, liquidV1Code, liquidCode, liquidAltCode, liquidAlt2Code, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
+        const [galaxyCode, galaxyAltCode, musicGuiCode, imageVideoCode, videoEffectCode, videoStainedCode, liquidV1Code, liquidCode, liquidAltCode, liquidAlt2Code, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
 
         // Save shader sources for later automatic binding attempts
         this.shaderSources.set('galaxy', galaxyCode);
         this.shaderSources.set('galaxyAlt', galaxyAltCode);
+        this.shaderSources.set('musicGui', musicGuiCode);
         this.shaderSources.set('imageVideo', imageVideoCode);
         this.shaderSources.set('videoEffect', videoEffectCode);
         this.shaderSources.set('videoStained', videoStainedCode);
@@ -473,6 +474,7 @@ export class Renderer {
 
         const galaxyModule = this.device.createShaderModule({code: galaxyCode});
         const galaxyAltModule = this.device.createShaderModule({code: galaxyAltCode});
+        const musicGuiModule = this.device.createShaderModule({code: musicGuiCode});
         const imageVideoModule = this.device.createShaderModule({code: imageVideoCode});
         const videoEffectModule = this.device.createShaderModule({code: videoEffectCode});
         const videoStainedModule = this.device.createShaderModule({code: videoStainedCode});
@@ -526,7 +528,7 @@ export class Renderer {
         };
 
         const [
-            galaxyPipeline, galaxyAltPipeline, imageVideoPipeline, texturePipeline
+            galaxyPipeline, galaxyAltPipeline, musicGuiPipeline, imageVideoPipeline, texturePipeline
         ] = await Promise.all([
             this.device.createRenderPipelineAsync({
                 layout: 'auto', ...commonConfig,
@@ -538,6 +540,12 @@ export class Renderer {
                 layout: 'auto', ...commonConfig,
                 vertex: {module: galaxyModule, entryPoint: 'vs_main'},
                 fragment: {...commonConfig.fragment, module: galaxyAltModule, entryPoint: 'fs_main'},
+                primitive: {topology: 'triangle-list' as GPUPrimitiveTopology}
+            }),
+            this.device.createRenderPipelineAsync({
+                layout: 'auto', ...commonConfig,
+                vertex: {module: imageVideoModule, entryPoint: 'vs_main'},
+                fragment: {...commonConfig.fragment, module: musicGuiModule, entryPoint: 'fs_main'},
                 primitive: {topology: 'triangle-list' as GPUPrimitiveTopology}
             }),
             this.device.createRenderPipelineAsync({
@@ -553,6 +561,7 @@ export class Renderer {
 
         this.pipelines.set('galaxy', galaxyPipeline);
         this.pipelines.set('galaxyAlt', galaxyAltPipeline);
+        this.pipelines.set('musicGui', musicGuiPipeline);
         this.pipelines.set('imageVideo', imageVideoPipeline);
         // 'liquid' render pipeline uses the textureModule pipeline (historical naming)
         this.pipelines.set('liquid', texturePipeline);
@@ -864,6 +873,16 @@ export class Renderer {
                     // prefer video bind if available
                     if (this.bindGroups.has('galaxyAlt')) passEncoder.setBindGroup(0, this.bindGroups.get('galaxyAlt')!);
                     else passEncoder.setBindGroup(0, this.bindGroups.get('galaxyAltImage')!);
+                    passEncoder.draw(6);
+                }
+                break;
+            case 'music-gui':
+                if (this.pipelines.get('musicGui')) {
+                    // pack button mask into u.z; the app should write a float mask into galaxyUniformBuffer's 3rd component
+                    this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([currentTime, zoom, 0.0, 0.0]));
+                    passEncoder.setPipeline(this.pipelines.get('musicGui') as GPURenderPipeline);
+                    if (this.bindGroups.has('musicGui')) passEncoder.setBindGroup(0, this.bindGroups.get('musicGui')!);
+                    else passEncoder.setBindGroup(0, this.bindGroups.get('musicGuiImage')!);
                     passEncoder.draw(6);
                 }
                 break;
