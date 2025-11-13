@@ -63,6 +63,7 @@ const Controls: React.FC<ControlsProps> = ({
     <option value="liquid">Liquid (Interactive)</option>
     <option value="liquid-zoom">Liquid Zoom</option>
     <option value="shader">Galaxy Shader</option>
+    <option value="galaxy-alt">Galaxy (Alternate)</option>
                     <option value="image">Static Image</option>
                     <option value="ripple">Ripple Effect</option>
                     <option value="video">Video Texture</option>

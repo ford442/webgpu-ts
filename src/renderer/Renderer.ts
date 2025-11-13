@@ -434,7 +434,7 @@ export class Renderer {
 
     private async createPipelines(): Promise<void> {
         const shaderNames = [
-            'galaxy.wgsl', 'imageVideo.wgsl', 'video-effect.wgsl', 'video-stained.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
+            'galaxy.wgsl', 'galaxy-alt.wgsl', 'imageVideo.wgsl', 'video-effect.wgsl', 'video-stained.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
             'liquid-alt.wgsl',
             'liquid-alt2.wgsl',
             'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'vortex.wgsl'
@@ -452,10 +452,11 @@ export class Renderer {
         // Fetch shader sources in parallel
         const shaderCodes = await Promise.all(shaderNames.map(fetchShader));
 
-        const [galaxyCode, imageVideoCode, videoEffectCode, videoStainedCode, liquidV1Code, liquidCode, liquidAltCode, liquidAlt2Code, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
+        const [galaxyCode, galaxyAltCode, imageVideoCode, videoEffectCode, videoStainedCode, liquidV1Code, liquidCode, liquidAltCode, liquidAlt2Code, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
 
         // Save shader sources for later automatic binding attempts
         this.shaderSources.set('galaxy', galaxyCode);
+        this.shaderSources.set('galaxyAlt', galaxyAltCode);
         this.shaderSources.set('imageVideo', imageVideoCode);
         this.shaderSources.set('videoEffect', videoEffectCode);
         this.shaderSources.set('videoStained', videoStainedCode);
@@ -471,6 +472,7 @@ export class Renderer {
         this.shaderSources.set('vortex', vortexCode);
 
         const galaxyModule = this.device.createShaderModule({code: galaxyCode});
+        const galaxyAltModule = this.device.createShaderModule({code: galaxyAltCode});
         const imageVideoModule = this.device.createShaderModule({code: imageVideoCode});
         const videoEffectModule = this.device.createShaderModule({code: videoEffectCode});
         const videoStainedModule = this.device.createShaderModule({code: videoStainedCode});
@@ -524,12 +526,18 @@ export class Renderer {
         };
 
         const [
-            galaxyPipeline, imageVideoPipeline, texturePipeline
+            galaxyPipeline, galaxyAltPipeline, imageVideoPipeline, texturePipeline
         ] = await Promise.all([
             this.device.createRenderPipelineAsync({
                 layout: 'auto', ...commonConfig,
                 vertex: {module: galaxyModule, entryPoint: 'vs_main'},
                 fragment: {...commonConfig.fragment, module: galaxyModule, entryPoint: 'fs_main'},
+                primitive: {topology: 'triangle-list' as GPUPrimitiveTopology}
+            }),
+            this.device.createRenderPipelineAsync({
+                layout: 'auto', ...commonConfig,
+                vertex: {module: galaxyModule, entryPoint: 'vs_main'},
+                fragment: {...commonConfig.fragment, module: galaxyAltModule, entryPoint: 'fs_main'},
                 primitive: {topology: 'triangle-list' as GPUPrimitiveTopology}
             }),
             this.device.createRenderPipelineAsync({
@@ -544,6 +552,7 @@ export class Renderer {
         ]);
 
         this.pipelines.set('galaxy', galaxyPipeline);
+        this.pipelines.set('galaxyAlt', galaxyAltPipeline);
         this.pipelines.set('imageVideo', imageVideoPipeline);
         // 'liquid' render pipeline uses the textureModule pipeline (historical naming)
         this.pipelines.set('liquid', texturePipeline);
@@ -624,6 +633,13 @@ export class Renderer {
                     resource: this.filteringSampler
                 }, {binding: 2, resource: this.videoTexture.createView()}]
             }));
+            this.bindGroups.set('galaxyAlt', this.device.createBindGroup({
+                layout: this.pipelines.get('galaxyAlt')!.getBindGroupLayout(0),
+                entries: [{binding: 0, resource: {buffer: this.galaxyUniformBuffer}}, {
+                    binding: 1,
+                    resource: this.filteringSampler
+                }, {binding: 2, resource: this.videoTexture.createView()}]
+            }));
             // Use shared videoBindGroupLayout for both imageVideo and videoEffect
             const videoBindGroupLayout = this.pipelines.get('imageVideo')!.getBindGroupLayout(0);
             this.bindGroups.set('video', this.device.createBindGroup({
@@ -635,6 +651,11 @@ export class Renderer {
                 ]
             }));
         }
+        // Also create galaxyAlt bind for image fallback
+        this.bindGroups.set('galaxyAltImage', this.device.createBindGroup({
+            layout: this.pipelines.get('galaxyAlt')!.getBindGroupLayout(0),
+            entries: [{binding: 0, resource: {buffer: this.galaxyUniformBuffer}}, {binding: 1, resource: this.filteringSampler}, {binding: 2, resource: this.imageTexture.createView()}]
+        }));
         this.bindGroups.set('image', this.device.createBindGroup({
             layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0),
             entries: [{binding: 0, resource: this.filteringSampler}, {
@@ -833,6 +854,16 @@ export class Renderer {
                     this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([currentTime, zoom, panX, panY]));
                     passEncoder.setPipeline(galaxyPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('galaxy')!);
+                    passEncoder.draw(6);
+                }
+                break;
+            case 'galaxy-alt':
+                if (this.pipelines.get('galaxyAlt')) {
+                    this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([currentTime, zoom, panX, panY]));
+                    passEncoder.setPipeline(this.pipelines.get('galaxyAlt') as GPURenderPipeline);
+                    // prefer video bind if available
+                    if (this.bindGroups.has('galaxyAlt')) passEncoder.setBindGroup(0, this.bindGroups.get('galaxyAlt')!);
+                    else passEncoder.setBindGroup(0, this.bindGroups.get('galaxyAltImage')!);
                     passEncoder.draw(6);
                 }
                 break;
