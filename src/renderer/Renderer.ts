@@ -541,7 +541,7 @@ export class Renderer {
                 layout: computePipelineLayout,
                 compute: {module: liquidAltModule, entryPoint: 'main'}
             })
-        );
+        ]);
 
         this.pipelines.set('computeV1', computeV1);
         this.pipelines.set('compute', compute);
