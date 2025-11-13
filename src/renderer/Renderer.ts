@@ -422,26 +422,12 @@ export class Renderer {
             'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'vortex.wgsl'
         ];
 
-        // Fetch shader sources and optional manifest files in parallel
+        // Fetch shader sources in parallel
         const shaderCodes = await Promise.all(
             shaderNames.map(name => fetch(`${this.shaderBaseUrl}${name}`).then(res => res.text()))
         );
 
-        // Try to fetch per-shader manifests at `${shaderBaseUrl}${name}.json` (e.g., galaxy.wgsl.json)
-        await Promise.all(shaderNames.map(async (name, i) => {
-            const url = `${this.shaderBaseUrl}${name}.json`;
-            try {
-                const r = await fetch(url);
-                if (!r.ok) return;
-                const j = await r.json();
-                // map pipeline key based on same ordering we use later
-                const keyMap = ['galaxy','imageVideo','liquidV1','liquid','liquidAlt','computeZoom','texture','liquidPerspective','vortex'];
-                const key = keyMap[i] || name;
-                this.shaderManifests.set(key, j);
-            } catch (e) {
-                // ignore
-            }
-        }));
+        // (Removed the block that attempted to fetch .json manifests here)
 
         const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidAltCode, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
 
@@ -468,8 +454,6 @@ export class Renderer {
         const liquidPerspectiveModule = this.device.createShaderModule({code: liquidPerspectiveCode});
         const vortexModule = this.device.createShaderModule({code: vortexCode});
 
-        // --- CORRECTED LOGIC ---
-
         // 1. Create ONE shared bind group layout for ALL compute shaders
         const computeBindGroupLayout = this.device.createBindGroupLayout({
             entries: [
@@ -480,14 +464,12 @@ export class Renderer {
                 { binding: 4, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } },
                 { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'non-filtering' as GPUSamplerBindingType } },
                 { binding: 6, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'r32float' as GPUTextureFormat } },
-                
-                // --- MODIFIED/ADDED LINES ---
+
                 { binding: 7, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
                 { binding: 8, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only' as GPUStorageTextureAccess, format: 'rgba32float' as GPUTextureFormat } },
                 { binding: 9, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } }, // dataTextureC
-                { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } }, // extraBuffer (moved)
-                { binding: 11, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'comparison' as GPUSamplerBindingType } }, // comparisonSampler (moved)
-                // --- END MODIFICATION ---
+                { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } }, // extraBuffer
+                { binding: 11, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'comparison' as GPUSamplerBindingType } }, // comparisonSampler
             ],
         });
 
@@ -529,7 +511,7 @@ export class Renderer {
             computePerspective, computeVortex, computeAlt
         ] = await Promise.all([
             this.device.createComputePipelineAsync({
-                layout: computePipelineLayout, 
+                layout: computePipelineLayout,
                 compute: {module: liquidV1Module, entryPoint: 'main'}
             }),
             this.device.createComputePipelineAsync({
@@ -553,7 +535,6 @@ export class Renderer {
                 compute: {module: liquidAltModule, entryPoint: 'main'}
             })
         ]);
-        // --- END CORRECTION ---
 
         this.pipelines.set('galaxy', galaxyPipeline);
         this.pipelines.set('imageVideo', imageVideoPipeline);
