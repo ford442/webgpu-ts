@@ -667,9 +667,10 @@ export class Renderer {
         }
 
         // Define the entries for the one bind group
+        const inputTextureView = this.imageTexture.createView();
         const computeEntries = [
             {binding: 0, resource: this.filteringSampler},
-            {binding: 1, resource: this.imageTexture.createView()},
+            {binding: 1, resource: inputTextureView},
             {binding: 2, resource: this.writeTexture.createView()},
             {binding: 3, resource: {buffer: this.computeUniformBuffer}},
             {binding: 4, resource: this.depthTextureRead.createView()},

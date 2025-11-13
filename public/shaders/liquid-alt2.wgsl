@@ -140,4 +140,3 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let newDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthSampleUV, 0.0).r;
   textureStore(writeDepthTexture, global_id.xy, vec4<f32>(newDepth, 0.0, 0.0, 0.0));
 }
-

@@ -13,7 +13,7 @@ const VAR_THRESHOLD: f32 = 0.006; // luminance variance threshold for coherence
 const HUE_DELTA: f32 = 0.055; // ~20 degrees
 
 struct Uniforms {
-  config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
+  config: vec4<f32>;              // time, rippleCount, resolutionX, resolutionY
   ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
 };
 
