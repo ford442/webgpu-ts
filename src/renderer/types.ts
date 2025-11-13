@@ -3,6 +3,7 @@ export type RenderMode =
   'image' | 
   'video' | 
   'video-effect' |
+  'video-stained' |
   'ripple' |
   'liquid-v1' | 
   'liquid' | 
