@@ -40,31 +40,71 @@ fn sample_zooming_layer(
   let parallax_factor = pow(1.0 - depth, parallax_strength);
   let per_pixel_speed = mix(bg_speed, fg_speed, parallax_factor);
   
-  // <<< CHANGE #2: Make the zoom intensity "breathe" using a sine wave for a more organic feel.
-  let base_intensity = 2.0;
-  let breath_amount = 0.5;
-  let breath_speed = 0.8;
+  // SOFTENED: Make breathing subtler and slower
+  // Select preset tuning from uniform (zoom_config.w)
+  let presetF = u.zoom_config.w;
+  let preset = i32(floor(presetF + 0.5)); // 0=subtle,1=dreamy,2=aggressive
+
+  var base_intensity: f32 = 1.2;
+  var breath_amount: f32 = 0.28;
+  var breath_speed: f32 = 0.6;
+  var chroma_base: f32 = 0.002;
+  var fade_duration: f32 = 0.5;
+
+  if (preset == 0) { // subtle
+    base_intensity = 1.0;
+    breath_amount = 0.18;
+    breath_speed = 0.45;
+    chroma_base = 0.0008;
+    fade_duration = 0.42;
+  } else if (preset == 1) { // dreamy
+    base_intensity = 1.4;
+    breath_amount = 0.36;
+    breath_speed = 0.55;
+    chroma_base = 0.0018;
+    fade_duration = 0.6;
+  } else { // aggressive
+    base_intensity = 1.9;
+    breath_amount = 0.6;
+    breath_speed = 0.95;
+    chroma_base = 0.0035;
+    fade_duration = 0.38;
+  }
+
   let zoom_intensity = base_intensity + sin(zoom_time * breath_speed) * breath_amount;
 
+  // Smooth the raw fract() progress to avoid abrupt edges
   let zoom_progress = fract(zoom_time * per_pixel_speed + cycle_offset);
-  let scale = 1.0 + (1.0 - zoom_progress) * zoom_intensity;
+  let smooth_prog = smoothstep(0.0, 1.0, zoom_progress);
+  // scale now eases in/out smoothly
+  let scale = 1.0 + (1.0 - smooth_prog) * zoom_intensity;
 
   let repeating_uv = (uv - zoom_center) * scale + zoom_center;
 
-  // <<< CHANGE #1 (continued): Use the seamless ping_pong wrap instead of fract().
-  let wrapped_uv = ping_pong_v2(repeating_uv);
+  // Use ping-pong wrap, then clamp to avoid tiny numerical overflow
+  let wrapped_uv = clamp(ping_pong_v2(repeating_uv), vec2<f32>(0.0), vec2<f32>(1.0));
 
-  // <<< CHANGE #3: Use the non_filtering_sampler for a crisp, pixelated zoom that matches the art style.
-  // To revert to a smoother (blurrier) zoom, change 'non_filtering_sampler' back to 'u_sampler'.
-  let color = textureSampleLevel(readTexture, non_filtering_sampler, wrapped_uv, 0.0);
+  // Subtle chromatic separation dependent on progression and depth
+  let chroma_strength = chroma_base * (0.5 + 0.5 * smooth_prog) * (1.0 + parallax_factor * 0.8);
+  let r_uv = clamp(wrapped_uv + vec2<f32>(chroma_strength, 0.0), vec2<f32>(0.0), vec2<f32>(1.0));
+  let g_uv = wrapped_uv;
+  let b_uv = clamp(wrapped_uv - vec2<f32>(chroma_strength * 0.7, 0.0), vec2<f32>(0.0), vec2<f32>(1.0));
 
-  // Fade logic remains the same for cross-fading
-  let fade_duration = 0.4;
+  let rcol = textureSampleLevel(readTexture, non_filtering_sampler, r_uv, 0.0).rgb;
+  let gcol = textureSampleLevel(readTexture, non_filtering_sampler, g_uv, 0.0).rgb;
+  let bcol = textureSampleLevel(readTexture, non_filtering_sampler, b_uv, 0.0).rgb;
+  let color_rgb = vec3<f32>(rcol.r, gcol.g, bcol.b);
+
+  // Fade logic (duration influenced by preset)
   let fade_in = smoothstep(0.0, fade_duration, zoom_progress);
   let fade_out = 1.0 - smoothstep(1.0 - fade_duration, 1.0, zoom_progress);
   let alpha = fade_in * fade_out;
 
-  return vec4(color.rgb, alpha);
+  // Slight tonemapping / contrast boost for punch
+  let contrast = 0.15;
+  let punched = mix(color_rgb, color_rgb * color_rgb * (3.0 - 2.0 * color_rgb), contrast);
+
+  return vec4<f32>(punched, alpha);
 }
 
 

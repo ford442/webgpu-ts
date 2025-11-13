@@ -30,6 +30,7 @@ function App() {
   const [edgeWidth, setEdgeWidth] = useState(0.06);
   const [refraction, setRefraction] = useState(0.02);
   const [colorStrength, setColorStrength] = useState(1.0);
+  const [zoomPreset, setZoomPreset] = useState(1);
 
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -156,8 +157,9 @@ function App() {
   useEffect(() => {
       if (rendererRef.current) {
           rendererRef.current.setStainedParams(cellSize, edgeWidth, refraction, colorStrength);
+         if (rendererRef.current.setZoomPreset) rendererRef.current.setZoomPreset(zoomPreset);
       }
-  }, [cellSize, edgeWidth, refraction, colorStrength]);
+  }, [cellSize, edgeWidth, refraction, colorStrength, zoomPreset]);
 
   return (
     <div id="app-container">
@@ -184,6 +186,8 @@ function App() {
             setRefraction={setRefraction}
             colorStrength={colorStrength}
             setColorStrength={setColorStrength}
+            zoomPreset={zoomPreset}
+            setZoomPreset={setZoomPreset}
         />
         <WebGPUCanvas
             rendererRef={rendererRef}

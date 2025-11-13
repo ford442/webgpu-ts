@@ -28,6 +28,9 @@ interface ControlsProps {
     setRefraction: (v: number) => void;
     colorStrength: number;
     setColorStrength: (v: number) => void;
+    // Zoom preset for zoom effects: 0=subtle,1=dreamy,2=aggressive
+    zoomPreset: number;
+    setZoomPreset: (v: number) => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({
@@ -43,6 +46,7 @@ const Controls: React.FC<ControlsProps> = ({
     edgeWidth, setEdgeWidth,
     refraction, setRefraction,
     colorStrength, setColorStrength,
+    zoomPreset, setZoomPreset,
 }) => {
     // The previous logic for `isImageMode` is no longer needed since you are always showing these controls.
 
@@ -91,6 +95,14 @@ const Controls: React.FC<ControlsProps> = ({
             <div className="control-group">
                 <label htmlFor="zoom-slider">Zoom:</label>
                 <input type="range" id="zoom-slider" min="50" max="200" value={zoom * 100} onChange={(e) => setZoom(parseFloat(e.target.value) / 100)} />
+            </div>
+            <div className="control-group">
+                <label htmlFor="zoom-preset">Zoom Preset:</label>
+                <select id="zoom-preset" value={zoomPreset} onChange={(e) => setZoomPreset(Number(e.target.value))}>
+                    <option value={0}>Subtle</option>
+                    <option value={1}>Dreamy</option>
+                    <option value={2}>Aggressive</option>
+                </select>
             </div>
             <div className="control-group">
                 <label htmlFor="pan-x-slider">Pan X:</label>

@@ -54,6 +54,7 @@ export class Renderer {
     private stainedCellSize: number = 0.035;
     private stainedEdgeWidth: number = 0.06;
     private stainedRefraction: number = 0.02;
+    private zoomPreset: number = 1;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -272,6 +273,10 @@ export class Renderer {
         this.stainedEdgeWidth = edgeWidth;
         this.stainedRefraction = refraction;
         this.colorStrength = colorStrength;
+    }
+
+    public setZoomPreset(p: number) {
+        this.zoomPreset = Math.max(0, Math.min(2, Math.floor(p)));
     }
 
     public async init(): Promise<boolean> {
@@ -743,7 +748,7 @@ export class Renderer {
                     uniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
 
                     // zoom_config (offset 4)
-                    uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
+                    uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, this.zoomPreset], 4);
 
                     // zoom_params (offset 8) - Use class properties
                     const zoomParams = new Float32Array([
