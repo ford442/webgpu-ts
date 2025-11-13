@@ -33,59 +33,37 @@ fn sample_zooming_layer(
   zoom_center: vec2<f32>,
   cycle_offset: f32
 ) -> vec4<f32> {
+  // Extract speed parameters and preset
   let fg_speed = u.zoom_params.x;
   let bg_speed = u.zoom_params.y;
   let parallax_strength = u.zoom_params.z;
 
+  let presetF = u.zoom_config.w;
+  let preset = i32(floor(presetF + 0.5)); // 0=subtle, 1=dreamy, 2=aggressive
+
+  // Depth-based parallax: closer objects move faster (foreground), distant objects slower (background)
+  // depth is 0 (closest) to 1 (farthest), so (1.0 - depth) inverts it for parallax effect
   let parallax_factor = pow(1.0 - depth, parallax_strength);
   let per_pixel_speed = mix(bg_speed, fg_speed, parallax_factor);
-  
-  // SOFTENED: Make breathing subtler and slower
-  // Select preset tuning from uniform (zoom_config.w)
-  let presetF = u.zoom_config.w;
-  let preset = i32(floor(presetF + 0.5)); // 0=subtle,1=dreamy,2=aggressive
 
-  var base_intensity: f32 = 1.2;
-  var breath_amount: f32 = 0.28;
-  var breath_speed: f32 = 0.6;
-  var chroma_base: f32 = 0.002;
-  var fade_duration: f32 = 0.5;
+  // Continuous scroll effect (no breathing/pulsing) — time flows linearly
+  // The layer repeats as it scrolls, creating infinite motion through the scene
+  let scroll_offset = zoom_time * per_pixel_speed + cycle_offset;
 
-  if (preset == 0) { // subtle
-    base_intensity = 1.0;
-    breath_amount = 0.18;
-    breath_speed = 0.45;
-    chroma_base = 0.0008;
-    fade_duration = 0.42;
-  } else if (preset == 1) { // dreamy
-    base_intensity = 1.4;
-    breath_amount = 0.36;
-    breath_speed = 0.55;
-    chroma_base = 0.0018;
-    fade_duration = 0.6;
-  } else { // aggressive
-    base_intensity = 1.9;
-    breath_amount = 0.6;
-    breath_speed = 0.95;
-    chroma_base = 0.0035;
-    fade_duration = 0.38;
-  }
+  // Radial outward scroll from center: each pixel moves away from zoom_center
+  // This creates a "flying forward" illusion where depth-ordered objects stream past
+  let direction_from_center = uv - zoom_center;
+  let distance_from_center = length(direction_from_center);
 
-  let zoom_intensity = base_intensity + sin(zoom_time * breath_speed) * breath_amount;
+  // Scale UV radially outward continuously (no sine/cosine, pure linear motion)
+  let radial_scale = 1.0 + scroll_offset * 0.5; // Adjust multiplier for speed perception
+  let scrolled_uv = zoom_center + direction_from_center * radial_scale;
 
-  // Smooth the raw fract() progress to avoid abrupt edges
-  let zoom_progress = fract(zoom_time * per_pixel_speed + cycle_offset);
-  let smooth_prog = smoothstep(0.0, 1.0, zoom_progress);
-  // scale now eases in/out smoothly
-  let scale = 1.0 + (1.0 - smooth_prog) * zoom_intensity;
+  // Seamless wrapping using ping-pong (mirrors at edges for continuous tiling)
+  let wrapped_uv = ping_pong_v2(scrolled_uv);
 
-  let repeating_uv = (uv - zoom_center) * scale + zoom_center;
-
-  // Use ping-pong wrap, then clamp to avoid tiny numerical overflow
-  let wrapped_uv = clamp(ping_pong_v2(repeating_uv), vec2<f32>(0.0), vec2<f32>(1.0));
-
-  // Subtle chromatic separation dependent on progression and depth
-  let chroma_strength = chroma_base * (0.5 + 0.5 * smooth_prog) * (1.0 + parallax_factor * 0.8);
+  // Very subtle chromatic aberration for visual interest
+  let chroma_strength = 0.001 * (1.0 + parallax_factor * 0.3);
   let r_uv = clamp(wrapped_uv + vec2<f32>(chroma_strength, 0.0), vec2<f32>(0.0), vec2<f32>(1.0));
   let g_uv = wrapped_uv;
   let b_uv = clamp(wrapped_uv - vec2<f32>(chroma_strength * 0.7, 0.0), vec2<f32>(0.0), vec2<f32>(1.0));
@@ -95,16 +73,20 @@ fn sample_zooming_layer(
   let bcol = textureSampleLevel(readTexture, non_filtering_sampler, b_uv, 0.0).rgb;
   let color_rgb = vec3<f32>(rcol.r, gcol.g, bcol.b);
 
-  // Fade logic (duration influenced by preset)
-  let fade_in = smoothstep(0.0, fade_duration, zoom_progress);
-  let fade_out = 1.0 - smoothstep(1.0 - fade_duration, 1.0, zoom_progress);
+  // Fade based on how far we've scrolled: new objects fade in, old objects fade out
+  let fade_in_dist = 0.1;
+  let fade_out_dist = 0.9;
+  let normalized_scroll = fract(scroll_offset);
+  let fade_in = smoothstep(0.0, fade_in_dist, normalized_scroll);
+  let fade_out = 1.0 - smoothstep(fade_out_dist, 1.0, normalized_scroll);
   let alpha = fade_in * fade_out;
 
-  // Slight tonemapping / contrast boost for punch
-  let contrast = 0.15;
-  let punched = mix(color_rgb, color_rgb * color_rgb * (3.0 - 2.0 * color_rgb), contrast);
+  // Optional depth-based brightness for added 3D perception
+  // Foreground (close) objects slightly brighter, background (far) objects slightly dimmer
+  let depth_brightness = mix(1.1, 0.85, parallax_factor);
+  let final_color = color_rgb * depth_brightness;
 
-  return vec4<f32>(punched, alpha);
+  return vec4<f32>(final_color, alpha);
 }
 
 
@@ -137,7 +119,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 
   // --- Depth Texture Update ---
-  // This logic needs to mirror the main color logic PRECISELY to stay in sync.
+  // Mirror the radial scroll logic for depth to stay in sync with color motion
   let fg_speed = u.zoom_params.x;
   let bg_speed = u.zoom_params.y;
   let parallax_strength = u.zoom_params.z;
@@ -145,18 +127,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let parallax_factor = pow(1.0 - static_depth, parallax_strength);
   let per_pixel_speed = mix(bg_speed, fg_speed, parallax_factor);
 
-  // Use the same breathing intensity calculation
-  let base_intensity = 2.0;
-  let breath_amount = 0.5;
-  let breath_speed = 0.8;
-  let zoom_intensity = base_intensity + sin(zoom_time * breath_speed) * breath_amount;
+  // Use same scroll offset as color layer
+  let scroll_offset = zoom_time * per_pixel_speed;
+  let direction_from_center = displaced_uv - zoom_center;
+  let radial_scale = 1.0 + scroll_offset * 0.5;
+  let scrolled_uv = zoom_center + direction_from_center * radial_scale;
 
-  let main_zoom_progress = fract(zoom_time * per_pixel_speed);
-  let main_scale = 1.0 + (1.0 - main_zoom_progress) * zoom_intensity;
-
-  let transformed_uv = (displaced_uv - zoom_center) * main_scale + zoom_center;
-  // Use the same wrapping for the depth texture!
-  let wrapped_uv = ping_pong_v2(transformed_uv);
+  // Seamless wrap for depth
+  let wrapped_uv = ping_pong_v2(scrolled_uv);
   let transformed_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, wrapped_uv, 0.0).r;
 
   textureStore(writeDepthTexture, global_id.xy, vec4<f32>(transformed_depth, 0.0, 0.0, 0.0));
