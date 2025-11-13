@@ -5,8 +5,8 @@
 @group(0) @binding(2) var<uniform> u : vec4<f32>; // time, (others unused)
 
 struct VertexOutput {
-  @builtin(position) position: vec4<f32>,
-  @location(0) fragUV: vec2<f32>,
+  @builtin(position) position: vec4<f32>;
+  @location(0) fragUV: vec2<f32>;
 };
 
 @vertex

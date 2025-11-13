@@ -5,9 +5,9 @@
 @group(0) @binding(1) var u_videoTexture: texture_2d<f32>;
 
 struct Uniforms {
-  resolutions: vec4<f32>; // canvas.xy, source.xy
-  config: vec4<f32>;      // time, rippleCount, mode, unused
-  stainedParams: vec4<f32>; // cellSize, edgeWidth, refraction, colorStrength
+  resolutions: vec4<f32>, // canvas.xy, source.xy
+  config: vec4<f32>,      // time, rippleCount, mode, unused
+  stainedParams: vec4<f32>, // cellSize, edgeWidth, refraction, colorStrength
   // ripples follow in buffer (we don't read them here)
 };
 @group(0) @binding(2) var<uniform> u : Uniforms;
