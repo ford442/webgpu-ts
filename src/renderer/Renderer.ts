@@ -1057,14 +1057,13 @@ export class Renderer {
             else entries.forEach(e => console.log(`  binding ${e.binding}: resource =`, e.resource));
 
             // Report mismatches
-            for (const b of expectedMap.keys()) {
-                const kind = expectedMap.get(b);
+            expectedMap.forEach((kind, b) => {
                 const present = providedMap.has(b);
                 if (!present) console.warn(`[Renderer] Shader expects binding ${b} (${kind}) but no entry provided.`);
-            }
-            for (const b of providedMap.keys()) {
+            });
+            providedMap.forEach((_res, b) => {
                 if (!expectedMap.has(b)) console.warn(`[Renderer] Provided binding ${b} was not expected by shader '${pipelineKey}'.`);
-            }
+            });
 
             // Helpful hint for common case: sampler expected but not provided
             for (const p of parsed) {
