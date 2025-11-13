@@ -417,24 +417,30 @@ export class Renderer {
 
     private async createPipelines(): Promise<void> {
         const shaderNames = [
-            'galaxy.wgsl', 'imageVideo.wgsl', 'video-effect.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
+            'galaxy.wgsl', 'imageVideo.wgsl', 'video-effect.wgsl', 'video-stained.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
             'liquid-alt.wgsl',
             'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'vortex.wgsl'
         ];
 
+        // Helper: fetch shader from remote, fallback to local /shaders when offline/CORS
+        const fetchShader = async (name: string): Promise<string> => {
+            try {
+                const r = await fetch(`${this.shaderBaseUrl}${name}`);
+                if (r.ok) return await r.text();
+            } catch {}
+            const rl = await fetch(`shaders/${name}`);
+            return await rl.text();
+        };
         // Fetch shader sources in parallel
-        const shaderCodes = await Promise.all(
-            shaderNames.map(name => fetch(`${this.shaderBaseUrl}${name}`).then(res => res.text()))
-        );
+        const shaderCodes = await Promise.all(shaderNames.map(fetchShader));
 
-        // (Removed the block that attempted to fetch .json manifests here)
-
-        const [galaxyCode, imageVideoCode, videoEffectCode, liquidV1Code, liquidCode, liquidAltCode, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
+        const [galaxyCode, imageVideoCode, videoEffectCode, videoStainedCode, liquidV1Code, liquidCode, liquidAltCode, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
 
         // Save shader sources for later automatic binding attempts
         this.shaderSources.set('galaxy', galaxyCode);
         this.shaderSources.set('imageVideo', imageVideoCode);
         this.shaderSources.set('videoEffect', videoEffectCode);
+        this.shaderSources.set('videoStained', videoStainedCode);
         this.shaderSources.set('liquidV1', liquidV1Code);
         this.shaderSources.set('liquid', liquidCode);
         this.shaderSources.set('computeAlt', liquidAltCode);
@@ -448,6 +454,7 @@ export class Renderer {
         const galaxyModule = this.device.createShaderModule({code: galaxyCode});
         const imageVideoModule = this.device.createShaderModule({code: imageVideoCode});
         const videoEffectModule = this.device.createShaderModule({code: videoEffectCode});
+        const videoStainedModule = this.device.createShaderModule({code: videoStainedCode});
         const liquidV1Module = this.device.createShaderModule({code: liquidV1Code});
         const liquidModule = this.device.createShaderModule({code: liquidCode});
         const liquidAltModule = this.device.createShaderModule({code: liquidAltCode});
@@ -568,6 +575,15 @@ export class Renderer {
         });
 
         this.pipelines.set('videoEffect', videoEffectPipeline);
+
+        // Create the video-stained render pipeline
+        const videoStainedPipeline = await this.device.createRenderPipelineAsync({
+            layout: videoPipelineLayout,
+            vertex: { module: imageVideoModule, entryPoint: 'vs_main' },
+            fragment: { module: videoStainedModule, entryPoint: 'fs_main', targets: [{ format: this.presentationFormat }] },
+            primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology }
+        });
+        this.pipelines.set('videoStained', videoStainedPipeline);
     }
 
     private createBindGroups(): void {
@@ -808,6 +824,19 @@ export class Renderer {
                     passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
                     passEncoder.draw(4);
                 }
+                break;
+            case 'video-stained': {
+                const videoStainedPipeline = this.pipelines.get('videoStained') as GPURenderPipeline | undefined;
+                if (videoStainedPipeline && this.bindGroups.has('video')) {
+                    const ua = new Float32Array(8);
+                    ua.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
+                    ua.set([currentTime, 0, 0, 0], 4);
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, ua);
+                    passEncoder.setPipeline(videoStainedPipeline);
+                    passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
+                    passEncoder.draw(4);
+                }
+            }
                 break;
             case 'video-effect':
                 // Use the dedicated videoEffect pipeline but reuse the same bind group/uniform layout as 'video'
