@@ -32,6 +32,23 @@ export class Renderer {
     private shaderBaseUrl: string = 'https://glsl.1ink.us/effects/';
     // Store shader sources keyed by pipeline key so we can parse WGSL for bindings
     private shaderSources = new Map<string, string>();
+    // Optional per-shader manifest data (parsed JSON) keyed by pipeline key
+    private shaderManifests = new Map<string, any>();
+    // Default binding map for compute pipelines (binding index -> logical resource key)
+    private defaultComputeBindingMap: Record<number, string> = {
+        0: 'filteringSampler',
+        1: 'imageTexture',
+        2: 'writeTexture',
+        3: 'computeUniformBuffer',
+        4: 'depthTextureRead',
+        5: 'nonFilteringSampler',
+        6: 'depthTextureWrite',
+        7: 'dataTextureA',
+        8: 'dataTextureB',
+        9: 'dataTextureC',
+        10: 'extraBuffer',
+        11: 'comparisonSampler'
+    };
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -87,6 +104,12 @@ export class Renderer {
 
         const kind = parsed.kind;
         try {
+            // If binding index matches a default mapping for compute pipelines, prefer it
+            if (pipelineKey.startsWith('compute') && this.defaultComputeBindingMap[parsed.binding]) {
+                const key = this.defaultComputeBindingMap[parsed.binding];
+                const r = this.resolveResourceByKey(key);
+                if (r) return r;
+            }
             if (kind === 'sampler') {
                 return res.filteringSampler || res.nonFilteringSampler || null;
             }
@@ -129,23 +152,89 @@ export class Renderer {
         return null;
     }
 
+    private resolveResourceByKey(key: string): GPUBindingResource | null {
+        if (!key) return null;
+        const k = key.toString();
+        try {
+            if (k.includes('Sampler')) {
+                if (k === 'comparisonSampler') return this.comparisonSampler || null;
+                if (k === 'nonFilteringSampler') return this.nonFilteringSampler || this.filteringSampler || null;
+                return this.filteringSampler || this.nonFilteringSampler || null;
+            }
+            if (k.includes('Texture')) {
+                const tex = (this as any)[k] as GPUTexture | undefined;
+                if (tex && typeof tex.createView === 'function') return tex.createView();
+                return null;
+            }
+            if (k.includes('Buffer') || k.endsWith('Buffer') || k.endsWith('UniformBuffer')) {
+                const buf = (this as any)[k] as GPUBuffer | undefined;
+                if (buf) return {buffer: buf};
+                return null;
+            }
+            // fallback: check known names
+            switch (k) {
+                case 'extraBuffer': return this.extraBuffer ? {buffer: this.extraBuffer} : null;
+                case 'computeUniformBuffer': return this.computeUniformBuffer ? {buffer: this.computeUniformBuffer} : null;
+                case 'imageVideoUniformBuffer': return this.imageVideoUniformBuffer ? {buffer: this.imageVideoUniformBuffer} : null;
+                case 'galaxyUniformBuffer': return this.galaxyUniformBuffer ? {buffer: this.galaxyUniformBuffer} : null;
+                case 'videoTexture': return this.videoTexture ? this.videoTexture.createView() : null;
+                case 'imageTexture': return this.imageTexture ? this.imageTexture.createView() : null;
+                case 'writeTexture': return this.writeTexture ? this.writeTexture.createView() : null;
+                case 'dataTextureA': return this.dataTextureA ? this.dataTextureA.createView() : null;
+                case 'dataTextureB': return this.dataTextureB ? this.dataTextureB.createView() : null;
+                case 'dataTextureC': return this.dataTextureC ? this.dataTextureC.createView() : null;
+                case 'depthTextureRead': return this.depthTextureRead ? this.depthTextureRead.createView() : null;
+                case 'depthTextureWrite': return this.depthTextureWrite ? this.depthTextureWrite.createView() : null;
+            }
+        } catch (e) {
+            return null;
+        }
+        return null;
+    }
+
     private tryCreateBindGroupFromShader(bindGroupKey: string, pipelineKey: string): boolean {
         const pipeline = this.pipelines.get(pipelineKey);
         if (!pipeline) return false;
         const code = this.shaderSources.get(pipelineKey);
-        if (!code) return false;
-        const parsed = this.parseWGSLBindings(code).filter(p => p.group === 0);
-        if (parsed.length === 0) return false;
+        const manifest = this.shaderManifests.get(pipelineKey);
         const layout = (pipeline as unknown as { getBindGroupLayout(index: number): GPUBindGroupLayout }).getBindGroupLayout(0);
         const entries: Array<{binding: number, resource: GPUBindingResource}> = [];
-        for (const p of parsed) {
-            const resource = this.resolveResourceForParsedBinding(p, pipelineKey);
-            if (!resource) {
-                // fail fast if we can't satisfy a required binding
-                return false;
+
+        // 1) If a manifest exists, use it (explicit mapping binding -> resourceKey)
+        if (manifest && manifest.bindings) {
+            for (const [k, resourceKey] of Object.entries(manifest.bindings)) {
+                const binding = Number(k);
+                const resource = this.resolveResourceByKey(resourceKey as string);
+                if (!resource) return false;
+                entries.push({binding, resource});
             }
-            entries.push({binding: p.binding, resource});
+        } else {
+            // 2) Try to parse WGSL bindings
+            if (code) {
+                const parsed = this.parseWGSLBindings(code).filter(p => p.group === 0);
+                for (const p of parsed) {
+                    const resource = this.resolveResourceForParsedBinding(p, pipelineKey);
+                    if (!resource) {
+                        // if a parsed binding can't be satisfied, attempt default map fallback below
+                        continue;
+                    }
+                    entries.push({binding: p.binding, resource});
+                }
+            }
+
+            // 3) If entries are incomplete for compute pipelines, use default binding map
+            if (pipelineKey.startsWith('compute')) {
+                for (const [bindIdxStr, key] of Object.entries(this.defaultComputeBindingMap)) {
+                    const binding = Number(bindIdxStr);
+                    // skip if we already filled this binding
+                    if (entries.find(e => e.binding === binding)) continue;
+                    const resource = this.resolveResourceByKey(key);
+                    if (!resource) continue;
+                    entries.push({binding, resource});
+                }
+            }
         }
+
         try {
             const bg = this.device.createBindGroup({layout, entries});
             this.bindGroups.set(bindGroupKey, bg);
@@ -332,9 +421,26 @@ export class Renderer {
             'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'vortex.wgsl'
         ];
 
+        // Fetch shader sources and optional manifest files in parallel
         const shaderCodes = await Promise.all(
             shaderNames.map(name => fetch(`${this.shaderBaseUrl}${name}`).then(res => res.text()))
         );
+
+        // Try to fetch per-shader manifests at `${shaderBaseUrl}${name}.json` (e.g., galaxy.wgsl.json)
+        await Promise.all(shaderNames.map(async (name, i) => {
+            const url = `${this.shaderBaseUrl}${name}.json`;
+            try {
+                const r = await fetch(url);
+                if (!r.ok) return;
+                const j = await r.json();
+                // map pipeline key based on same ordering we use later
+                const keyMap = ['galaxy','imageVideo','liquidV1','liquid','computeZoom','texture','liquidPerspective','vortex'];
+                const key = keyMap[i] || name;
+                this.shaderManifests.set(key, j);
+            } catch (e) {
+                // ignore
+            }
+        }));
 
         const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
 
