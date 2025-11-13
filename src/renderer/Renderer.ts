@@ -1057,11 +1057,12 @@ export class Renderer {
             else entries.forEach(e => console.log(`  binding ${e.binding}: resource =`, e.resource));
 
             // Report mismatches
-            for (const [b, kind] of expectedMap) {
+            for (const b of expectedMap.keys()) {
+                const kind = expectedMap.get(b);
                 const present = providedMap.has(b);
                 if (!present) console.warn(`[Renderer] Shader expects binding ${b} (${kind}) but no entry provided.`);
             }
-            for (const [b, res] of providedMap) {
+            for (const b of providedMap.keys()) {
                 if (!expectedMap.has(b)) console.warn(`[Renderer] Provided binding ${b} was not expected by shader '${pipelineKey}'.`);
             }
 
