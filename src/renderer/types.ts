@@ -2,7 +2,8 @@ export type RenderMode =
   'shader' | 
   'image' | 
   'video' | 
-  'ripple' | 
+  'video-effect' |
+  'ripple' |
   'liquid-v1' | 
   'liquid' | 
   'liquid-zoom' | 

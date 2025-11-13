@@ -417,7 +417,7 @@ export class Renderer {
 
     private async createPipelines(): Promise<void> {
         const shaderNames = [
-            'galaxy.wgsl', 'imageVideo.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
+            'galaxy.wgsl', 'imageVideo.wgsl', 'video-effect.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
             'liquid-alt.wgsl',
             'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'vortex.wgsl'
         ];
@@ -429,11 +429,12 @@ export class Renderer {
 
         // (Removed the block that attempted to fetch .json manifests here)
 
-        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidAltCode, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
+        const [galaxyCode, imageVideoCode, videoEffectCode, liquidV1Code, liquidCode, liquidAltCode, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
 
         // Save shader sources for later automatic binding attempts
         this.shaderSources.set('galaxy', galaxyCode);
         this.shaderSources.set('imageVideo', imageVideoCode);
+        this.shaderSources.set('videoEffect', videoEffectCode);
         this.shaderSources.set('liquidV1', liquidV1Code);
         this.shaderSources.set('liquid', liquidCode);
         this.shaderSources.set('computeAlt', liquidAltCode);
@@ -446,6 +447,7 @@ export class Renderer {
 
         const galaxyModule = this.device.createShaderModule({code: galaxyCode});
         const imageVideoModule = this.device.createShaderModule({code: imageVideoCode});
+        const videoEffectModule = this.device.createShaderModule({code: videoEffectCode});
         const liquidV1Module = this.device.createShaderModule({code: liquidV1Code});
         const liquidModule = this.device.createShaderModule({code: liquidCode});
         const liquidAltModule = this.device.createShaderModule({code: liquidAltCode});
@@ -486,7 +488,7 @@ export class Renderer {
         };
 
         const [
-            galaxyPipeline, imageVideoPipeline, liquidPipeline
+            galaxyPipeline, imageVideoPipeline, texturePipeline
         ] = await Promise.all([
             this.device.createRenderPipelineAsync({
                 layout: 'auto', ...commonConfig,
@@ -504,6 +506,11 @@ export class Renderer {
                 fragment: {...commonConfig.fragment, module: textureModule, entryPoint: 'fs_main'}
             }),
         ]);
+
+        this.pipelines.set('galaxy', galaxyPipeline);
+        this.pipelines.set('imageVideo', imageVideoPipeline);
+        // 'liquid' render pipeline uses the textureModule pipeline (historical naming)
+        this.pipelines.set('liquid', texturePipeline);
 
         // 4. Create ALL compute pipelines using the SHARED layout
         const [
@@ -534,17 +541,24 @@ export class Renderer {
                 layout: computePipelineLayout,
                 compute: {module: liquidAltModule, entryPoint: 'main'}
             })
-        ]);
+        );
 
-        this.pipelines.set('galaxy', galaxyPipeline);
-        this.pipelines.set('imageVideo', imageVideoPipeline);
-        this.pipelines.set('liquid', liquidPipeline);
         this.pipelines.set('computeV1', computeV1);
         this.pipelines.set('compute', compute);
         this.pipelines.set('computeZoom', computeZoom);
         this.pipelines.set('computePerspective', computePerspective);
         this.pipelines.set('computeVortex', computeVortex);
         this.pipelines.set('computeAlt', computeAlt);
+
+        // Create the video-effect render pipeline (separate await to keep Promise lists simple)
+        const videoEffectPipeline = await this.device.createRenderPipelineAsync({
+            layout: 'auto',
+            vertex: { module: imageVideoModule, entryPoint: 'vs_main' },
+            fragment: { module: videoEffectModule, entryPoint: 'fs_main', targets: [{ format: this.presentationFormat }] },
+            primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology }
+        });
+
+        this.pipelines.set('videoEffect', videoEffectPipeline);
     }
 
     private createBindGroups(): void {
@@ -779,6 +793,19 @@ if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler |
                     uniformArray.set([currentTime, 0, 0, 0], 4);
                     this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
                     passEncoder.setPipeline(imageVideoPipeline);
+                    passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
+                    passEncoder.draw(4);
+                }
+                break;
+            case 'video-effect':
+                // Use the dedicated videoEffect pipeline but reuse the same bind group/uniform layout as 'video'
+                const videoEffectPipeline = this.pipelines.get('videoEffect') as GPURenderPipeline | undefined;
+                if (videoEffectPipeline && this.bindGroups.has('video')) {
+                    const ua = new Float32Array(8);
+                    ua.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
+                    ua.set([currentTime, 0, 0, 0], 4);
+                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, ua);
+                    passEncoder.setPipeline(videoEffectPipeline);
                     passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
                     passEncoder.draw(4);
                 }

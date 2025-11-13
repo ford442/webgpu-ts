@@ -48,6 +48,7 @@ const Controls: React.FC<ControlsProps> = ({
                     <option value="image">Static Image</option>
                     <option value="ripple">Ripple Effect</option>
                     <option value="video">Video Texture</option>
+                    <option value="video-effect">Video Effect (Realtime)</option>
                     <option value="liquid-v1">Liquid (Ambient)</option>
                 </select>
             </div>
