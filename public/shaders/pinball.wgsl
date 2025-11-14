@@ -2,14 +2,14 @@
 @group(0) @binding(1) var u_texture: texture_2d<f32>;
 
 struct PinballUniforms {
-  ballPos: vec2<f32>;
-  ballVel: vec2<f32>;
-  leftFlipperActive: f32;
-  rightFlipperActive: f32;
-  canvasSize: vec2<f32>;
-  audioFreq: f32;        // 0..1 audio intensity
-  time: f32;
-  _pad: vec2<f32>;       // padding for alignment
+  ballPos: vec2<f32>,
+  ballVel: vec2<f32>,
+  leftFlipperActive: f32,
+  rightFlipperActive: f32,
+  canvasSize: vec2<f32>,
+  audioFreq: f32,       // 0..1 audio intensity
+  time: f32,
+  _pad: vec2<f32>,       // padding for alignment
 };
 
 @group(0) @binding(2) var<uniform> u: PinballUniforms;
