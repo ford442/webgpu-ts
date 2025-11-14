@@ -27,6 +27,8 @@ function App() {
   const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
   const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 });
   const [isMouseDown, setIsMouseDown] = useState(false);
+  const [isAudioRunning, setIsAudioRunning] = useState(false);
+  const [audioUrl, setAudioUrl] = useState('https://stream.zeno.fm/ywcmn7hpha0uv');
 
   // Stained-glass tunables
   const [cellSize, setCellSize] = useState(0.035);
@@ -274,6 +276,33 @@ function App() {
       }
   }, [depthEstimator, runDepthAnalysis]);
 
+  const startAudio = useCallback(async () => {
+      if (!rendererRef.current) { setStatus('Renderer not ready; cannot start audio.'); return; }
+      try {
+          setStatus('Initializing audio stream...');
+          const ok = await rendererRef.current.initAudio(audioUrl);
+          if (!ok) { setStatus('Failed to initialize audio analyzer. See console for details.'); return; }
+          await rendererRef.current.startAudio();
+          setIsAudioRunning(true);
+          setStatus('Audio started.');
+      } catch (e:any) {
+          console.error('Failed to start audio:', e);
+          setStatus('Failed to start audio. Check console for details.');
+      }
+  }, [audioUrl]);
+
+  const stopAudio = useCallback(() => {
+      if (!rendererRef.current) { setStatus('Renderer not ready.'); return; }
+      try {
+          rendererRef.current.stopAudio();
+          setIsAudioRunning(false);
+          setStatus('Audio stopped.');
+      } catch (e:any) {
+          console.error('Failed to stop audio:', e);
+          setStatus('Failed to stop audio.');
+      }
+  }, []);
+
   useEffect(() => {
       let intervalId: NodeJS.Timeout | null = null;
       if (autoChangeEnabled) {
@@ -345,6 +374,11 @@ function App() {
             setColorStrength={setColorStrength}
             zoomPreset={zoomPreset}
             setZoomPreset={setZoomPreset}
+            audioUrl={audioUrl}
+            setAudioUrl={setAudioUrl}
+            startAudio={startAudio}
+            stopAudio={stopAudio}
+            audioRunning={isAudioRunning}
         />
         <WebGPUCanvas
             rendererRef={rendererRef}

@@ -31,6 +31,12 @@ interface ControlsProps {
     // Zoom preset for zoom effects: 0=subtle,1=dreamy,2=aggressive
     zoomPreset: number;
     setZoomPreset: (v: number) => void;
+    // Audio controls
+    audioUrl: string;
+    setAudioUrl: (url: string) => void;
+    startAudio: () => Promise<void>;
+    stopAudio: () => void;
+    audioRunning: boolean;
 }
 
 const Controls: React.FC<ControlsProps> = ({
@@ -47,6 +53,7 @@ const Controls: React.FC<ControlsProps> = ({
     refraction, setRefraction,
     colorStrength, setColorStrength,
     zoomPreset, setZoomPreset,
+    audioUrl, setAudioUrl, startAudio, stopAudio, audioRunning,
 }) => {
     // The previous logic for `isImageMode` is no longer needed since you are always showing these controls.
 
@@ -71,6 +78,7 @@ const Controls: React.FC<ControlsProps> = ({
                     <option value="video-effect">Video Effect (Realtime)</option>
                     <option value="video-stained">Video Effect (Stained Glass)</option>
                     <option value="liquid-v1">Liquid (Ambient)</option>
+                    <option value="pinball">Pinball (Game)</option>
                 </select>
             </div>
             <div className="control-group">
@@ -130,6 +138,14 @@ const Controls: React.FC<ControlsProps> = ({
             <div className="control-group">
                 <label htmlFor="color-strength">Color Strength: {colorStrength.toFixed(2)}</label>
                 <input id="color-strength" type="range" min="0.0" max="2.0" step="0.01" value={colorStrength} onChange={(e) => setColorStrength(Number(e.target.value))} />
+            </div>
+            <div className="control-group">
+                <label htmlFor="audio-url">Audio Stream URL:</label>
+                <input id="audio-url" type="text" value={audioUrl} onChange={(e) => setAudioUrl(e.target.value)} style={{ width: '100%' }} />
+                <div style={{marginTop: 6}}>
+                    <button onClick={() => startAudio()} disabled={audioRunning}>Start Audio</button>
+                    <button onClick={() => stopAudio()} disabled={!audioRunning} style={{marginLeft:8}}>Stop Audio</button>
+                </div>
             </div>
         </div>
     );

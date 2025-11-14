@@ -1,4 +1,5 @@
 import {RenderMode} from './types';
+import { AudioAnalyzer, AudioFrequencyData } from '../audio/AudioAnalyzer';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -56,6 +57,72 @@ export class Renderer {
     private stainedRefraction: number = 0.02;
     private zoomPreset: number = 1;
     private musicGuiRectsBuffer!: GPUBuffer; // holds 6 vec4<f32> rects in UV space
+    // --- Pinball game state + uniforms ---
+    private pinballUniformBuffer!: GPUBuffer;
+    private pinballBallPos: [number, number] = [0.5, 0.25];
+    private pinballBallVel: [number, number] = [0.0, 0.0];
+    private pinballGravity: number = -400.0; // units: normalized coords per second^2 (tweakable)
+    private pinballLeftFlipper: boolean = false;
+    private pinballRightFlipper: boolean = false;
+    private lastFrameTime: number = 0;
+
+    // --- Audio Integration ---
+    private audioAnalyzer: AudioAnalyzer | null = null;
+    private currentAudioData: AudioFrequencyData | null = null;
+
+    /**
+     * Initialize audio capture from a stream URL
+     */
+    public async initAudio(streamUrl: string): Promise<boolean> {
+        try {
+            this.audioAnalyzer = new AudioAnalyzer();
+            const success = await this.audioAnalyzer.init(streamUrl);
+            if (success) {
+                console.log('[Renderer] Audio analyzer initialized successfully');
+                return true;
+            }
+            console.warn('[Renderer] Audio analyzer init returned false');
+            return false;
+        } catch (e) {
+            console.error('[Renderer] Failed to initialize audio analyzer:', e);
+            return false;
+        }
+    }
+
+    /**
+     * Start audio playback and analysis
+     */
+    public async startAudio(): Promise<void> {
+        if (!this.audioAnalyzer) return;
+        await this.audioAnalyzer.start();
+    }
+
+    /**
+     * Stop audio playback
+     */
+    public stopAudio(): void {
+        if (!this.audioAnalyzer) return;
+        this.audioAnalyzer.stop();
+    }
+
+    /**
+     * Get current audio frequency data (call during render loop)
+     */
+    public getAudioFrequencyData(): AudioFrequencyData | null {
+        if (!this.audioAnalyzer) return null;
+        this.currentAudioData = this.audioAnalyzer.getFrequencyData();
+        return this.currentAudioData;
+    }
+
+    /**
+     * Cleanup audio resources
+     */
+    public disposeAudio(): void {
+        if (!this.audioAnalyzer) return;
+        this.audioAnalyzer.dispose();
+        this.audioAnalyzer = null;
+        this.currentAudioData = null;
+    }
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -448,6 +515,11 @@ export class Renderer {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
             mappedAtCreation: false,
         });
+        // Pinball uniform buffer (ball pos/vel, flipper states, canvas size) - allocate 64 bytes for alignment
+        this.pinballUniformBuffer = this.device.createBuffer({
+            size: 64,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
         await this.loadRandomImage();
     }
 
@@ -493,6 +565,8 @@ export class Renderer {
             'liquid-alt2.wgsl',
             'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'vortex.wgsl'
         ];
+        // include pinball shader for the new game mode
+        shaderNames.push('pinball.wgsl');
 
         // Helper: fetch shader from remote, fallback to local /shaders when offline/CORS
         const fetchShader = async (name: string): Promise<string> => {
@@ -525,6 +599,7 @@ export class Renderer {
         this.shaderSources.set('texture', textureCode);
         this.shaderSources.set('liquidPerspective', liquidPerspectiveCode);
         this.shaderSources.set('vortex', vortexCode);
+        this.shaderSources.set('pinball', await fetchShader('pinball.wgsl'));
 
         const galaxyModule = this.device.createShaderModule({code: galaxyCode});
         const galaxyAltModule = this.device.createShaderModule({code: galaxyAltCode});
@@ -540,6 +615,8 @@ export class Renderer {
         const textureModule = this.device.createShaderModule({code: textureCode});
         const liquidPerspectiveModule = this.device.createShaderModule({code: liquidPerspectiveCode});
         const vortexModule = this.device.createShaderModule({code: vortexCode});
+        const pinballCode = this.shaderSources.get('pinball')!;
+        const pinballModule = this.device.createShaderModule({code: pinballCode});
 
         // 1. Create ONE shared bind group layout for ALL compute shaders
         const videoBindGroupLayout = this.device.createBindGroupLayout({
@@ -681,6 +758,14 @@ export class Renderer {
             primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology }
         });
         this.pipelines.set('videoStained', videoStainedPipeline);
+        // Pinball render pipeline (simple textured fullscreen pipeline with a small uniform set)
+        const pinballPipeline = await this.device.createRenderPipelineAsync({
+            layout: videoPipelineLayout,
+            vertex: { module: pinballModule, entryPoint: 'vs_main' },
+            fragment: { module: pinballModule, entryPoint: 'fs_main', targets: [{ format: this.presentationFormat }] },
+            primitive: { topology: 'triangle-strip' as GPUPrimitiveTopology }
+        });
+        this.pipelines.set('pinball', pinballPipeline);
         // Now that pipelines exist, create bind groups so compute bind group can be constructed
         this.createBindGroups();
     }
@@ -742,6 +827,16 @@ export class Renderer {
             ];
             this.logBindGroupDiagnostics('musicGuiImage', entries as any);
             this.bindGroups.set('musicGuiImage', this.device.createBindGroup({layout: this.pipelines.get('musicGui')!.getBindGroupLayout(0), entries}));
+        }
+        // Pinball bind group: sampler, texture, uniform
+        if (this.pipelines.has('pinball')) {
+            const entries = [
+                { binding: 0, resource: this.filteringSampler },
+                { binding: 1, resource: this.imageTexture.createView() },
+                { binding: 2, resource: { buffer: this.pinballUniformBuffer } }
+            ];
+            this.logBindGroupDiagnostics('pinball', entries as any);
+            this.bindGroups.set('pinball', this.device.createBindGroup({ layout: this.pipelines.get('pinball')!.getBindGroupLayout(0), entries }));
         }
         {
             const entries = [{binding: 0, resource: this.filteringSampler}, {binding: 1, resource: this.imageTexture.createView()}, {binding: 2, resource: {buffer: this.imageVideoUniformBuffer}}];
@@ -1046,9 +1141,48 @@ export class Renderer {
                     passEncoder.draw(4);
                 }
                 break;
-        }
-        passEncoder.end();
-        this.device.queue.submit([commandEncoder.finish()]);
+            case 'pinball': {
+                const pinballPipeline = this.pipelines.get('pinball') as GPURenderPipeline | undefined;
+                const pinballBG = this.bindGroups.get('pinball');
+                if (pinballPipeline && pinballBG) {
+                    // simple CPU-side physics update
+                    const now = performance.now() / 1000.0;
+                    const dt = this.lastFrameTime ? Math.min(0.033, now - this.lastFrameTime) : 0.016;
+                    this.lastFrameTime = now;
+                    // gravity (downwards in Y in pixel-space, but our coords are 0..1 top-to-bottom)
+                    // convert gravity to units per second^2 in UV space: assume pinballGravity is pixels/sec^2; convert
+                    const g = this.pinballGravity / Math.max(1, this.canvas.height);
+                    // integrate velocity
+                    this.pinballBallVel[1] += g * dt;
+                    // simple flipper impulse
+                    if (this.pinballLeftFlipper) this.pinballBallVel[0] -= 0.6;
+                    if (this.pinballRightFlipper) this.pinballBallVel[0] += 0.6;
+                    // integrate position
+                    this.pinballBallPos[0] += this.pinballBallVel[0] * dt;
+                    this.pinballBallPos[1] += this.pinballBallVel[1] * dt;
+                    // simple bounds and bounce
+                    if (this.pinballBallPos[0] < 0.02) { this.pinballBallPos[0] = 0.02; this.pinballBallVel[0] *= -0.6; }
+                    if (this.pinballBallPos[0] > 0.98) { this.pinballBallPos[0] = 0.98; this.pinballBallVel[0] *= -0.6; }
+                    if (this.pinballBallPos[1] < 0.02) { this.pinballBallPos[1] = 0.02; this.pinballBallVel[1] *= -0.6; }
+                    if (this.pinballBallPos[1] > 0.98) { this.pinballBallPos[1] = 0.98; this.pinballBallVel[1] *= -0.6; }
+
+                    // write uniforms to GPU
+                    const ua = new Float32Array(8); // ballPos.xy, ballVel.xy, left, right, canvasSize.xy
+                    ua[0] = this.pinballBallPos[0]; ua[1] = this.pinballBallPos[1];
+                    ua[2] = this.pinballBallVel[0]; ua[3] = this.pinballBallVel[1];
+                    ua[4] = this.pinballLeftFlipper ? 1.0 : 0.0; ua[5] = this.pinballRightFlipper ? 1.0 : 0.0;
+                    ua[6] = this.canvas.width; ua[7] = this.canvas.height;
+                    this.device.queue.writeBuffer(this.pinballUniformBuffer, 0, ua.buffer as ArrayBuffer);
+
+                    passEncoder.setPipeline(pinballPipeline);
+                    passEncoder.setBindGroup(0, pinballBG);
+                    passEncoder.draw(4);
+                }
+                break;
+            }
+         }
+         passEncoder.end();
+         this.device.queue.submit([commandEncoder.finish()]);
     }
 
     private logBindGroupDiagnostics(pipelineKey: string, entries: Array<{binding: number, resource: GPUBindingResource}>) {
@@ -1116,5 +1250,13 @@ export class Renderer {
         } catch (err) {
             console.error('[Renderer] Failed to run bind-group diagnostics', err);
         }
+    }
+
+    /**
+     * Allow external callers to set flipper state (from keyboard handlers)
+     */
+    public setPinballFlipperState(left: boolean, right: boolean) {
+        this.pinballLeftFlipper = left;
+        this.pinballRightFlipper = right;
     }
 }

@@ -25,7 +25,8 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const renderer = new Renderer(canvas);
-        
+        let keyDownHandler: ((e: KeyboardEvent) => void) | null = null;
+        let keyUpHandler: ((e: KeyboardEvent) => void) | null = null;
         (async () => {
             const success = await renderer.init();
             if (success) {
@@ -40,10 +41,28 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
                 videoRef.current.autoplay = true;
                 videoRef.current.playsInline = true;
                 await videoRef.current.play().catch(console.error);
+
+                // Keyboard handlers for pinball flippers
+                keyDownHandler = (e: KeyboardEvent) => {
+                    if (!rendererRef.current) return;
+                    if (e.code === 'ArrowLeft' || e.code === 'KeyA') rendererRef.current.setPinballFlipperState(true, false);
+                    if (e.code === 'ArrowRight' || e.code === 'KeyD') rendererRef.current.setPinballFlipperState(false, true);
+                };
+                keyUpHandler = (e: KeyboardEvent) => {
+                    if (!rendererRef.current) return;
+                    if (e.code === 'ArrowLeft' || e.code === 'KeyA') rendererRef.current.setPinballFlipperState(false, false);
+                    if (e.code === 'ArrowRight' || e.code === 'KeyD') rendererRef.current.setPinballFlipperState(false, false);
+                };
+                window.addEventListener('keydown', keyDownHandler);
+                window.addEventListener('keyup', keyUpHandler);
             }
         })();
-        return () => cancelAnimationFrame(animationFrameId.current);
-    }, [rendererRef]); 
+        return () => {
+            cancelAnimationFrame(animationFrameId.current);
+            if (keyDownHandler) window.removeEventListener('keydown', keyDownHandler as EventListener);
+            if (keyUpHandler) window.removeEventListener('keyup', keyUpHandler as EventListener);
+        };
+    }, [rendererRef]);
     
  useEffect(() => {
         let active = true;
