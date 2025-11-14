@@ -105,7 +105,8 @@ fn drawBumper(uv: vec2<f32>, center: vec2<f32>, radius: f32, activeStrength: f32
 @fragment
 fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
     // background sample
-    var color:vec3<f32> = vec3f(textureSample(u_texture, u_sampler, fragUV).rgb);
+    // sample background color (rgb) from texture
+    var color: vec3<f32> = textureSample(u_texture, u_sampler, fragUV).rgb;
 
     // Draw bumpers (top and bottom center, left and right middle)
     let bumperRadius = 0.04;
@@ -140,4 +141,3 @@ fn fs_main(@location(0) fragUV: vec2<f32>) -> @location(0) vec4<f32> {
 
     return vec4<f32>(color, 1.0);
 }
-
