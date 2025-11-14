@@ -8,6 +8,7 @@ export class Renderer {
     private presentationFormat!: GPUTextureFormat;
     private pipelines = new Map<string, GPURenderPipeline | GPUComputePipeline>();
     private bindGroups = new Map<string, GPUBindGroup>();
+    private videoBindGroupLayout!: GPUBindGroupLayout; // store layout used for sampler/texture/(optional)uniform
     private filteringSampler!: GPUSampler;
     private nonFilteringSampler!: GPUSampler;
     private comparisonSampler!: GPUSampler;
@@ -626,6 +627,7 @@ export class Renderer {
                 { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' as GPUBufferBindingType } },
             ]
         });
+        this.videoBindGroupLayout = videoBindGroupLayout;
         const videoPipelineLayout = this.device.createPipelineLayout({
             bindGroupLayouts: [videoBindGroupLayout]
         });
@@ -830,28 +832,46 @@ export class Renderer {
         }
         // Pinball bind group: sampler, texture, uniform
         if (this.pipelines.has('pinball')) {
-            const entries = [
-                { binding: 0, resource: this.filteringSampler },
-                { binding: 1, resource: this.imageTexture.createView() },
-                { binding: 2, resource: { buffer: this.pinballUniformBuffer } }
-            ];
-            this.logBindGroupDiagnostics('pinball', entries as any);
-            this.bindGroups.set('pinball', this.device.createBindGroup({ layout: this.pipelines.get('pinball')!.getBindGroupLayout(0), entries }));
+            // try with uniform at binding 2, fallback to 0/1 only if layout doesn't expose 2
+            let bg: GPUBindGroup | null = null;
+            try {
+                const entriesFull = [
+                    { binding: 0, resource: this.filteringSampler },
+                    { binding: 1, resource: this.imageTexture.createView() },
+                    { binding: 2, resource: { buffer: this.pinballUniformBuffer } }
+                ];
+                this.logBindGroupDiagnostics('pinball', entriesFull as any);
+                bg = this.device.createBindGroup({ layout: this.pipelines.get('pinball')!.getBindGroupLayout(0), entries: entriesFull });
+            } catch (e) {
+                console.warn('[Renderer] Pinball bind group with uniform (binding 2) failed, retrying without uniform. Error:', e);
+                const entriesLite = [
+                    { binding: 0, resource: this.filteringSampler },
+                    { binding: 1, resource: this.imageTexture.createView() },
+                ];
+                bg = this.device.createBindGroup({ layout: this.pipelines.get('pinball')!.getBindGroupLayout(0), entries: entriesLite });
+            }
+            this.bindGroups.set('pinball', bg!);
         }
         {
-            const entries = [{binding: 0, resource: this.filteringSampler}, {binding: 1, resource: this.imageTexture.createView()}, {binding: 2, resource: {buffer: this.imageVideoUniformBuffer}}];
-            this.logBindGroupDiagnostics('image', entries as any);
-            this.bindGroups.set('image', this.device.createBindGroup({layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries}));
-        }
-        {
-            // Use binding 2 for the texture view and include a small uniform at binding 3 where pipelines expect it.
-            const entries = [
-                { binding: 0, resource: this.filteringSampler },
-                { binding: 2, resource: this.writeTexture.createView() },
-                { binding: 3, resource: { buffer: this.galaxyUniformBuffer } }
-            ];
-            this.logBindGroupDiagnostics('liquid', entries as any);
-            this.bindGroups.set('liquid', this.device.createBindGroup({ layout: this.pipelines.get('liquid')!.getBindGroupLayout(0), entries }));
+            // Image pipeline: try include uniform at binding 2, fallback to only sampler+texture if layout doesn't include 2
+            let bgImage: GPUBindGroup | null = null;
+            try {
+                const entriesImg = [
+                    {binding: 0, resource: this.filteringSampler},
+                    {binding: 1, resource: this.imageTexture.createView()},
+                    {binding: 2, resource: {buffer: this.imageVideoUniformBuffer}},
+                ];
+                this.logBindGroupDiagnostics('image', entriesImg as any);
+                bgImage = this.device.createBindGroup({layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: entriesImg});
+            } catch (e) {
+                console.warn('[Renderer] Image bind group with uniform failed, retrying without uniform. Error:', e);
+                const entriesImgLite = [
+                    {binding: 0, resource: this.filteringSampler},
+                    {binding: 1, resource: this.imageTexture.createView()},
+                ];
+                bgImage = this.device.createBindGroup({layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: entriesImgLite});
+            }
+            this.bindGroups.set('image', bgImage!);
         }
 
         // --- Attempt AUTO-binding for compute pipelines (fallback to manual mega bind group if auto fails) ---
@@ -1166,12 +1186,17 @@ export class Renderer {
                     if (this.pinballBallPos[1] < 0.02) { this.pinballBallPos[1] = 0.02; this.pinballBallVel[1] *= -0.6; }
                     if (this.pinballBallPos[1] > 0.98) { this.pinballBallPos[1] = 0.98; this.pinballBallVel[1] *= -0.6; }
 
-                    // write uniforms to GPU
-                    const ua = new Float32Array(8); // ballPos.xy, ballVel.xy, left, right, canvasSize.xy
+                    // audio overall intensity 0..1
+                    const audioOverall = (this.getAudioFrequencyData()?.overall) ?? 0.0;
+
+                    // write uniforms to GPU (vec2 ballPos, vec2 ballVel, left, right, vec2 canvasSize, audio, time, pad2)
+                    const ua = new Float32Array(12);
                     ua[0] = this.pinballBallPos[0]; ua[1] = this.pinballBallPos[1];
                     ua[2] = this.pinballBallVel[0]; ua[3] = this.pinballBallVel[1];
                     ua[4] = this.pinballLeftFlipper ? 1.0 : 0.0; ua[5] = this.pinballRightFlipper ? 1.0 : 0.0;
                     ua[6] = this.canvas.width; ua[7] = this.canvas.height;
+                    ua[8] = audioOverall; ua[9] = now;
+                    ua[10] = 0.0; ua[11] = 0.0;
                     this.device.queue.writeBuffer(this.pinballUniformBuffer, 0, ua.buffer as ArrayBuffer);
 
                     passEncoder.setPipeline(pinballPipeline);
