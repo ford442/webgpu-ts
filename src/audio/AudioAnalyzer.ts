@@ -16,7 +16,8 @@ export interface AudioFrequencyData {
 export class AudioAnalyzer {
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
-  private mediaSource: MediaAudioElementAudioSourceNode | null = null;
+  // correct DOM type for a media-element based audio source
+  private mediaSource: MediaElementAudioSourceNode | null = null;
   private dataArray: Uint8Array | null = null;
   private isRunning: boolean = false;
   private audioElement: HTMLAudioElement | null = null;
@@ -54,7 +55,8 @@ export class AudioAnalyzer {
 
       // Connect audio element to analyser
       if (!this.mediaSource) {
-        this.mediaSource = this.audioContext.createMediaElementAudioSource(this.audioElement);
+        // use createMediaElementSource (standard) to create a MediaElementAudioSourceNode
+        this.mediaSource = this.audioContext.createMediaElementSource(this.audioElement);
         this.mediaSource.connect(this.analyser);
         this.analyser.connect(this.audioContext.destination);
       }
@@ -123,14 +125,14 @@ export class AudioAnalyzer {
 
     // Normalize to 0..1 and average bands
     const totalBins = this.dataArray.length;
-    const binSize = 256 / this.dataArray.fftSize; // approximate Hz per bin
 
-    // Frequency ranges (approximate based on 44.1kHz sample rate, fftSize 256)
-    // Each bin ~172Hz (44100 / 256)
-    const bassBins = Math.floor((250 * totalBins) / 22050); // 0-250Hz
-    const lowMidBins = Math.floor((500 * totalBins) / 22050); // 250-500Hz
-    const midBins = Math.floor((2000 * totalBins) / 22050); // 500-2kHz
-    const highMidBins = Math.floor((4000 * totalBins) / 22050); // 2-4kHz
+    // Compute bin counts dynamically based on audio context sample rate (Nyquist = sampleRate/2)
+    const sampleRate = this.audioContext ? this.audioContext.sampleRate : 44100;
+    const nyquist = sampleRate / 2;
+    const bassBins = Math.floor((250 / nyquist) * totalBins); // 0-250Hz
+    const lowMidBins = Math.floor((500 / nyquist) * totalBins); // 250-500Hz
+    const midBins = Math.floor((2000 / nyquist) * totalBins); // 500-2kHz
+    const highMidBins = Math.floor((4000 / nyquist) * totalBins); // 2-4kHz
 
     // Average each band
     let bass = 0,
@@ -194,4 +196,3 @@ export class AudioAnalyzer {
     }
   }
 }
-
