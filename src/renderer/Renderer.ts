@@ -813,8 +813,8 @@ export class Renderer {
                 try {
                     const entriesVideo = [
                         {binding: 0, resource: this.filteringSampler},
-                        {binding: 2, resource: this.videoTexture.createView()},
-                        {binding: 3, resource: {buffer: this.imageVideoUniformBuffer}},
+                        {binding: 1, resource: this.videoTexture.createView()},
+                        {binding: 2, resource: {buffer: this.imageVideoUniformBuffer}},
                     ];
                     this.logBindGroupDiagnostics('video', entriesVideo as any);
                     bgVideo = this.device.createBindGroup({layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: entriesVideo});
@@ -822,7 +822,7 @@ export class Renderer {
                     console.warn('[Renderer] Video bind group (with uniform) failed, retrying without uniform. Error:', e);
                     const entriesVideoLite = [
                         {binding: 0, resource: this.filteringSampler},
-                        {binding: 2, resource: this.videoTexture.createView()},
+                        {binding: 1, resource: this.videoTexture.createView()},
                     ];
                     bgVideo = this.device.createBindGroup({layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: entriesVideoLite});
                 }
@@ -873,13 +873,13 @@ export class Renderer {
             this.bindGroups.set('pinball', bg!);
         }
         {
-            // Image pipeline: match imageVideo.wgsl layout (binding0 sampler, binding2 texture, binding3 uniform)
+            // Image pipeline: match imageVideo.wgsl layout (binding0 sampler, binding1 texture, binding2 uniform)
             let bgImage: GPUBindGroup | null = null;
             try {
                 const entriesImg = [
                     {binding: 0, resource: this.filteringSampler},
-                    {binding: 2, resource: this.imageTexture.createView()},
-                    {binding: 3, resource: {buffer: this.imageVideoUniformBuffer}},
+                    {binding: 1, resource: this.imageTexture.createView()},
+                    {binding: 2, resource: {buffer: this.imageVideoUniformBuffer}},
                 ];
                 this.logBindGroupDiagnostics('image', entriesImg as any);
                 bgImage = this.device.createBindGroup({layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: entriesImg});
@@ -887,7 +887,7 @@ export class Renderer {
                 console.warn('[Renderer] Image bind group (with uniform) failed, retrying without uniform. Error:', e);
                 const entriesImgLite = [
                     {binding: 0, resource: this.filteringSampler},
-                    {binding: 2, resource: this.imageTexture.createView()},
+                    {binding: 1, resource: this.imageTexture.createView()},
                 ];
                 bgImage = this.device.createBindGroup({layout: this.pipelines.get('imageVideo')!.getBindGroupLayout(0), entries: entriesImgLite});
             }
