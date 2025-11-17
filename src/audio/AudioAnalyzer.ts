@@ -22,8 +22,6 @@ export class AudioAnalyzer {
   private isRunning: boolean = false;
   private audioElement: HTMLAudioElement | null = null;
 
-  constructor() {}
-
   /**
    * Initialize audio capture from a stream URL (CORS-enabled remote stream or local audio)
    * Uses a hidden audio element to capture the stream via Web Audio API.

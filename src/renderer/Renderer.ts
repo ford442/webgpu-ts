@@ -14,7 +14,7 @@ export class Renderer {
     private comparisonSampler!: GPUSampler;
     private imageUrls: string[] = [];
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
-    private MAX_RIPPLES = 100;
+    private MAX_RIPPLES = 50;
     private computeUniformBuffer!: GPUBuffer;
     private imageVideoUniformBuffer!: GPUBuffer;
     private galaxyUniformBuffer!: GPUBuffer;
@@ -467,7 +467,7 @@ export class Renderer {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         this.imageVideoUniformBuffer = this.device.createBuffer({
-            size: 32 + (this.MAX_RIPPLES * 16),
+            size: 48 + (this.MAX_RIPPLES * 16), // 3*vec4 (resolutions, config, stainedParams) + 50*vec4 (ripples) = 848 bytes
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         this.computeUniformBuffer = this.device.createBuffer({
