@@ -451,6 +451,7 @@ export class Renderer {
             minFilter: 'linear',
             addressModeU: 'repeat',
             addressModeV: 'repeat',
+            maxAnisotropy: 16,
         });
         this.nonFilteringSampler = this.device.createSampler({
             magFilter: 'nearest',
