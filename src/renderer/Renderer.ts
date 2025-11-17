@@ -449,6 +449,7 @@ export class Renderer {
         this.filteringSampler = this.device.createSampler({
             magFilter: 'linear',
             minFilter: 'linear',
+            mipmapFilter" 'linear',
             addressModeU: 'repeat',
             addressModeV: 'repeat',
             maxAnisotropy: 16,
