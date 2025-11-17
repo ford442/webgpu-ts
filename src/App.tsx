@@ -71,7 +71,6 @@ function App() {
                 return;
             } catch (quantErr: any) {
                 console.warn('Quantized model load failed:', quantErr);
-                const qmsg = (quantErr && quantErr.message) ? quantErr.message : String(quantErr);
                 // If quantized failed due to session/allocation, fall back to FP32 attempt below
                 setStatus('Quantized model failed to load; attempting full model as fallback...');
             }

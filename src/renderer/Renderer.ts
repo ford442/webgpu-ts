@@ -14,7 +14,7 @@ export class Renderer {
     private comparisonSampler!: GPUSampler;
     private imageUrls: string[] = [];
     private ripplePoints: { x: number, y: number, startTime: number }[] = [];
-    private MAX_RIPPLES = 100;
+    private MAX_RIPPLES = 50;
     private computeUniformBuffer!: GPUBuffer;
     private imageVideoUniformBuffer!: GPUBuffer;
     private galaxyUniformBuffer!: GPUBuffer;
