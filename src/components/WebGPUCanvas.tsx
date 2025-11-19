@@ -20,7 +20,6 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
-    const lastMouseAddTime = useRef(0);
 
     useEffect(() => {
         if (!canvasRef.current) return;
@@ -95,34 +94,18 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         setIsMouseDown(false);
         setMousePosition({ x: -1, y: -1 });
     };
-    
-    const addRippleAtMouseEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!rendererRef.current) return;
-        const canvas = canvasRef.current!;
-        const rect = canvas.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / canvas.width;
-        const y = (event.clientY - rect.top) / canvas.height;
-        rendererRef.current.addRipplePoint(x, y);
-    };
 
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
         setIsMouseDown(true);
         updateMousePosition(event); // Ensure position is updated on click
-        if (mode === 'ripple' || mode === 'liquid') { // Removed liquid-v1 from ripple logic
-            addRippleAtMouseEvent(event);
-        }
+        // Streetview mode doesn't use ripple effects
     };
 
     const handleMouseUp = () => setIsMouseDown(false);
 
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
         updateMousePosition(event);
-        if (isMouseDown && (mode === 'ripple' || mode === 'liquid')) { // Removed liquid-v1 from ripple logic
-            const now = performance.now();
-            if (now - lastMouseAddTime.current < 10) return;
-            lastMouseAddTime.current = now;
-            addRippleAtMouseEvent(event);
-        }
+        // Streetview mode doesn't use ripple effects
     };
 
    return (

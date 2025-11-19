@@ -62,23 +62,7 @@ const Controls: React.FC<ControlsProps> = ({
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
                  <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
-    <option value="vortex">Clean Vortex</option> {/* ADD THIS */}
-    <option value="liquid-perspective">Liquid Perspective</option>
-    <option value="liquid-alt">Liquid (Alternate)</option>
-    <option value="liquid-alt2">Liquid (Alternate v2)</option>
-    <option value="liquid-vortex">Liquid Vortex</option>
-    <option value="liquid">Liquid (Interactive)</option>
-    <option value="liquid-zoom">Liquid Zoom</option>
-    <option value="shader">Galaxy Shader</option>
-    <option value="galaxy-alt">Galaxy (Alternate)</option>
-    <option value="music-gui">Music GUI</option>
-                    <option value="image">Static Image</option>
-                    <option value="ripple">Ripple Effect</option>
-                    <option value="video">Video Texture</option>
-                    <option value="video-effect">Video Effect (Realtime)</option>
-                    <option value="video-stained">Video Effect (Stained Glass)</option>
-                    <option value="liquid-v1">Liquid (Ambient)</option>
-                    <option value="pinball">Pinball (Game)</option>
+                    <option value="streetview">Street View</option>
                 </select>
             </div>
             <div className="control-group">
