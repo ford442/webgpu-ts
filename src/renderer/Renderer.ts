@@ -482,8 +482,6 @@ export class Renderer {
         };
         this.depthTextureRead = this.device.createTexture(placeholderDepthDescriptor);
         this.depthTextureWrite = this.device.createTexture(placeholderDepthDescriptor);
-        this.device.queue.writeTexture({texture: this.depthTextureRead}, new Float32Array([0.0]), {bytesPerRow: 4}, [1, 1]);
-        this.device.queue.writeTexture({texture: this.depthTextureWrite}, new Float32Array([0.0]), {bytesPerRow: 4}, [1, 1]);
         this.writeTexture = this.device.createTexture({
             size: [width, height],
             format: 'rgba32float',
@@ -954,23 +952,51 @@ export class Renderer {
         this.depthTextureWrite = temp;
     }
 
-    public render(mode: RenderMode, videoElement: HTMLVideoElement, zoom: number, panX: number, panY: number, farthestPoint: {
-        x: number,
-        y: number
-    }, mousePosition: { x: number, y: number }, isMouseDown: boolean): void {
-        if (!this.device || !this.imageTexture) return;
+    public render(
+        mode: RenderMode, 
+        source: CanvasImageSource | null, // CHANGED: Accepts Video, Canvas, or ImageBitmap
+        zoom: number, 
+        panX: number, 
+        panY: number, 
+        farthestPoint: { x: number, y: number }, 
+        mousePosition: { x: number, y: number }, 
+        isMouseDown: boolean
+    ): void {
+        if (!this.device || !this.imageTexture || !source) return;
         const currentTime = performance.now() / 1000.0;
-        if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-            if (!this.videoTexture || this.videoTexture.width !== videoElement.videoWidth || this.videoTexture.height !== videoElement.videoHeight) {
+
+        // Get dimensions based on source type
+        let sourceWidth = 0;
+        let sourceHeight = 0;
+        if (source instanceof HTMLVideoElement) {
+            if (source.readyState < 2) return;
+            sourceWidth = source.videoWidth;
+            sourceHeight = source.videoHeight;
+        } else if (source instanceof HTMLCanvasElement) {
+            sourceWidth = source.width;
+            sourceHeight = source.height;
+        } else if (source instanceof ImageBitmap) {
+            sourceWidth = source.width;
+            sourceHeight = source.height;
+        }
+
+        if (sourceWidth > 0 && sourceHeight > 0) {
+            // Create or resize videoTexture if needed
+            if (!this.videoTexture || this.videoTexture.width !== sourceWidth || this.videoTexture.height !== sourceHeight) {
                 if (this.videoTexture) this.videoTexture.destroy();
                 this.videoTexture = this.device.createTexture({
-                    size: [videoElement.videoWidth, videoElement.videoHeight],
+                    size: [sourceWidth, sourceHeight],
                     format: 'rgba8unorm',
                     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
                 });
                 this.createBindGroups();
             }
-            this.device.queue.copyExternalImageToTexture({source: videoElement}, {texture: this.videoTexture}, [videoElement.videoWidth, videoElement.videoHeight]);
+            // Copy the current frame from the source (Video or Maps Canvas) to the WebGPU texture
+            this.device.queue.copyExternalImageToTexture(
+                { source: source }, 
+                { texture: this.videoTexture }, 
+                [sourceWidth, sourceHeight]
+            );
         }
         const commandEncoder = this.device.createCommandEncoder();
         if (mode.startsWith('liquid') || mode === 'vortex') {

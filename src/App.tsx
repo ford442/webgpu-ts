@@ -5,6 +5,7 @@ import { Renderer } from './renderer/Renderer';
 import { RenderMode } from './renderer/types';
 import { pipeline, env } from '@xenova/transformers';
 import './style.css';
+import StreetView from './components/StreetView';
 
 env.allowLocalModels = false;
 env.allowRemoteModels = true;
@@ -39,6 +40,8 @@ function App() {
 
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [streetViewCanvas, setStreetViewCanvas] = useState<HTMLCanvasElement | null>(null);
+  const apiKey = 'AIzaSyABKwxIeRZX7VcFIejGkpSplxST_E0-Xn0'; // Replace with your actual API key
 
   const loadModel = async () => {
         if (depthEstimator) { setStatus('Model already loaded.'); return; }
@@ -302,6 +305,11 @@ function App() {
       }
   }, []);
 
+  // Handler for StreetView canvas
+  const handleStreetViewCanvas = useCallback((canvas: HTMLCanvasElement) => {
+    setStreetViewCanvas(canvas);
+  }, []);
+
   useEffect(() => {
       let intervalId: NodeJS.Timeout | null = null;
       if (autoChangeEnabled) {
@@ -350,6 +358,7 @@ function App() {
     <div id="app-container">
         <h1>WebGPU Liquid + Depth Effect</h1>
         <p><strong>Status:</strong> {status}</p>
+        <StreetView onCanvasReady={handleStreetViewCanvas} apiKey={apiKey} />
         <Controls
             mode={mode}
             setMode={setMode}
@@ -390,6 +399,7 @@ function App() {
             setMousePosition={setMousePosition}
             isMouseDown={isMouseDown}
             setIsMouseDown={setIsMouseDown}
+            source={streetViewCanvas}
         />
         {depthMapResult && (
             <div className="debug-container">

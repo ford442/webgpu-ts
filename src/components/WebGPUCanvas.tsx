@@ -13,9 +13,10 @@ interface WebGPUCanvasProps {
     setMousePosition: (pos: { x: number, y: number }) => void;
     isMouseDown: boolean;
     setIsMouseDown: (down: boolean) => void;
+    source?: CanvasImageSource | null; // NEW PROP
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, rendererRef, farthestPoint, mousePosition, setMousePosition, isMouseDown, setIsMouseDown, source }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const animationFrameId = useRef<number>(0);
@@ -68,15 +69,18 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
         let active = true;
         const animate = () => {
             if (!active) return;
-            if (rendererRef.current && videoRef.current) {
-                // --- THIS IS THE CORRECTED LINE ---
-                rendererRef.current.render(mode, videoRef.current, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown);
+            if (rendererRef.current) {
+                // Use provided source (StreetView canvas) if available, else fallback to video
+                const inputSource = source || videoRef.current;
+                if (inputSource) {
+                    rendererRef.current.render(mode, inputSource, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown);
+                }
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
         animate();
         return () => { active = false; cancelAnimationFrame(animationFrameId.current); };
-    }, [mode, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown, rendererRef]); // Added isMouseDown and rendererRef
+    }, [mode, zoom, panX, panY, farthestPoint, mousePosition, isMouseDown, rendererRef, source]);
 
      const updateMousePosition = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!canvasRef.current) return;
