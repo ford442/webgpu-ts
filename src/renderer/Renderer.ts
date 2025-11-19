@@ -563,7 +563,7 @@ export class Renderer {
 
     private async createPipelines(): Promise<void> {
         const shaderNames = [
-            'galaxy.wgsl', 'galaxy-alt.wgsl', 'music-gui.wgsl', 'imageVideo.wgsl', 'video-effect.wgsl', 'video-stained.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
+            'streetview.wgsl', 'galaxy.wgsl', 'galaxy-alt.wgsl', 'music-gui.wgsl', 'imageVideo.wgsl', 'video-effect.wgsl', 'video-stained.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
             'liquid-alt.wgsl',
             'liquid-alt2.wgsl',
             'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'vortex.wgsl'
@@ -583,9 +583,10 @@ export class Renderer {
         // Fetch shader sources in parallel
         const shaderCodes = await Promise.all(shaderNames.map(fetchShader));
 
-        const [galaxyCode, galaxyAltCode, musicGuiCode, imageVideoCode, videoEffectCode, videoStainedCode, liquidV1Code, liquidCode, liquidAltCode, liquidAlt2Code, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
+        const [streetviewCode, galaxyCode, galaxyAltCode, musicGuiCode, imageVideoCode, videoEffectCode, videoStainedCode, liquidV1Code, liquidCode, liquidAltCode, liquidAlt2Code, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
 
         // Save shader sources for later automatic binding attempts
+        this.shaderSources.set('streetview', streetviewCode);
         this.shaderSources.set('galaxy', galaxyCode);
         this.shaderSources.set('galaxyAlt', galaxyAltCode);
         this.shaderSources.set('musicGui', musicGuiCode);
@@ -604,6 +605,7 @@ export class Renderer {
         this.shaderSources.set('vortex', vortexCode);
         this.shaderSources.set('pinball', await fetchShader('pinball.wgsl'));
 
+        const streetviewModule = this.device.createShaderModule({code: streetviewCode});
         const galaxyModule = this.device.createShaderModule({code: galaxyCode});
         const galaxyAltModule = this.device.createShaderModule({code: galaxyAltCode});
         const musicGuiModule = this.device.createShaderModule({code: musicGuiCode});
@@ -663,8 +665,13 @@ export class Renderer {
         };
 
         const [
-            galaxyPipeline, galaxyAltPipeline, musicGuiPipeline, imageVideoPipeline, texturePipeline
+            streetviewPipeline, galaxyPipeline, galaxyAltPipeline, musicGuiPipeline, imageVideoPipeline, texturePipeline
         ] = await Promise.all([
+            this.device.createRenderPipelineAsync({
+                layout: videoPipelineLayout, ...commonConfig,
+                vertex: {module: streetviewModule, entryPoint: 'vs_main'},
+                fragment: {...commonConfig.fragment, module: streetviewModule, entryPoint: 'fs_main'}
+            }),
             this.device.createRenderPipelineAsync({
                 layout: 'auto', ...commonConfig,
                 vertex: {module: galaxyModule, entryPoint: 'vs_main'},
@@ -694,6 +701,7 @@ export class Renderer {
             }),
         ]);
 
+        this.pipelines.set('streetview', streetviewPipeline);
         this.pipelines.set('galaxy', galaxyPipeline);
         this.pipelines.set('galaxyAlt', galaxyAltPipeline);
         this.pipelines.set('musicGui', musicGuiPipeline);
@@ -893,6 +901,28 @@ export class Renderer {
             }
             this.bindGroups.set('image', bgImage!);
         }
+        
+        // Streetview bind group: sampler, texture, uniform (same layout as video/image)
+        {
+            let bgStreetview: GPUBindGroup | null = null;
+            try {
+                const entriesStreetview = [
+                    {binding: 0, resource: this.filteringSampler},
+                    {binding: 1, resource: this.imageTexture.createView()},
+                    {binding: 2, resource: {buffer: this.galaxyUniformBuffer}}, // reuse galaxy uniform for zoom/pan
+                ];
+                this.logBindGroupDiagnostics('streetview', entriesStreetview as any);
+                bgStreetview = this.device.createBindGroup({layout: this.pipelines.get('streetview')!.getBindGroupLayout(0), entries: entriesStreetview});
+            } catch (e) {
+                console.warn('[Renderer] Streetview bind group (with uniform) failed, retrying without uniform. Error:', e);
+                const entriesStreetviewLite = [
+                    {binding: 0, resource: this.filteringSampler},
+                    {binding: 1, resource: this.imageTexture.createView()},
+                ];
+                bgStreetview = this.device.createBindGroup({layout: this.pipelines.get('streetview')!.getBindGroupLayout(0), entries: entriesStreetviewLite});
+            }
+            this.bindGroups.set('streetview', bgStreetview!);
+        }
 
         // --- Attempt AUTO-binding for compute pipelines (fallback to manual mega bind group if auto fails) ---
         const computePipeline = this.pipelines.get('compute') || this.pipelines.get('computeV1');
@@ -973,92 +1003,7 @@ export class Renderer {
             this.device.queue.copyExternalImageToTexture({source: videoElement}, {texture: this.videoTexture}, [videoElement.videoWidth, videoElement.videoHeight]);
         }
         const commandEncoder = this.device.createCommandEncoder();
-        if (mode.startsWith('liquid') || mode === 'vortex') {
-            const computePass = commandEncoder.beginComputePass();
-            const computeBG = this.bindGroups.get('compute'); // Get the ONE bind group
-
-            if (computeBG) {
-                // --- 1. Uniform Buffer Updates ---
-                if (mode === 'liquid-v1') {
-                    // liquid-v1 only needs config: [time, 0, resX, resY]
-                    const configData = new Float32Array([
-                        currentTime, 0, this.canvas.width, this.canvas.height
-                    ]);
-                    // Write only the first vec4 (16 bytes)
-                    this.device.queue.writeBuffer(this.computeUniformBuffer, 0, configData, 0, 4);
-                } else {
-                    // All other compute shaders use the full uniform struct
-                    this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
-                    if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
-
-                    const rippleDataArr = new Float32Array(this.MAX_RIPPLES * 4);
-                    for (let i = 0; i < this.ripplePoints.length; i++) {
-                        const point = this.ripplePoints[i];
-                        rippleDataArr.set([point.x, point.y, point.startTime], i * 4);
-                    }
-
-                    // Create the full 848-byte array
-                    const uniformArray = new Float32Array(12 + this.MAX_RIPPLES * 4);
-
-                    // config (offset 0)
-                    uniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
-
-                    // zoom_config (offset 4)
-                    uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, this.zoomPreset], 4);
-
-                    // zoom_params (offset 8) - Use class properties
-                    const zoomParams = new Float32Array([
-                        this.fgSpeed,
-                        this.bgSpeed,
-                        this.parallaxStrength,
-                        this.fogDensity
-                    ]);
-                    uniformArray.set(zoomParams, 8);
-
-                    // ripples (offset 12)
-                    uniformArray.set(rippleDataArr, 12);
-
-                    this.device.queue.writeBuffer(this.computeUniformBuffer, 0, uniformArray);
-                }
-
-                // --- 2. Set Bind Group ONCE ---
-                computePass.setBindGroup(0, computeBG);
-
-                // --- 3. Switch Pipeline ---
-                if (mode === 'liquid-v1') {
-                    computePass.setPipeline(this.pipelines.get('computeV1') as GPUComputePipeline);
-                } else if (mode === 'vortex') {
-                    computePass.setPipeline(this.pipelines.get('computeVortex') as GPUComputePipeline);
-                } else if (mode === 'liquid-zoom' || mode === 'liquid-vortex') {
-                    computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
-                } else if (mode === 'liquid-alt2') {
-                    computePass.setPipeline(this.pipelines.get('computeAlt2') as GPUComputePipeline);
-                } else if (mode === 'liquid-perspective') {
-                    computePass.setPipeline(this.pipelines.get('computePerspective') as GPUComputePipeline);
-                } else if ((mode as string) === 'liquid-alt') {
-                    computePass.setPipeline(this.pipelines.get('computeAlt') as GPUComputePipeline);
-                } else if ((mode as string) === 'liquid-alt') {
-                    computePass.setPipeline(this.pipelines.get('computeAlt') as GPUComputePipeline);
-                } else if ((mode as string) === 'liquid-alt') {
-                    computePass.setPipeline(this.pipelines.get('computeAlt') as GPUComputePipeline);
-                } else if ((mode as string) === 'liquid-alt') {
-                    computePass.setPipeline(this.pipelines.get('computeAlt') as GPUComputePipeline);
-                } else { // 'liquid'
-                    computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
-                }
-
-                // --- 4. Dispatch ---
-                const wx = Math.ceil(this.canvas.width / 8);
-                const wy = Math.ceil(this.canvas.height / 8);
-                computePass.dispatchWorkgroups(wx, wy, 1);
-            }
-            computePass.end();
-
-            // swapDepthTextures logic is unchanged
-            if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex') {
-                this.swapDepthTextures();
-            }
-        }
+        // Streetview mode doesn't use compute shaders - removed liquid/vortex compute pass
         const textureView = this.context.getCurrentTexture().createView();
         const renderPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [{
@@ -1069,162 +1014,21 @@ export class Renderer {
             }]
         };
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-        const liquidPipeline = this.pipelines.get('liquid') as GPURenderPipeline;
-        const imageVideoPipeline = this.pipelines.get('imageVideo') as GPURenderPipeline;
-        const galaxyPipeline = this.pipelines.get('galaxy') as GPURenderPipeline;
+        const streetviewPipeline = this.pipelines.get('streetview') as GPURenderPipeline;
+        
+        // Streetview rendering - simplified switch statement
         switch (mode) {
-            case 'shader':
-                if (galaxyPipeline && this.bindGroups.has('galaxy')) {
+            case 'streetview':
+                if (streetviewPipeline && this.bindGroups.has('streetview')) {
                     this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([currentTime, zoom, panX, panY]));
-                    passEncoder.setPipeline(galaxyPipeline);
-                    passEncoder.setBindGroup(0, this.bindGroups.get('galaxy')!);
-                    passEncoder.draw(6);
-                }
-                break;
-            case 'galaxy-alt':
-                if (this.pipelines.get('galaxyAlt')) {
-                    this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([currentTime, zoom, panX, panY]));
-                    passEncoder.setPipeline(this.pipelines.get('galaxyAlt') as GPURenderPipeline);
-                    // prefer video bind if available
-                    if (this.bindGroups.has('galaxyAlt')) passEncoder.setBindGroup(0, this.bindGroups.get('galaxyAlt')!);
-                    else passEncoder.setBindGroup(0, this.bindGroups.get('galaxyAltImage')!);
-                    passEncoder.draw(6);
-                }
-                break;
-            case 'music-gui':
-                if (this.pipelines.get('musicGui')) {
-                    // pack button mask into u.z; the app should write a float mask into galaxyUniformBuffer's 3rd component
-                    this.device.queue.writeBuffer(this.galaxyUniformBuffer, 0, new Float32Array([currentTime, zoom, 0.0, 0.0]));
-                    passEncoder.setPipeline(this.pipelines.get('musicGui') as GPURenderPipeline);
-                    if (this.bindGroups.has('musicGui')) passEncoder.setBindGroup(0, this.bindGroups.get('musicGui')!);
-                    else passEncoder.setBindGroup(0, this.bindGroups.get('musicGuiImage')!);
-                    passEncoder.draw(6);
-                }
-                break;
-            case 'image':
-            case 'ripple': {
-                if (imageVideoPipeline && this.bindGroups.has('image')) {
-                    const uniformArray = new Float32Array(12 + this.MAX_RIPPLES * 4);
-                    // resolutions
-                    uniformArray.set([this.canvas.width, this.canvas.height, this.imageTexture.width, this.imageTexture.height], 0);
-                    // config
-                    uniformArray.set([currentTime, this.ripplePoints.length, mode === 'ripple' ? 1.0 : 0.0, 0.0], 4);
-                    // stained params (cellSize, edgeWidth, refraction, colorStrength)
-                    uniformArray.set([this.stainedCellSize, this.stainedEdgeWidth, this.stainedRefraction, this.colorStrength], 8);
-                    // ripples start at offset 12
-                    for (let i = 0; i < this.ripplePoints.length; i++) {
-                        const point = this.ripplePoints[i];
-                        uniformArray.set([point.x, point.y, point.startTime, 0.0], 12 + i * 4);
-                    }
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-
-                    passEncoder.setPipeline(imageVideoPipeline);
-                    passEncoder.setBindGroup(0, this.bindGroups.get('image')!);
+                    passEncoder.setPipeline(streetviewPipeline);
+                    passEncoder.setBindGroup(0, this.bindGroups.get('streetview')!);
                     passEncoder.draw(4);
                 }
                 break;
-            }
-            case 'video': {
-                if (imageVideoPipeline && this.bindGroups.has('video')) {
-                    const uniformArray = new Float32Array(12);
-                    uniformArray.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
-                    uniformArray.set([currentTime, 0, 0, 0], 4);
-                    uniformArray.set([this.stainedCellSize, this.stainedEdgeWidth, this.stainedRefraction, this.colorStrength], 8);
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, uniformArray);
-
-                    passEncoder.setPipeline(imageVideoPipeline);
-                    passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
-                    passEncoder.draw(4);
-                }
+            // All other modes removed for streetview-only build
+            default:
                 break;
-            }
-            case 'video-stained': {
-                const videoStainedPipeline = this.pipelines.get('videoStained') as GPURenderPipeline | undefined;
-                if (videoStainedPipeline && this.bindGroups.has('video')) {
-                    const ua = new Float32Array(12);
-                    ua.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
-                    ua.set([currentTime, 0, 0, 0], 4);
-                    ua.set([this.stainedCellSize, this.stainedEdgeWidth, this.stainedRefraction, this.colorStrength], 8);
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, ua);
-
-                    passEncoder.setPipeline(videoStainedPipeline);
-                    passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
-                    passEncoder.draw(4);
-                }
-                break;
-            }
-            case 'video-effect': {
-                // Use the dedicated videoEffect pipeline but reuse the same bind group/uniform layout as 'video'
-                const videoEffectPipeline = this.pipelines.get('videoEffect') as GPURenderPipeline | undefined;
-                if (videoEffectPipeline && this.bindGroups.has('video')) {
-                    const ua = new Float32Array(12);
-                    ua.set([this.canvas.width, this.canvas.height, this.videoTexture.width, this.videoTexture.height], 0);
-                    ua.set([currentTime, 0, 0, 0], 4);
-                    ua.set([this.stainedCellSize, this.stainedEdgeWidth, this.stainedRefraction, this.colorStrength], 8);
-                    this.device.queue.writeBuffer(this.imageVideoUniformBuffer, 0, ua);
-
-                    passEncoder.setPipeline(videoEffectPipeline);
-                    passEncoder.setBindGroup(0, this.bindGroups.get('video')!);
-                    passEncoder.draw(4);
-                }
-                break;
-            }
-            case 'liquid-v1':
-            case 'liquid':
-            case 'liquid-zoom':
-            case 'liquid-vortex':
-            case 'liquid-perspective':
-            case 'vortex':
-                if (liquidPipeline && this.bindGroups.has('liquid')) {
-                    passEncoder.setPipeline(liquidPipeline);
-                    passEncoder.setBindGroup(0, this.bindGroups.get('liquid')!);
-                    passEncoder.draw(4);
-                }
-                break;
-            case 'pinball': {
-                const pinballPipeline = this.pipelines.get('pinball') as GPURenderPipeline | undefined;
-                const pinballBG = this.bindGroups.get('pinball');
-                if (pinballPipeline && pinballBG) {
-                    // simple CPU-side physics update
-                    const now = performance.now() / 1000.0;
-                    const dt = this.lastFrameTime ? Math.min(0.033, now - this.lastFrameTime) : 0.016;
-                    this.lastFrameTime = now;
-                    // gravity (downwards in Y in pixel-space, but our coords are 0..1 top-to-bottom)
-                    // convert gravity to units per second^2 in UV space: assume pinballGravity is pixels/sec^2; convert
-                    const g = this.pinballGravity / Math.max(1, this.canvas.height);
-                    // integrate velocity
-                    this.pinballBallVel[1] += g * dt;
-                    // simple flipper impulse
-                    if (this.pinballLeftFlipper) this.pinballBallVel[0] -= 0.6;
-                    if (this.pinballRightFlipper) this.pinballBallVel[0] += 0.6;
-                    // integrate position
-                    this.pinballBallPos[0] += this.pinballBallVel[0] * dt;
-                    this.pinballBallPos[1] += this.pinballBallVel[1] * dt;
-                    // simple bounds and bounce
-                    if (this.pinballBallPos[0] < 0.02) { this.pinballBallPos[0] = 0.02; this.pinballBallVel[0] *= -0.6; }
-                    if (this.pinballBallPos[0] > 0.98) { this.pinballBallPos[0] = 0.98; this.pinballBallVel[0] *= -0.6; }
-                    if (this.pinballBallPos[1] < 0.02) { this.pinballBallPos[1] = 0.02; this.pinballBallVel[1] *= -0.6; }
-                    if (this.pinballBallPos[1] > 0.98) { this.pinballBallPos[1] = 0.98; this.pinballBallVel[1] *= -0.6; }
-
-                    // audio overall intensity 0..1
-                    const audioOverall = (this.getAudioFrequencyData()?.overall) ?? 0.0;
-
-                    // write uniforms to GPU (vec2 ballPos, vec2 ballVel, left, right, vec2 canvasSize, audio, time, pad2)
-                    const ua = new Float32Array(12);
-                    ua[0] = this.pinballBallPos[0]; ua[1] = this.pinballBallPos[1];
-                    ua[2] = this.pinballBallVel[0]; ua[3] = this.pinballBallVel[1];
-                    ua[4] = this.pinballLeftFlipper ? 1.0 : 0.0; ua[5] = this.pinballRightFlipper ? 1.0 : 0.0;
-                    ua[6] = this.canvas.width; ua[7] = this.canvas.height;
-                    ua[8] = audioOverall; ua[9] = now;
-                    ua[10] = 0.0; ua[11] = 0.0;
-                    this.device.queue.writeBuffer(this.pinballUniformBuffer, 0, ua.buffer as ArrayBuffer);
-
-                    passEncoder.setPipeline(pinballPipeline);
-                    passEncoder.setBindGroup(0, pinballBG);
-                    passEncoder.draw(4);
-                }
-                break;
-            }
          }
          passEncoder.end();
          this.device.queue.submit([commandEncoder.finish()]);
