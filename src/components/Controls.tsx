@@ -1,136 +1,161 @@
-// src/components/Controls.tsx
-
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { RenderMode } from '../renderer/types';
 
 interface ControlsProps {
-    mode: RenderMode; // ADD THIS LINE
-    setMode: (mode: RenderMode) => void; // ADD THIS LINE
+    mode: RenderMode;
+    heading: number;
+    pitch: number;
     zoom: number;
-    setZoom: (zoom: number) => void;
-    panX: number;
-    setPanX: (panX: number) => void;
-    panY: number;
-    setPanY: (panY: number) => void;
-    onNewImage: () => void;
-    autoChangeEnabled: boolean;
-    setAutoChangeEnabled: (enabled: boolean) => void;
-    autoChangeDelay: number;
-    setAutoChangeDelay: (delay: number) => void;
-    onLoadModel: () => void;
-    isModelLoaded: boolean;
-    // Stained glass tunables
-    cellSize: number;
-    setCellSize: (v: number) => void;
-    edgeWidth: number;
-    setEdgeWidth: (v: number) => void;
-    refraction: number;
-    setRefraction: (v: number) => void;
-    colorStrength: number;
-    setColorStrength: (v: number) => void;
-    // Zoom preset for zoom effects: 0=subtle,1=dreamy,2=aggressive
-    zoomPreset: number;
-    setZoomPreset: (v: number) => void;
-    // Audio controls
-    audioUrl: string;
-    setAudioUrl: (url: string) => void;
-    startAudio: () => Promise<void>;
-    stopAudio: () => void;
-    audioRunning: boolean;
+    mapVisible: boolean;
+    setMapVisible: (visible: boolean) => void;
+    onUpdatePOV: (heading: number, pitch: number) => void;
+    onUpdateZoom: (zoom: number) => void;
+    onMove: (direction: 'forward' | 'backward' | 'left' | 'right') => void;
+    panorama: google.maps.StreetViewPanorama | null;
 }
 
 const Controls: React.FC<ControlsProps> = ({
-    mode, setMode, // ADD THIS LINE
-    zoom, setZoom,
-    panX, setPanX,
-    panY, setPanY,
-    onNewImage,
-    autoChangeEnabled, setAutoChangeEnabled,
-    autoChangeDelay, setAutoChangeDelay,
-    onLoadModel, isModelLoaded,
-    cellSize, setCellSize,
-    edgeWidth, setEdgeWidth,
-    refraction, setRefraction,
-    colorStrength, setColorStrength,
-    zoomPreset, setZoomPreset,
-    audioUrl, setAudioUrl, startAudio, stopAudio, audioRunning,
+    mode,
+    heading,
+    pitch,
+    zoom,
+    mapVisible,
+    setMapVisible,
+    onUpdatePOV,
+    onUpdateZoom,
+    onMove,
+    panorama,
 }) => {
-    // The previous logic for `isImageMode` is no longer needed since you are always showing these controls.
+    const minimapRef = useRef<HTMLDivElement>(null);
+    const minimapInstance = useRef<google.maps.Map | null>(null);
+    const markerRef = useRef<google.maps.Marker | null>(null);
+
+    // Initialize minimap
+    useEffect(() => {
+        if (!minimapRef.current || !window.google || !window.google.maps || !panorama) return;
+
+        const position = panorama.getPosition();
+        if (!position) return;
+
+        // Create minimap
+        const map = new window.google.maps.Map(minimapRef.current, {
+            center: { lat: position.lat(), lng: position.lng() },
+            zoom: 16,
+            mapTypeId: 'roadmap',
+            disableDefaultUI: true,
+            zoomControl: true,
+        });
+
+        minimapInstance.current = map;
+
+        // Create marker
+        const marker = new window.google.maps.Marker({
+            position: { lat: position.lat(), lng: position.lng() },
+            map: map,
+            title: 'Current Position',
+        });
+
+        markerRef.current = marker;
+
+        // Listen to panorama position changes
+        panorama.addListener('position_changed', () => {
+            const newPos = panorama.getPosition();
+            if (newPos && marker && map) {
+                marker.setPosition(newPos);
+                map.setCenter(newPos);
+            }
+        });
+
+        // Allow clicking on minimap to teleport
+        map.addListener('click', (e: google.maps.MapMouseEvent) => {
+            if (e.latLng && panorama) {
+                panorama.setPosition(e.latLng);
+            }
+        });
+
+    }, [panorama]);
 
     return (
         <div className="controls">
             <div className="control-group">
-                <label htmlFor="mode-select">Render Mode:</label>
-                 <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
-                    <option value="streetview">Street View</option>
-                </select>
+                <label>Mode: {mode}</label>
             </div>
+            
             <div className="control-group">
-                <button onClick={onLoadModel} disabled={isModelLoaded}>
-                    {isModelLoaded ? 'AI Model Loaded' : 'Load AI Model'}
-                </button>
-                <button onClick={onNewImage}>Load New Random Image</button>
+                <h3>Navigation Controls</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px', maxWidth: '150px' }}>
+                    <button onClick={() => onMove('forward')} style={{ gridColumn: '2' }}>↑</button>
+                    <button onClick={() => onMove('left')} style={{ gridColumn: '1', gridRow: '2' }}>←</button>
+                    <button onClick={() => onMove('backward')} style={{ gridColumn: '2', gridRow: '2' }}>↓</button>
+                    <button onClick={() => onMove('right')} style={{ gridColumn: '3', gridRow: '2' }}>→</button>
+                </div>
             </div>
-            <>
+
+            <div className="control-group">
+                <label htmlFor="heading-slider">Heading: {heading.toFixed(0)}°</label>
+                <input 
+                    type="range" 
+                    id="heading-slider" 
+                    min="0" 
+                    max="360" 
+                    value={heading} 
+                    onChange={(e) => onUpdatePOV(Number(e.target.value), pitch)} 
+                />
+            </div>
+
+            <div className="control-group">
+                <label htmlFor="pitch-slider">Pitch: {pitch.toFixed(0)}°</label>
+                <input 
+                    type="range" 
+                    id="pitch-slider" 
+                    min="-90" 
+                    max="90" 
+                    value={pitch} 
+                    onChange={(e) => onUpdatePOV(heading, Number(e.target.value))} 
+                />
+            </div>
+
+            <div className="control-group">
+                <label htmlFor="zoom-slider">Zoom: {zoom.toFixed(1)}x</label>
+                <input 
+                    type="range" 
+                    id="zoom-slider" 
+                    min="0" 
+                    max="4" 
+                    step="0.1"
+                    value={zoom} 
+                    onChange={(e) => onUpdateZoom(Number(e.target.value))} 
+                />
+            </div>
+
+            <div className="control-group">
+                <label>
+                    <input 
+                        type="checkbox" 
+                        checked={mapVisible} 
+                        onChange={(e) => setMapVisible(e.target.checked)} 
+                    />
+                    Show Minimap
+                </label>
+            </div>
+
+            {mapVisible && (
                 <div className="control-group">
-                    <label></label>
-                    <button onClick={onNewImage}>New Random Image</button>
+                    <h3>Minimap</h3>
+                    <div 
+                        ref={minimapRef} 
+                        style={{ 
+                            width: '100%', 
+                            height: '200px', 
+                            border: '1px solid #ccc',
+                            borderRadius: '4px'
+                        }} 
+                    />
+                    <small style={{ color: '#666', display: 'block', marginTop: '5px' }}>
+                        Click on the map to teleport to that location
+                    </small>
                 </div>
-                <div className="control-group">
-                    <label htmlFor="auto-change-toggle">Auto Change:</label>
-                    <input type="checkbox" id="auto-change-toggle" checked={autoChangeEnabled} onChange={(e) => setAutoChangeEnabled(e.target.checked)} />
-                </div>
-                {autoChangeEnabled && (
-                    <div className="control-group">
-                        <label htmlFor="delay-slider">Delay ({autoChangeDelay}s):</label>
-                        <input type="range" id="delay-slider" min="1" max="10" step="1" value={autoChangeDelay} onChange={(e) => setAutoChangeDelay(Number(e.target.value))} />
-                    </div>
-                )}
-            </>
-            <div className="control-group">
-                <label htmlFor="zoom-slider">Zoom:</label>
-                <input type="range" id="zoom-slider" min="50" max="200" value={zoom * 100} onChange={(e) => setZoom(parseFloat(e.target.value) / 100)} />
-            </div>
-            <div className="control-group">
-                <label htmlFor="zoom-preset">Zoom Preset:</label>
-                <select id="zoom-preset" value={zoomPreset} onChange={(e) => setZoomPreset(Number(e.target.value))}>
-                    <option value={0}>Subtle</option>
-                    <option value={1}>Dreamy</option>
-                    <option value={2}>Aggressive</option>
-                </select>
-            </div>
-            <div className="control-group">
-                <label htmlFor="pan-x-slider">Pan X:</label>
-                <input type="range" id="pan-x-slider" min="0" max="200" value={panX * 100} onChange={(e) => setPanX(parseFloat(e.target.value) / 100)} />
-            </div>
-            <div className="control-group">
-                <label htmlFor="pan-y-slider">Pan Y:</label>
-                <input type="range" id="pan-y-slider" min="0" max="200" value={panY * 100} onChange={(e) => setPanY(parseFloat(e.target.value) / 100)} />
-            </div>
-            <div className="control-group">
-                <label htmlFor="cell-size">Stained Cell Size: {cellSize.toFixed(3)}</label>
-                <input id="cell-size" type="range" min="0.01" max="0.15" step="0.001" value={cellSize} onChange={(e) => setCellSize(Number(e.target.value))} />
-            </div>
-            <div className="control-group">
-                <label htmlFor="edge-width">Lead Edge Width: {edgeWidth.toFixed(3)}</label>
-                <input id="edge-width" type="range" min="0.0" max="0.2" step="0.001" value={edgeWidth} onChange={(e) => setEdgeWidth(Number(e.target.value))} />
-            </div>
-            <div className="control-group">
-                <label htmlFor="refraction">Refraction Strength: {refraction.toFixed(3)}</label>
-                <input id="refraction" type="range" min="0.0" max="0.06" step="0.001" value={refraction} onChange={(e) => setRefraction(Number(e.target.value))} />
-            </div>
-            <div className="control-group">
-                <label htmlFor="color-strength">Color Strength: {colorStrength.toFixed(2)}</label>
-                <input id="color-strength" type="range" min="0.0" max="2.0" step="0.01" value={colorStrength} onChange={(e) => setColorStrength(Number(e.target.value))} />
-            </div>
-            <div className="control-group">
-                <label htmlFor="audio-url">Audio Stream URL:</label>
-                <input id="audio-url" type="text" value={audioUrl} onChange={(e) => setAudioUrl(e.target.value)} style={{ width: '100%' }} />
-                <div style={{marginTop: 6}}>
-                    <button onClick={() => startAudio()} disabled={audioRunning}>Start Audio</button>
-                    <button onClick={() => stopAudio()} disabled={!audioRunning} style={{marginLeft:8}}>Stop Audio</button>
-                </div>
-            </div>
+            )}
         </div>
     );
 };

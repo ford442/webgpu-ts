@@ -1,1 +1,2 @@
-export type RenderMode = 'streetview';
+export type RenderMode = 
+  'streetview';

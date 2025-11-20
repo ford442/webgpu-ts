@@ -3,11 +3,12 @@ import React, { useEffect, useRef } from 'react';
 interface StreetViewProps {
     onCanvasReady: (canvas: HTMLCanvasElement) => void;
     apiKey: string;
+    onPanoramaReady?: (panorama: google.maps.StreetViewPanorama) => void;
 }
 
 const fenway = { lat: 39.2575004, lng: -121.021821 };
 
-const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
+const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanoramaReady }) => {
     const panoRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -18,7 +19,7 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
         script.async = true;
         script.onload = () => {
             if (window.google && window.google.maps) {
-                const panorama = new window.google.maps.StreetViewPanorama(
+                const pano = new window.google.maps.StreetViewPanorama(
                     panoRef.current!,
                     {
                         position: fenway,
@@ -26,6 +27,9 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
                         visible: true,
                     }
                 );
+                if (onPanoramaReady) {
+                    onPanoramaReady(pano);
+                }
                 // Wait for the panorama to render and extract the canvas
                 const tryFindCanvas = () => {
                     if (!panoRef.current) return;
@@ -45,7 +49,7 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
         return () => {
             document.body.removeChild(script);
         };
-    }, [apiKey, onCanvasReady]);
+    }, [apiKey, onCanvasReady, onPanoramaReady]);
 
     return <div ref={panoRef} style={{ width: '100%', height: '100%' }} />;
 };
