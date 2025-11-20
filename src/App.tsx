@@ -1,114 +1,134 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
+import StreetView from './components/StreetView';
+import { Renderer } from './renderer/Renderer';
 import { RenderMode } from './renderer/types';
 import './style.css';
-import StreetView from './components/StreetView';
 
 function App() {
-  const [mode] = useState<RenderMode>('streetview');
+  const [mode, setMode] = useState<RenderMode>('liquid');
+  const [zoom, setZoom] = useState(1.0);
+  const [panX, setPanX] = useState(0.5);
+  const [panY, setPanY] = useState(0.5);
+
+  // --- Street View / Connect States ---
   const [streetViewCanvas, setStreetViewCanvas] = useState<HTMLCanvasElement | null>(null);
-  const [panorama, setPanorama] = useState<google.maps.StreetViewPanorama | null>(null);
-  const [heading, setHeading] = useState(34);
-  const [pitch, setPitch] = useState(10);
-  const [zoom, setZoom] = useState(1);
-  const [mapVisible, setMapVisible] = useState(true);
-  const apiKey = 'AIzaSyABKwxIeRZX7VcFIejGkpSplxST_E0-Xn0';
+  const [isConnected, setIsConnected] = useState(false);
 
-  // Handler for StreetView canvas
-  const handleStreetViewCanvas = useCallback((canvas: HTMLCanvasElement) => {
-    setStreetViewCanvas(canvas);
-  }, []);
+  // *** PASTE YOUR API KEY HERE ***
+  const GOOGLE_MAPS_KEY = "AIzaSy...";
 
-  // Handler for panorama instance
-  const handlePanoramaReady = useCallback((pano: google.maps.StreetViewPanorama) => {
-    setPanorama(pano);
-  }, []);
+  const rendererRef = useRef<Renderer | null>(null);
 
-  // Navigation controls
-  const updatePOV = useCallback((newHeading: number, newPitch: number) => {
-    if (panorama) {
-      panorama.setPov({ heading: newHeading, pitch: newPitch });
-      setHeading(newHeading);
-      setPitch(newPitch);
-    }
-  }, [panorama]);
-
-  const updateZoom = useCallback((newZoom: number) => {
-    if (panorama) {
-      panorama.setZoom(newZoom);
-      setZoom(newZoom);
-    }
-  }, [panorama]);
-
-  const movePosition = useCallback((direction: 'forward' | 'backward' | 'left' | 'right') => {
-    if (!panorama) return;
-    
-    const pov = panorama.getPov();
-    const position = panorama.getPosition();
-    if (!position) return;
-
-    // Calculate movement based on heading
-    const headingRad = (pov.heading || 0) * (Math.PI / 180);
-    const distance = 0.0001; // approximately 11 meters
-
-    let latOffset = 0;
-    let lngOffset = 0;
-
-    switch (direction) {
-      case 'forward':
-        latOffset = Math.cos(headingRad) * distance;
-        lngOffset = Math.sin(headingRad) * distance;
-        break;
-      case 'backward':
-        latOffset = -Math.cos(headingRad) * distance;
-        lngOffset = -Math.sin(headingRad) * distance;
-        break;
-      case 'left':
-        latOffset = Math.cos(headingRad - Math.PI / 2) * distance;
-        lngOffset = Math.sin(headingRad - Math.PI / 2) * distance;
-        break;
-      case 'right':
-        latOffset = Math.cos(headingRad + Math.PI / 2) * distance;
-        lngOffset = Math.sin(headingRad + Math.PI / 2) * distance;
-        break;
-    }
-
-    const newPosition = {
-      lat: position.lat() + latOffset,
-      lng: position.lng() + lngOffset,
-    };
-
-    panorama.setPosition(newPosition);
-  }, [panorama]);
+  // Dummy props for Controls (since we are stripping down for Street View)
+  const [autoChangeEnabled, setAutoChangeEnabled] = useState(false);
+  const [autoChangeDelay, setAutoChangeDelay] = useState(10);
+  const [cellSize, setCellSize] = useState(0.035);
+  const [edgeWidth, setEdgeWidth] = useState(0.06);
+  const [refraction, setRefraction] = useState(0.02);
+  const [colorStrength, setColorStrength] = useState(1.0);
+  const [zoomPreset, setZoomPreset] = useState(1);
+  const [audioUrl, setAudioUrl] = useState('');
+  const [isAudioRunning, setIsAudioRunning] = useState(false);
 
   return (
-    <div id="app-container">
-        <h1>WebGPU StreetView Explorer</h1>
-        <StreetView 
-          onCanvasReady={handleStreetViewCanvas} 
-          onPanoramaReady={handlePanoramaReady}
-          apiKey={apiKey} 
-        />
-        <Controls
-            mode={mode}
-            heading={heading}
-            pitch={pitch}
-            zoom={zoom}
-            mapVisible={mapVisible}
-            setMapVisible={setMapVisible}
-            onUpdatePOV={updatePOV}
-            onUpdateZoom={updateZoom}
-            onMove={movePosition}
-            panorama={panorama}
-        />
-        <WebGPUCanvas
-            mode={mode}
-            source={streetViewCanvas}
-            heading={heading}
-            pitch={pitch}
-            zoom={zoom}
-        />
+    <div id="app-container" style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', padding: 0, margin: 0 }}>
+
+        {/* 1. STREET VIEW LAYER (Bottom) */}
+        {/* Always rendered so Google Maps stays alive. Hidden via z-index when connected. */}
+        <div style={{
+            position: 'absolute',
+            top: 0, left: 0, width: '100%', height: '100%',
+            zIndex: isConnected ? 0 : 2
+        }}>
+            <StreetView
+                apiKey={GOOGLE_MAPS_KEY}
+                onCanvasReady={(canvas) => setStreetViewCanvas(canvas)}
+            />
+        </div>
+
+        {/* 2. WEBGPU LAYER (Top) */}
+        {/* Only visible after connecting. */}
+        <div style={{
+            position: 'absolute',
+            top: 0, left: 0, width: '100%', height: '100%',
+            zIndex: isConnected ? 2 : 0,
+            pointerEvents: isConnected ? 'auto' : 'none',
+            opacity: isConnected ? 1 : 0 // Hide WebGPU canvas until connected
+        }}>
+            <WebGPUCanvas
+                rendererRef={rendererRef}
+                mode={mode}
+                // Only pass the source if we are officially "connected"
+                source={isConnected ? streetViewCanvas : null}
+                zoom={zoom}
+                panX={panX}
+                panY={panY}
+                farthestPoint={{x:0.5, y:0.5}}
+                mousePosition={{x:-1, y:-1}}
+                setMousePosition={() => {}}
+                isMouseDown={false}
+                setIsMouseDown={() => {}}
+            />
+        </div>
+
+        {/* 3. UI OVERLAY (Very Top) */}
+        <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+
+            {/* THE CONNECT BUTTON */}
+            {!isConnected && (
+                <button
+                    onClick={() => setIsConnected(true)}
+                    disabled={!streetViewCanvas}
+                    style={{
+                        padding: '15px 30px',
+                        fontSize: '1.2rem',
+                        backgroundColor: streetViewCanvas ? '#4CAF50' : '#555',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: streetViewCanvas ? 'pointer' : 'wait',
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.3)'
+                    }}
+                >
+                    {streetViewCanvas ? "START SIMULATION" : "Waiting for Maps..."}
+                </button>
+            )}
+
+            {/* DISCONNECT BUTTON (Optional) */}
+            {isConnected && (
+                <button
+                    onClick={() => setIsConnected(false)}
+                    style={{ padding: '8px 16px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                    Stop / Change View
+                </button>
+            )}
+
+            {/* Existing Controls (Visible only when connected) */}
+            {isConnected && (
+                <div style={{ background: 'rgba(0,0,0,0.8)', padding: 15, borderRadius: 8 }}>
+                    <Controls
+                        mode={mode} setMode={setMode}
+                        zoom={zoom} setZoom={setZoom}
+                        panX={panX} setPanX={setPanX}
+                        panY={panY} setPanY={setPanY}
+                        // Fill dummy props
+                        onNewImage={()=>{}} autoChangeEnabled={false} setAutoChangeEnabled={()=>{}}
+                        autoChangeDelay={0} setAutoChangeDelay={()=>{}}
+                        onLoadModel={()=>{}} isModelLoaded={false}
+                        cellSize={cellSize} setCellSize={setCellSize}
+                        edgeWidth={edgeWidth} setEdgeWidth={setEdgeWidth}
+                        refraction={refraction} setRefraction={setRefraction}
+                        colorStrength={colorStrength} setColorStrength={setColorStrength}
+                        zoomPreset={zoomPreset} setZoomPreset={setZoomPreset}
+                        audioUrl={audioUrl} setAudioUrl={setAudioUrl}
+                        startAudio={async ()=>{}} stopAudio={()=>{}} audioRunning={false}
+                    />
+                </div>
+            )}
+        </div>
     </div>
   );
 }
