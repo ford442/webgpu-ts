@@ -5,7 +5,8 @@ interface StreetViewProps {
     apiKey: string;
 }
 
-const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
+const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, onPanoramaReady, apiKey }) => {
+
     const panoRef = useRef<HTMLDivElement>(null);
     const [panorama, setPanorama] = useState<google.maps.StreetViewPanorama | null>(null);
 
