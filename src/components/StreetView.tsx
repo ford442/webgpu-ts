@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 interface StreetViewProps {
     onCanvasReady: (canvas: HTMLCanvasElement) => void;
+    onPanoramaReady: (pano: google.maps.StreetViewPanorama) => void;
     apiKey: string;
 }
 
@@ -47,6 +48,7 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, onPanoramaReady,
 
             mapInstance.setStreetView(panoInstance);
             setPanorama(panoInstance);
+            onPanoramaReady(panoInstance);
 
             // --- CRITICAL UPDATE: Wait for valid dimensions ---
             // We poll faster (100ms) but wait for dimensions > 100px
@@ -72,11 +74,12 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, onPanoramaReady,
     }, [apiKey]);
 
     // --- Navigation Logic ---
-    const findNextPano = (links: google.maps.StreetViewLink[] | null, currentHeading: number) => {
+    const findNextPano = (links: (google.maps.StreetViewLink | null)[] | null, currentHeading: number) => {
         if (!links) return null;
         let closestHeadingDiff = 360;
         let closestPanoId = null;
         for (const link of links) {
+            if (!link) continue;
             const headingDiff = Math.abs((link.heading || 0) - currentHeading);
             if (headingDiff < closestHeadingDiff) {
                 closestHeadingDiff = headingDiff;
