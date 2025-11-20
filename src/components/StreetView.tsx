@@ -2,11 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 
 interface StreetViewProps {
     onCanvasReady: (canvas: HTMLCanvasElement) => void;
-    onPanoramaReady: (pano: google.maps.StreetViewPanorama) => void;
     apiKey: string;
 }
 
-const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, onPanoramaReady, apiKey }) => {
+const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
     const panoRef = useRef<HTMLDivElement>(null);
     const [panorama, setPanorama] = useState<google.maps.StreetViewPanorama | null>(null);
 
@@ -30,7 +29,6 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, onPanoramaReady,
             if (!panoRef.current) return;
 
             // Create a Map instance (required context for some StreetView features)
-            // We create a detached div for it since we only care about the panorama
             const mapDiv = document.createElement('div');
             const mapInstance = new google.maps.Map(mapDiv, {
                 center: startLocation,
@@ -48,35 +46,36 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, onPanoramaReady,
 
             mapInstance.setStreetView(panoInstance);
             setPanorama(panoInstance);
-            onPanoramaReady(panoInstance); // Notify that the panorama is ready
 
-            // --- CRITICAL: Find the Canvas ---
-            // Google Maps creates a <canvas> inside the container div. We poll until it exists.
+            // --- CRITICAL UPDATE: Wait for valid dimensions ---
+            // We poll faster (100ms) but wait for dimensions > 100px
+            // This ignores the initial 1x1 or 0x0 initialization state
             const checkForCanvas = setInterval(() => {
                 if (panoRef.current) {
                     const canvases = panoRef.current.getElementsByTagName('canvas');
                     if (canvases.length > 0) {
                         const canvas = canvases[0];
-                        // Ensure canvas has actual dimensions before using it
-                        if (canvas.width > 0 && canvas.height > 0) {
-                            console.log("StreetView Canvas Found!", canvas);
+                        
+                        // FIX: Ensure canvas has SUBSTANTIAL dimensions. 
+                        // Google Maps often inits at 1px height initially.
+                        if (canvas.width > 100 && canvas.height > 100) {
+                            console.log("StreetView Canvas Ready:", canvas.width, "x", canvas.height);
                             onCanvasReady(canvas);
                             clearInterval(checkForCanvas);
                         }
                     }
                 }
-            }, 500);
+            }, 100);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [apiKey /* onCanvasReady excluded to prevent re-init loops */]);
+    }, [apiKey]);
 
     // --- Navigation Logic ---
-    const findNextPano = (links: (google.maps.StreetViewLink | null)[] | null, currentHeading: number) => {
+    const findNextPano = (links: google.maps.StreetViewLink[] | null, currentHeading: number) => {
         if (!links) return null;
         let closestHeadingDiff = 360;
         let closestPanoId = null;
         for (const link of links) {
-            if (!link) continue; // Skip null links
             const headingDiff = Math.abs((link.heading || 0) - currentHeading);
             if (headingDiff < closestHeadingDiff) {
                 closestHeadingDiff = headingDiff;
@@ -101,12 +100,13 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, onPanoramaReady,
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-            {/* The actual StreetView div - Nearly invisible so WebGPU sees the update */}
+            {/* The actual StreetView div */}
             <div 
                 ref={panoRef} 
                 style={{ 
                     width: '100%', 
                     height: '100%', 
+                    // Keep opacity just above 0 to ensure the browser renders the WebGL context
                     opacity: 0.01, 
                     pointerEvents: 'auto', 
                     position: 'absolute',
