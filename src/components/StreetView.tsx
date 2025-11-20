@@ -2,10 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 
 interface StreetViewProps {
     onCanvasReady: (canvas: HTMLCanvasElement) => void;
+    onPanoramaReady: (pano: google.maps.StreetViewPanorama) => void;
     apiKey: string;
 }
 
-const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
+const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, onPanoramaReady, apiKey }) => {
     const panoRef = useRef<HTMLDivElement>(null);
     const [panorama, setPanorama] = useState<google.maps.StreetViewPanorama | null>(null);
 
@@ -47,6 +48,7 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
 
             mapInstance.setStreetView(panoInstance);
             setPanorama(panoInstance);
+            onPanoramaReady(panoInstance); // Notify that the panorama is ready
 
             // --- CRITICAL: Find the Canvas ---
             // Google Maps creates a <canvas> inside the container div. We poll until it exists.
@@ -69,11 +71,12 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
     }, [apiKey /* onCanvasReady excluded to prevent re-init loops */]);
 
     // --- Navigation Logic ---
-    const findNextPano = (links: google.maps.StreetViewLink[] | null, currentHeading: number) => {
+    const findNextPano = (links: (google.maps.StreetViewLink | null)[] | null, currentHeading: number) => {
         if (!links) return null;
         let closestHeadingDiff = 360;
         let closestPanoId = null;
         for (const link of links) {
+            if (!link) continue; // Skip null links
             const headingDiff = Math.abs((link.heading || 0) - currentHeading);
             if (headingDiff < closestHeadingDiff) {
                 closestHeadingDiff = headingDiff;

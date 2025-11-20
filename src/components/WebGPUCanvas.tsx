@@ -5,9 +5,12 @@ import { RenderMode } from '../renderer/types';
 interface WebGPUCanvasProps {
     mode: RenderMode;
     source?: CanvasImageSource | null;
+    heading?: number;
+    pitch?: number;
+    zoom?: number;
 }
 
-const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, source }) => {
+const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, source, heading, pitch, zoom }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<Renderer | null>(null);
     const animationFrameId = useRef<number>(0);
@@ -34,7 +37,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, source }) => {
         const animate = () => {
             if (!active) return;
             if (rendererRef.current && source) {
-                rendererRef.current.renderStreetView(mode, source);
+                rendererRef.current.renderStreetView(mode, source, heading, pitch, zoom);
             }
             animationFrameId.current = requestAnimationFrame(animate);
         };
@@ -43,7 +46,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, source }) => {
             active = false; 
             cancelAnimationFrame(animationFrameId.current); 
         };
-    }, [mode, source]);
+    }, [mode, source, heading, pitch, zoom]);
 
     return (
         <canvas 

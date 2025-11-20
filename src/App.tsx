@@ -105,6 +105,9 @@ function App() {
         <WebGPUCanvas
             mode={mode}
             source={streetViewCanvas}
+            heading={heading}
+            pitch={pitch}
+            zoom={zoom}
         />
     </div>
   );

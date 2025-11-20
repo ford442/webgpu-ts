@@ -9,6 +9,7 @@ export class Renderer {
     private bindGroup!: GPUBindGroup;
     private sampler!: GPUSampler;
     private texture!: GPUTexture;
+    private uniformBuffer!: GPUBuffer;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -50,6 +51,11 @@ export class Renderer {
             // Initialize with a 1x1 placeholder to prevent null errors before first frame
             this.createTexture(1, 1);
             
+            this.uniformBuffer = this.device.createBuffer({
+                size: 16, // 4 floats * 4 bytes
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            });
+
             await this.createPipeline();
 
             console.log('WebGPU Renderer initialized');
@@ -82,12 +88,13 @@ export class Renderer {
             entries: [
                 { binding: 0, resource: this.sampler },
                 { binding: 1, resource: this.texture.createView() },
+                { binding: 2, resource: { buffer: this.uniformBuffer } },
             ],
         });
     }
 
     private async createPipeline(): Promise<void> {
-        const shaderCode = await fetch('./shaders/texture.wgsl').then(r => r.text());
+        const shaderCode = await fetch('./shaders/streetview.wgsl').then(r => r.text());
 
         const shaderModule = this.device.createShaderModule({
             code: shaderCode,
@@ -104,6 +111,11 @@ export class Renderer {
                     binding: 1,
                     visibility: GPUShaderStage.FRAGMENT,
                     texture: { sampleType: 'float' as GPUTextureSampleType },
+                },
+                {
+                    binding: 2,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: { type: 'uniform' as GPUBufferBindingType },
                 },
             ],
         });
@@ -129,7 +141,7 @@ export class Renderer {
         this.updateBindGroup();
     }
 
-    public renderStreetView(mode: RenderMode, source: CanvasImageSource): void {
+    public renderStreetView(mode: RenderMode, source: CanvasImageSource, heading?: number, pitch?: number, zoom?: number): void {
         if (!this.device || !source || !this.pipeline) return;
 
         // 1. Determine Source Dimensions safely
@@ -154,6 +166,14 @@ export class Renderer {
         }
 
         try {
+            // Update uniforms
+            const time = Date.now() / 1000;
+            const z = zoom || 1;
+            const panX = ((heading || 0) % 360) / 360;
+            const panY = ((pitch || 0) + 90) / 180;
+            const uniforms = new Float32Array([time, z, panX, panY]);
+            this.device.queue.writeBuffer(this.uniformBuffer, 0, uniforms);
+
             // 4. Copy Image
             this.device.queue.copyExternalImageToTexture(
                 { source: source },
