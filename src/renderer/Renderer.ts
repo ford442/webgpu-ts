@@ -16,7 +16,6 @@ export class Renderer {
 
     public async init(): Promise<boolean> {
         try {
-            // Check WebGPU support
             if (!navigator.gpu) {
                 console.error('WebGPU not supported');
                 return false;
@@ -43,21 +42,13 @@ export class Renderer {
                 alphaMode: 'opaque',
             });
 
-            // Create sampler
             this.sampler = this.device.createSampler({
                 magFilter: 'linear',
                 minFilter: 'linear',
             });
 
-            // Create texture (will be updated with source)
-            this.texture = this.device.createTexture({
-                size: [this.canvas.width, this.canvas.height],
-                format: 'rgba8unorm',
-                usage: GPUTextureUsage.TEXTURE_BINDING | 
-                       GPUTextureUsage.COPY_DST | 
-                       GPUTextureUsage.RENDER_ATTACHMENT,
-            });
-
+            // Create an initial placeholder texture (1x1) to avoid null errors
+            this.createTexture(1, 1);
             await this.createPipeline();
 
             console.log('WebGPU Renderer initialized');
@@ -68,15 +59,24 @@ export class Renderer {
         }
     }
 
+    private createTexture(width: number, height: number) {
+        if (this.texture) this.texture.destroy();
+        
+        this.texture = this.device.createTexture({
+            size: [width, height],
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING | 
+                   GPUTextureUsage.COPY_DST | 
+                   GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+    }
+
     private async createPipeline(): Promise<void> {
-        // Load shader code
+        // Load shader code (ensure texture.wgsl exists in public/shaders/)
         const shaderCode = await fetch('./shaders/texture.wgsl').then(r => r.text());
 
-        const shaderModule = this.device.createShaderModule({
-            code: shaderCode,
-        });
+        const shaderModule = this.device.createShaderModule({ code: shaderCode });
 
-        // Create bind group layout
         const bindGroupLayout = this.device.createBindGroupLayout({
             entries: [
                 {
@@ -92,12 +92,10 @@ export class Renderer {
             ],
         });
 
-        // Create pipeline layout
         const pipelineLayout = this.device.createPipelineLayout({
             bindGroupLayouts: [bindGroupLayout],
         });
 
-        // Create render pipeline
         this.pipeline = this.device.createRenderPipeline({
             layout: pipelineLayout,
             vertex: {
@@ -107,43 +105,59 @@ export class Renderer {
             fragment: {
                 module: shaderModule,
                 entryPoint: 'fs_main',
-                targets: [{
-                    format: this.presentationFormat,
-                }],
+                targets: [{ format: this.presentationFormat }],
             },
-            primitive: {
-                topology: 'triangle-strip',
-            },
+            primitive: { topology: 'triangle-strip' },
         });
+        
+        this.updateBindGroup();
+    }
 
-        // Create bind group
+    private updateBindGroup() {
+        if (!this.device || !this.pipeline || !this.texture) return;
+        
         this.bindGroup = this.device.createBindGroup({
-            layout: bindGroupLayout,
+            layout: this.pipeline.getBindGroupLayout(0),
             entries: [
-                {
-                    binding: 0,
-                    resource: this.sampler,
-                },
-                {
-                    binding: 1,
-                    resource: this.texture.createView(),
-                },
+                { binding: 0, resource: this.sampler },
+                { binding: 1, resource: this.texture.createView() },
             ],
         });
     }
 
     public renderStreetView(mode: RenderMode, source: CanvasImageSource): void {
-        if (!this.device || !source) return;
+        if (!this.device || !source || !this.pipeline) return;
+
+        // 1. Get Dimensions safely
+        let srcWidth = 0;
+        let srcHeight = 0;
+
+        if (source instanceof HTMLCanvasElement) {
+            srcWidth = source.width;
+            srcHeight = source.height;
+        } else if (source instanceof HTMLVideoElement) {
+            srcWidth = source.videoWidth;
+            srcHeight = source.videoHeight;
+        }
+
+        // 2. Prevent "Out of bounds" crash by checking dimensions
+        if (srcWidth === 0 || srcHeight === 0) return;
+
+        // 3. Resize texture if source dimensions changed (e.g., window resize)
+        if (this.texture.width !== srcWidth || this.texture.height !== srcHeight) {
+            this.createTexture(srcWidth, srcHeight);
+            this.updateBindGroup();
+        }
 
         try {
-            // Update texture with source
+            // 4. Copy content from Source (StreetView) to WebGPU Texture
             this.device.queue.copyExternalImageToTexture(
                 { source: source },
                 { texture: this.texture },
-                [this.canvas.width, this.canvas.height]
+                [srcWidth, srcHeight]
             );
 
-            // Render
+            // 5. Render Texture to Screen
             const commandEncoder = this.device.createCommandEncoder();
             const textureView = this.context.getCurrentTexture().createView();
 
@@ -163,7 +177,8 @@ export class Renderer {
 
             this.device.queue.submit([commandEncoder.finish()]);
         } catch (e) {
-            console.error('Error rendering:', e);
+            // Suppress logs for single-frame glitches to avoid console spam
+            // console.warn('Render error:', e); 
         }
     }
 }
