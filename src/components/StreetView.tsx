@@ -106,9 +106,10 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanora
                     position: 'absolute',
                     top: 0,
                     left: 0,
-                    // If canvas not found yet, show it fully.
-                    // Once found, we might want to keep it visible for updates,
-                    // but handled by the parent's layout (App.tsx).
+                    // Keep a tiny non-zero opacity so the browser continues to rasterize the canvas
+                    opacity: 0.01,
+                    pointerEvents: 'auto',
+                    zIndex: 1,
                 }}
             />
 

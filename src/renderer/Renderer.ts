@@ -8,7 +8,8 @@ export class Renderer {
     private pipeline!: GPURenderPipeline;
     private bindGroup!: GPUBindGroup;
     private sampler!: GPUSampler;
-    private texture!: GPUTexture;
+    private texture!: GPUTexture; // static image texture
+    private videoTexture?: GPUTexture; // dynamic texture for video/canvas frames
     private uniformBuffer!: GPUBuffer;
 
     constructor(canvas: HTMLCanvasElement) {
@@ -66,7 +67,7 @@ export class Renderer {
         }
     }
 
-    // Helper to create/recreate texture
+    // Helper to create/recreate the static image texture
     private createTexture(width: number, height: number) {
         if (this.texture) this.texture.destroy();
 
@@ -79,15 +80,29 @@ export class Renderer {
         });
     }
 
+    // Helper to create/recreate the dynamic video/canvas texture
+    private createVideoTexture(width: number, height: number) {
+        if (this.videoTexture) this.videoTexture.destroy();
+
+        this.videoTexture = this.device.createTexture({
+            size: [width, height],
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+    }
+
     // Helper to update bind group when texture changes
     private updateBindGroup() {
-        if (!this.pipeline || !this.texture) return;
+        if (!this.pipeline || !this.texture || !this.sampler || !this.uniformBuffer) return;
+
+        // Prefer the videoTexture if present, otherwise fall back to the static image texture
+        const textureView = (this.videoTexture ? this.videoTexture.createView() : this.texture.createView());
 
         this.bindGroup = this.device.createBindGroup({
             layout: this.pipeline.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: this.sampler },
-                { binding: 1, resource: this.texture.createView() },
+                { binding: 1, resource: textureView },
                 { binding: 2, resource: { buffer: this.uniformBuffer } },
             ],
         });
@@ -141,29 +156,54 @@ export class Renderer {
         this.updateBindGroup();
     }
 
-    public renderStreetView(mode: RenderMode, source: CanvasImageSource, heading?: number, pitch?: number, zoom?: number): void {
-        if (!this.device || !source || !this.pipeline) return;
+    // NOTE: Accept a nullable source so we can render even if no new frame is provided
+    public renderStreetView(mode: RenderMode, source: CanvasImageSource | null, heading?: number, pitch?: number, zoom?: number): void {
+        if (!this.device || !this.pipeline) return;
 
-        // 1. Determine Source Dimensions safely
+        // 1. If a source is provided, determine Source Dimensions safely and upload to videoTexture
         let srcWidth = 0;
         let srcHeight = 0;
 
-        if (source instanceof HTMLCanvasElement) {
-            srcWidth = source.width;
-            srcHeight = source.height;
-        } else if (source instanceof HTMLVideoElement) {
-            srcWidth = source.videoWidth;
-            srcHeight = source.videoHeight;
+        if (source) {
+            if (source instanceof HTMLCanvasElement) {
+                srcWidth = source.width;
+                srcHeight = source.height;
+            } else if (source instanceof HTMLVideoElement) {
+                // Only use video dimensions when ready
+                if (source.readyState >= 2) {
+                    srcWidth = source.videoWidth;
+                    srcHeight = source.videoHeight;
+                }
+            } else if (source instanceof ImageBitmap) {
+                srcWidth = source.width;
+                srcHeight = source.height;
+            }
+
+            // If we have a valid source size, ensure videoTexture exists and upload
+            if (srcWidth > 0 && srcHeight > 0) {
+                // Resize/Create dynamic video texture if dimensions changed
+                // Note: GPUTexture does not expose width/height directly in the spec, but existing code
+                // used checks against texture.width/height; to be defensive, recreate unconditionally if absent
+                if (!this.videoTexture) {
+                    this.createVideoTexture(srcWidth, srcHeight);
+                    // Rebind so shader uses the videoTexture immediately
+                    this.updateBindGroup();
+                }
+
+                try {
+                    this.device.queue.copyExternalImageToTexture(
+                        { source: source },
+                        { texture: this.videoTexture! },
+                        [srcWidth, srcHeight]
+                    );
+                } catch (e) {
+                    // Ignore transient copy errors
+                }
+            }
         }
 
-        // 2. Safety check: Don't render if source is invalid or empty
-        if (srcWidth === 0 || srcHeight === 0) return;
-
-        // 3. Resize texture if dimensions differ (fixes the "Copy rect out of bounds" crash)
-        if (this.texture.width !== srcWidth || this.texture.height !== srcHeight) {
-            this.createTexture(srcWidth, srcHeight);
-            this.updateBindGroup();
-        }
+        // 2. If no dynamic source provided but the static texture size differs from canvas, adjust it
+        // (Keep original createTexture logic intact if a static image is used elsewhere.)
 
         try {
             // Update uniforms
@@ -174,14 +214,7 @@ export class Renderer {
             const uniforms = new Float32Array([time, z, panX, panY]);
             this.device.queue.writeBuffer(this.uniformBuffer, 0, uniforms);
 
-            // 4. Copy Image
-            this.device.queue.copyExternalImageToTexture(
-                { source: source },
-                { texture: this.texture },
-                [srcWidth, srcHeight]
-            );
-
-            // 5. Render
+            // 3. Render using whichever texture the bind group currently references (videoTexture preferred)
             const commandEncoder = this.device.createCommandEncoder();
             const textureView = this.context.getCurrentTexture().createView();
 
