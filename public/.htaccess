@@ -1,0 +1,37 @@
+DirectoryIndex 1ink.1ink
+RewriteEngine On
+
+# 1. Force HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# 2. Define Custom MIME Types & Encodings
+AddType application/wasm wasm
+AddType 'text/html;charset=UTF-16' 1ink
+# UTF-32 Custom Type
+AddType 'application/x-javascript; charset=UTF-32' 3ijs
+# UTF-16 Custom Type
+AddType 'application/x-javascript; charset=UTF-16' 1ijs
+AddType 'application/x-javascript; charset=UTF-8' js
+AddType 'text/css;charset=UTF-16' 1iss
+
+# 3. CRITICAL: Enable Compression for Custom Types
+# Since you are using 'application/x-javascript', we must explicitly filter it.
+# This ensures your massive .3ijs and .1ijs files are gzipped on the fly.
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/wasm
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/css
+    # This covers your .js, .1ijs, and .3ijs files
+    AddOutputFilterByType DEFLATE application/x-javascript
+</IfModule>
+
+# 4. High-Performance Headers (SharedArrayBuffer support)
+Header set Accept-Ranges bytes
+Header set Cross-Origin-Opener-Policy: same-origin
+Header always set Cross-Origin-Embedder-Policy: unsafe-none
+Header set Access-Control-Allow-Origin "*"
+Header set Cross-Origin-Resource-Policy: cross-origin
+
+# 5. Error Handling
+ErrorDocument 404 https://www.noahcohn.com/404.1ink
