@@ -1,103 +1,142 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface StreetViewProps {
     onCanvasReady: (canvas: HTMLCanvasElement) => void;
     apiKey: string;
-    onPanoramaReady?: (panorama: google.maps.StreetViewPanorama) => void;
 }
 
-const fenway = { lat: 39.2575004, lng: -121.021821 };
-
-const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanoramaReady }) => {
+const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
     const panoRef = useRef<HTMLDivElement>(null);
+    const [panorama, setPanorama] = useState<google.maps.StreetViewPanorama | null>(null);
+
+    // Coordinates from your original HTML
+    const startLocation = { lat: 39.2575004, lng: -121.021821 };
 
     useEffect(() => {
-        // 1. Check if script exists to avoid duplicates
-        if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-            initMap();
-            return;
+        // Check if Google Maps is already loaded
+        if (!(window as any).google) {
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=alpha`;
+            script.async = true;
+            script.defer = true;
+            script.onload = initialize;
+            document.body.appendChild(script);
+        } else {
+            initialize();
         }
 
-        const script = document.createElement('script');
-        // Use v=weekly and loading=async (though manual injection is still synchronous in nature)
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&v=weekly`;
-        script.async = true;
-        script.onload = () => initMap();
-        document.body.appendChild(script);
+        function initialize() {
+            if (!panoRef.current) return;
 
-        function initMap() {
-            if (!window.google || !window.google.maps || !panoRef.current) return;
+            // Create a Map instance (required context for some StreetView features)
+            // We create a detached div for it since we only care about the panorama
+            const mapDiv = document.createElement('div');
+            const mapInstance = new google.maps.Map(mapDiv, {
+                center: startLocation,
+                zoom: 12,
+            });
 
-            const pano = new window.google.maps.StreetViewPanorama(
-                panoRef.current,
-                {
-                    position: fenway,
-                    pov: { heading: 34, pitch: 10 },
-                    visible: true,
-                    motionTracking: false,
-                    motionTrackingControl: false,
-                    disableDefaultUI: true
+            // Create the Panorama attached to our ref
+            const panoInstance = new google.maps.StreetViewPanorama(panoRef.current!, {
+                position: startLocation,
+                pov: { heading: 34, pitch: 10 },
+                zoom: 1,
+                showRoadLabels: false,
+                disableDefaultUI: true
+            });
+
+            mapInstance.setStreetView(panoInstance);
+            setPanorama(panoInstance);
+
+            // --- CRITICAL: Find the Canvas ---
+            // Google Maps creates a <canvas> inside the container div. We poll until it exists.
+            const checkForCanvas = setInterval(() => {
+                if (panoRef.current) {
+                    const canvases = panoRef.current.getElementsByTagName('canvas');
+                    if (canvases.length > 0) {
+                        const canvas = canvases[0];
+                        // Ensure canvas has actual dimensions before using it
+                        if (canvas.width > 0 && canvas.height > 0) {
+                            console.log("StreetView Canvas Found!", canvas);
+                            onCanvasReady(canvas);
+                            clearInterval(checkForCanvas);
+                        }
+                    }
                 }
-            );
+            }, 500);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [apiKey /* onCanvasReady excluded to prevent re-init loops */]);
 
-            if (onPanoramaReady) {
-                onPanoramaReady(pano);
+    // --- Navigation Logic ---
+    const findNextPano = (links: google.maps.StreetViewLink[] | null, currentHeading: number) => {
+        if (!links) return null;
+        let closestHeadingDiff = 360;
+        let closestPanoId = null;
+        for (const link of links) {
+            const headingDiff = Math.abs((link.heading || 0) - currentHeading);
+            if (headingDiff < closestHeadingDiff) {
+                closestHeadingDiff = headingDiff;
+                closestPanoId = link.pano;
             }
+        }
+        return closestPanoId;
+    };
 
-            // 2. Robust Canvas Finder
-            const findCanvas = setInterval(() => {
-                if (!panoRef.current) { clearInterval(findCanvas); return; }
-                
-                const canvases = panoRef.current.getElementsByTagName('canvas');
-                // Ensure canvas has actual dimensions before using it
-                if (canvases.length > 0 &&Pkgs.mkShell {
-    buildInputs = with pkgs; [
-      cargo
-      rustc
-      rustfmt
-      clippy
-      libiconv
-      libusb1
-      udev
-      pkg-config
-      # Add other dependencies here
-    ];
+    const handleMoveForward = () => {
+        if (!panorama) return;
+        const links = panorama.getLinks();
+        const pov = panorama.getPov();
+        const nextPanoId = findNextPano(links, pov.heading);
+        if (nextPanoId) {
+            panorama.setPano(nextPanoId);
+        }
+    };
 
-    # Set environment variables
-    RUST_BACKTRACE = 1;
-    RUST_LOG = "debug";
-    PKG_CONFIG_PATH = "${pkgs.libusb1.dev}/lib/pkgconfig";
-  }
-<ctrl63>src/lib.rs
-<ctrl62><ctrl60>pub mod connection;
-pub mod errors;
-pub mod messages;
-pub mod utils;<ctrl61>
-<ctrl63>src/errors.rs
-use std::{fmt, io, str::Utf8Error};
-use thiserror::Error;
+    const handleZoomIn = () => panorama?.setZoom(panorama.getZoom() + 1);
+    const handleZoomOut = () => panorama?.setZoom(panorama.getZoom() - 1);
 
-/// Represents possible errors in the TTP233 driver.
-#[derive(Error, Debug)]
-pub enum TTP233Error {
-    /// Device not found.
-    #[error("TTP233 device not found")]
-    DeviceNotFound,
+    return (
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            {/* The actual StreetView div - Nearly invisible so WebGPU sees the update */}
+            <div 
+                ref={panoRef} 
+                style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    opacity: 0.01, 
+                    pointerEvents: 'auto', 
+                    position: 'absolute',
+                    zIndex: 1
+                }} 
+            />
 
-    /// USB error.
-    #[error("USB error: {0}")]
-    UsbError(#[from] rusb::Error),
+            {/* Custom Controls Overlay */}
+            <div className="streetview-controls" style={{ 
+                position: 'absolute', 
+                bottom: 20, 
+                left: '50%', 
+                transform: 'translateX(-50%)', 
+                zIndex: 100, 
+                display: 'flex', 
+                gap: 10 
+            }}>
+                <button onClick={handleMoveForward} style={btnStyle}>Forward</button>
+                <button onClick={handleZoomIn} style={btnStyle}>Zoom In</button>
+                <button onClick={handleZoomOut} style={btnStyle}>Zoom Out</button>
+            </div>
+        </div>
+    );
+};
 
-    /// I/O error.
-    #[error("I/O error: {0}")]
-    IoError(#[from] io::Error),
+const btnStyle: React.CSSProperties = {
+    padding: '10px 20px',
+    backgroundColor: 'gold',
+    border: '2px solid white',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    color: 'black'
+};
 
-    /// UTF-8 error.
-    #[error("UTF-8 decoding error: {0}")]
-    Utf8Error(#[from] Utf8Error),
-
-    /// Custom error message.
-    #[error("{0}")]
-    Custom(String),
-}
-<ctrl63>
+export default StreetView;
