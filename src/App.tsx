@@ -7,7 +7,8 @@ import { RenderMode } from './renderer/types';
 import './style.css';
 
 function App() {
-  const [mode, setMode] = useState<RenderMode>('streetview');
+  // Only valid mode in types is 'streetview'
+  const [mode] = useState<RenderMode>('streetview');
   const [zoom, setZoom] = useState(1.0);
   const [panX, setPanX] = useState(0.5);
   const [panY, setPanY] = useState(0.5);
@@ -15,22 +16,17 @@ function App() {
   // --- Street View / Connect States ---
   const [streetViewCanvas, setStreetViewCanvas] = useState<HTMLCanvasElement | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [panorama, setPanorama] = useState<google.maps.StreetViewPanorama | null>(null);
 
   // *** PASTE YOUR API KEY HERE ***
-  const GOOGLE_MAPS_KEY = "AIzaSy...";
+  const GOOGLE_MAPS_KEY = "AIzaSyABKwxIeRZX7VcFIejGkpSplxST_E0-Xn0";
 
   const rendererRef = useRef<Renderer | null>(null);
 
-  // Dummy props for Controls (since we are stripping down for Street View)
-  const [autoChangeEnabled, setAutoChangeEnabled] = useState(false);
-  const [autoChangeDelay, setAutoChangeDelay] = useState(10);
-  const [cellSize, setCellSize] = useState(0.035);
-  const [edgeWidth, setEdgeWidth] = useState(0.06);
-  const [refraction, setRefraction] = useState(0.02);
-  const [colorStrength, setColorStrength] = useState(1.0);
-  const [zoomPreset, setZoomPreset] = useState(1);
-  const [audioUrl, setAudioUrl] = useState('');
-  const [isAudioRunning, setIsAudioRunning] = useState(false);
+  // Controls state matching ControlsProps
+  const [heading, setHeading] = useState(34);
+  const [pitch, setPitch] = useState(10);
+  const [mapVisible, setMapVisible] = useState(false);
 
   return (
     <div id="app-container" style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', padding: 0, margin: 0 }}>
@@ -45,6 +41,7 @@ function App() {
             <StreetView
                 apiKey={GOOGLE_MAPS_KEY}
                 onCanvasReady={(canvas) => setStreetViewCanvas(canvas)}
+                onPanoramaReady={(p) => setPanorama(p)}
             />
         </div>
 
@@ -58,7 +55,6 @@ function App() {
             opacity: isConnected ? 1 : 0 // Hide WebGPU canvas until connected
         }}>
             <WebGPUCanvas
-                rendererRef={rendererRef}
                 mode={mode}
                 // Only pass the source if we are officially "connected"
                 source={isConnected ? streetViewCanvas : null}
@@ -110,21 +106,16 @@ function App() {
             {isConnected && (
                 <div style={{ background: 'rgba(0,0,0,0.8)', padding: 15, borderRadius: 8 }}>
                     <Controls
-                        mode={mode} setMode={setMode}
-                        zoom={zoom} setZoom={setZoom}
-                        panX={panX} setPanX={setPanX}
-                        panY={panY} setPanY={setPanY}
-                        // Fill dummy props
-                        onNewImage={()=>{}} autoChangeEnabled={false} setAutoChangeEnabled={()=>{}}
-                        autoChangeDelay={0} setAutoChangeDelay={()=>{}}
-                        onLoadModel={()=>{}} isModelLoaded={false}
-                        cellSize={cellSize} setCellSize={setCellSize}
-                        edgeWidth={edgeWidth} setEdgeWidth={setEdgeWidth}
-                        refraction={refraction} setRefraction={setRefraction}
-                        colorStrength={colorStrength} setColorStrength={setColorStrength}
-                        zoomPreset={zoomPreset} setZoomPreset={setZoomPreset}
-                        audioUrl={audioUrl} setAudioUrl={setAudioUrl}
-                        startAudio={async ()=>{}} stopAudio={()=>{}} audioRunning={false}
+                        mode={mode}
+                        heading={heading}
+                        pitch={pitch}
+                        zoom={zoom}
+                        mapVisible={mapVisible}
+                        setMapVisible={setMapVisible}
+                        onUpdatePOV={(h, p) => { setHeading(h); setPitch(p); panorama?.setPov({heading: h, pitch: p}); }}
+                        onUpdateZoom={(z) => { setZoom(z); panorama?.setZoom(z); }}
+                        onMove={(dir) => { if (dir === 'forward') panorama?.getLinks && panorama?.setPano(panorama.getLinks()?.[0]?.pano as string); }}
+                        panorama={panorama}
                     />
                 </div>
             )}

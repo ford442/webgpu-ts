@@ -3,9 +3,11 @@ import React, { useEffect, useRef, useState } from 'react';
 interface StreetViewProps {
     onCanvasReady: (canvas: HTMLCanvasElement) => void;
     apiKey: string;
+    // New optional callback so parent (App) can receive the panorama instance
+    onPanoramaReady?: (panorama: google.maps.StreetViewPanorama) => void;
 }
 
-const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
+const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanoramaReady }) => {
     const panoRef = useRef<HTMLDivElement>(null);
     const [panorama, setPanorama] = useState<google.maps.StreetViewPanorama | null>(null);
     const [canvasFound, setCanvasFound] = useState(false);
@@ -13,6 +15,8 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
     const startLocation = { lat: 39.2575004, lng: -121.021821 };
 
     useEffect(() => {
+        let checkForCanvas: number | null = null;
+
         if (!(window as any).google) {
             const script = document.createElement('script');
             script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=alpha`;
@@ -46,8 +50,11 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
             mapInstance.setStreetView(panoInstance);
             setPanorama(panoInstance);
 
+            // Notify parent if requested
+            if (onPanoramaReady) onPanoramaReady(panoInstance);
+
             // --- POLLING FOR VALID CANVAS ---
-            const checkForCanvas = setInterval(() => {
+            checkForCanvas = window.setInterval(() => {
                 if (panoRef.current) {
                     const canvases = panoRef.current.getElementsByTagName('canvas');
                     if (canvases.length > 0) {
@@ -57,12 +64,21 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey }) => {
                             console.log(`[StreetView] Canvas ready: ${canvas.width}x${canvas.height}`);
                             onCanvasReady(canvas);
                             setCanvasFound(true);
-                            clearInterval(checkForCanvas);
+                            if (checkForCanvas) {
+                                clearInterval(checkForCanvas);
+                                checkForCanvas = null;
+                            }
                         }
                     }
                 }
             }, 200);
         }
+
+        return () => {
+            if (checkForCanvas) {
+                clearInterval(checkForCanvas);
+            }
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [apiKey]);
 
