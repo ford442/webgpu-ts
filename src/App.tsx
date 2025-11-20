@@ -7,7 +7,7 @@ import { RenderMode } from './renderer/types';
 import './style.css';
 
 function App() {
-  const [mode, setMode] = useState<RenderMode>('liquid');
+  const [mode, setMode] = useState<RenderMode>('streetview');
   const [zoom, setZoom] = useState(1.0);
   const [panX, setPanX] = useState(0.5);
   const [panY, setPanY] = useState(0.5);
