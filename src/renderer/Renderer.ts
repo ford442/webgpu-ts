@@ -70,7 +70,7 @@ export class Renderer {
 
     private async createPipeline(): Promise<void> {
         // Load shader code
-        const shaderCode = await fetch('/shaders/texture.wgsl').then(r => r.text());
+        const shaderCode = await fetch('./shaders/texture.wgsl').then(r => r.text());
 
         const shaderModule = this.device.createShaderModule({
             code: shaderCode,
