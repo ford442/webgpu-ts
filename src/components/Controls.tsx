@@ -42,6 +42,7 @@ const Controls: React.FC<ControlsProps> = ({
     <option value="liquid-perspective">Liquid Perspective</option>
     <option value="liquid-vortex">Liquid Vortex</option>
     <option value="liquid">Liquid (Interactive)</option>
+    <option value="liquid-viscous">Liquid Viscous</option>
     <option value="liquid-zoom">Liquid Zoom</option>
     <option value="shader">Galaxy Shader</option>
                     <option value="image">Static Image</option>

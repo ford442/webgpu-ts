@@ -8,4 +8,5 @@ export type RenderMode =
   'liquid-zoom' | 
   'liquid-vortex' |
   'liquid-perspective' |
+  'liquid-viscous' |
   'vortex'; // ADD THIS

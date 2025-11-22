@@ -207,14 +207,14 @@ export class Renderer {
     private async createPipelines(): Promise<void> {
         const shaderNames = [
             'galaxy.wgsl', 'imageVideo.wgsl', 'liquid-v1.wgsl', 'liquid.wgsl',
-            'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'vortex.wgsl'
+            'liquid-zoom.wgsl', 'texture.wgsl', 'liquid-perspective.wgsl', 'liquid-viscous.wgsl', 'vortex.wgsl'
         ];
 
         const shaderCodes = await Promise.all(
             shaderNames.map(name => fetch(`${this.shaderBaseUrl}${name}`).then(res => res.text()))
         );
 
-        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidZoomCode, textureCode, liquidPerspectiveCode, vortexCode] = shaderCodes;
+        const [galaxyCode, imageVideoCode, liquidV1Code, liquidCode, liquidZoomCode, textureCode, liquidPerspectiveCode, liquidViscousCode, vortexCode] = shaderCodes;
 
         const galaxyModule = this.device.createShaderModule({code: galaxyCode});
         const imageVideoModule = this.device.createShaderModule({code: imageVideoCode});
@@ -223,6 +223,7 @@ export class Renderer {
         const liquidZoomModule = this.device.createShaderModule({code: liquidZoomCode});
         const textureModule = this.device.createShaderModule({code: textureCode});
         const liquidPerspectiveModule = this.device.createShaderModule({code: liquidPerspectiveCode});
+        const liquidViscousModule = this.device.createShaderModule({code: liquidViscousCode});
         const vortexModule = this.device.createShaderModule({code: vortexCode});
 
         // --- CORRECTED LOGIC ---
@@ -283,7 +284,7 @@ export class Renderer {
         // 4. Create ALL compute pipelines using the SHARED layout
         const [
             computeV1, compute, computeZoom,
-            computePerspective, computeVortex
+            computePerspective, computeViscous, computeVortex
         ] = await Promise.all([
             this.device.createComputePipelineAsync({
                 layout: computePipelineLayout, 
@@ -303,6 +304,10 @@ export class Renderer {
             }),
             this.device.createComputePipelineAsync({
                 layout: computePipelineLayout,
+                compute: {module: liquidViscousModule, entryPoint: 'main'}
+            }),
+            this.device.createComputePipelineAsync({
+                layout: computePipelineLayout,
                 compute: {module: vortexModule, entryPoint: 'main'}
             })
         ]);
@@ -315,6 +320,7 @@ export class Renderer {
         this.pipelines.set('compute', compute);
         this.pipelines.set('computeZoom', computeZoom);
         this.pipelines.set('computePerspective', computePerspective);
+        this.pipelines.set('computeViscous', computeViscous);
         this.pipelines.set('computeVortex', computeVortex);
     }
 
@@ -545,6 +551,7 @@ if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler |
             case 'liquid-zoom':
             case 'liquid-vortex':
             case 'liquid-perspective':
+            case 'liquid-viscous':
             case 'vortex':
                 if (liquidPipeline && this.bindGroups.has('liquid')) {
                     passEncoder.setPipeline(liquidPipeline);
