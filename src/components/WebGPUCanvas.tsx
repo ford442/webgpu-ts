@@ -85,7 +85,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
     const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
         setIsMouseDown(true);
         updateMousePosition(event); // Ensure position is updated on click
-        if (mode === 'ripple' || mode === 'liquid') { // Removed liquid-v1 from ripple logic
+        if (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-viscous') {
             addRippleAtMouseEvent(event);
         }
     };
@@ -94,7 +94,7 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, zoom, panX, panY, ren
 
     const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
         updateMousePosition(event);
-        if (isMouseDown && (mode === 'ripple' || mode === 'liquid')) { // Removed liquid-v1 from ripple logic
+        if (isMouseDown && (mode === 'ripple' || mode === 'liquid' || mode === 'liquid-viscous')) {
             const now = performance.now();
             if (now - lastMouseAddTime.current < 10) return;
             lastMouseAddTime.current = now;

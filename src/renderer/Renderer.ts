@@ -438,7 +438,8 @@ if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler |
                     this.device.queue.writeBuffer(this.computeUniformBuffer, 0, configData, 0, 4);
                 } else {
                     // All other compute shaders use the full uniform struct
-                    this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < 4.0);
+                    const rippleLifetime = mode === 'liquid-viscous' ? 6.0 : 4.0;
+                    this.ripplePoints = this.ripplePoints.filter(p => (currentTime - p.startTime) < rippleLifetime);
                     if (this.ripplePoints.length > this.MAX_RIPPLES) this.ripplePoints.splice(0, this.ripplePoints.length - this.MAX_RIPPLES);
 
                     const rippleDataArr = new Float32Array(this.MAX_RIPPLES * 4);
@@ -483,7 +484,9 @@ if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler |
                     computePass.setPipeline(this.pipelines.get('computeZoom') as GPUComputePipeline);
                 } else if (mode === 'liquid-perspective') {
                     computePass.setPipeline(this.pipelines.get('computePerspective') as GPUComputePipeline);
-                } else { // 'liquid'
+                } else if (mode === 'liquid-viscous') {
+                    computePass.setPipeline(this.pipelines.get('computeViscous') as GPUComputePipeline);
+                } else {
                     computePass.setPipeline(this.pipelines.get('compute') as GPUComputePipeline);
                 }
 
@@ -493,7 +496,7 @@ if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler |
             computePass.end();
 
             // swapDepthTextures logic is unchanged
-            if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'vortex') {
+            if (mode === 'liquid' || mode === 'liquid-zoom' || mode === 'liquid-vortex' || mode === 'liquid-perspective' || mode === 'liquid-viscous' || mode === 'vortex') {
                 this.swapDepthTextures();
             }
         }

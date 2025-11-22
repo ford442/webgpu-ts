@@ -6,8 +6,10 @@
 @group(0) @binding(6) var writeDepthTexture: texture_storage_2d<r32float, write>;
 
 struct Uniforms {
-  config: vec4<f32>,              // time, rippleCount, resolutionX, resolutionY
-  ripples: array<vec4<f32>, 50>,  // x, y, startTime, unused
+  config: vec4<f32>,
+  zoom_config: vec4<f32>,
+  zoom_params: vec4<f32>,
+  ripples: array<vec4<f32>, 50>,
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
@@ -52,6 +54,19 @@ fn flowPattern(p: vec2<f32>, time: f32) -> vec2<f32> {
   return flow;
 }
 
+fn hash2_to_vec2(h: f32) -> vec2<f32> {
+  let a = fract(h * 0.1031);
+  let b = fract(h * 0.11369);
+  return vec2<f32>(a, b) * 2.0 - 1.0;
+}
+
+fn viscous_noise(p: vec2<f32>, time: f32) -> vec2<f32> {
+  let uv = p * vec2<f32>(0.1, 0.1) + time * 0.1;
+  let noiseValue = sin(uv.x * 3.14159) * cos(uv.y * 3.14159);
+  let flow = hash2_to_vec2(fract(noiseValue * 43758.5453));
+  return flow * exp(-length(p) * 0.5);
+}
+
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let resolution = u.config.zw;
@@ -59,39 +74,36 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let currentTime = u.config.x;
   let pixelSize = 1.0 / resolution;
   let center_depth = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;
+  let depthFactor = 1.0 - center_depth;
 
-  // --- Ambient Displacement (Background Only) with Viscous Flow ---
-  var ambientDisplacement = vec2<f32>(0.0, 0.0);
-  let background_factor = 1.0 - smoothstep(0.0, 0.1, center_depth);
-
+  // Ambient displacement and gravity bias
+  var ambientDisplacement = vec2<f32>(0.0);
+  let background_factor = smoothstep(0.0, 0.25, depthFactor);
   if (background_factor > 0.0) {
-    let time = currentTime * 0.3; // Slower for viscous effect
-    let base_ambient_strength = 0.003;
-
-    // Multi-octave noise-based flow
-    let flow = flowPattern(uv * 8.0, time);
-
-    // Add subtle downward gravity bias
-    let gravity = vec2<f32>(0.0, 0.0003);
-
-    ambientDisplacement = (flow * base_ambient_strength + gravity) * background_factor;
+    let time = currentTime * 0.2 + depthFactor * 2.0;
+    let noiseuv = uv * vec2<f32>(9.0, 7.0) + vec2<f32>(currentTime * 0.05, currentTime * 0.04);
+    let flow = flowPattern(noiseuv, time);
+    let gravity = vec2<f32>(0.0, 0.0006);
+    ambientDisplacement = (flow * 0.003 + gravity) * background_factor * (0.2 + depthFactor);
   }
 
-  // --- Mouse-driven Viscous Vortices ---
-  var mouseDisplacement = vec2<f32>(0.0, 0.0);
-  var totalChromaticStrength = 0.0;
-
+  // Vortex calculation
+  var mouseDisplacement = vec2<f32>(0.0);
+  var chromaticAccumulator = 0.0;
   let rippleCount = u32(u.config.y);
+
   for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
     let rippleData = u.ripples[i];
-    let timeSinceClick = u.config.x - rippleData.z;
+    let timeSinceClick = currentTime - rippleData.z;
 
-    // Per-vortex variation based on click position
+    if (timeSinceClick <= 0.0) {
+      continue;
+    }
     let vortexSeed = hash2(rippleData.xy * 100.0);
     let vortexDuration = mix(3.0, 6.0, vortexSeed);
     let chromaticStrength = mix(0.001, 0.005, hash2(rippleData.xy * 200.0));
 
-    if (timeSinceClick > 0.0 && timeSinceClick < vortexDuration) {
+    if (timeSinceClick < vortexDuration) {
       let direction_vec = uv - rippleData.xy;
       let dist = length(direction_vec);
 
@@ -122,12 +134,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let vortexDisplacement = (tangent * angularVelocity + radialComponent) * vortex_amplitude * falloff * attenuation;
 
         mouseDisplacement += vortexDisplacement;
-        totalChromaticStrength += chromaticStrength * length(vortexDisplacement) * 100.0;
+        chromaticAccumulator += chromaticStrength * length(vortexDisplacement) * 100.0;
       }
     }
   }
 
-  // --- Surface Tension: 4-tap neighbor smoothing (30% blend) ---
+  // 4 tap smoothing
   let smoothedDisplacement = mouseDisplacement * 0.7; // 70% original
 
   // Sample 4 cardinal neighbors
@@ -147,7 +159,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // --- Chromatic Aberration ---
   let totalDisplacement = finalMouseDisplacement + ambientDisplacement;
   let displacementMagnitude = length(totalDisplacement);
-  let chromaticOffset = totalChromaticStrength * (1.0 - center_depth) * 0.5;
+  let chromaticOffset = chromaticAccumulator * (1.0 - center_depth) * 0.5;
 
   // Sample each color channel at slightly different offsets
   let redUV = uv + totalDisplacement * (1.0 + chromaticOffset);
@@ -169,4 +181,3 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let displacedDepth = textureSampleLevel(readDepthTexture, non_filtering_sampler, depthDisplacedUV, 0.0).r;
   textureStore(writeDepthTexture, global_id.xy, vec4<f32>(displacedDepth, 0.0, 0.0, 0.0));
 }
-
