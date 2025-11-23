@@ -32,7 +32,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
     ambientDisplacement = motion * base_ambient_strength * background_factor;
   }
-  
+
   // --- Mouse-driven Ripples ---
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
   let rippleCount = u32(u.config.y);
@@ -49,15 +49,29 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let wave = sin(dist * 25.0 - timeSinceClick * ripple_speed);
         let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / (3.0 * mix(0.5, 1.0, rippleOriginDepthFactor)));
         let falloff = 1.0 / (dist * 20.0 + 1.0);
-        mouseDisplacement += (direction_vec / dist) * wave * ripple_amplitude * falloff;
+        mouseDisplacement += (direction_vec / dist) * wave * ripple_amplitude * falloff * attenuation;
       }
     }
   }
-  
-  // --- Final Output ---
+
+  // --- Final Output (RGB Split) ---
   let totalDisplacement = mouseDisplacement + ambientDisplacement;
-  let colorDisplacedUV = uv + totalDisplacement;
-  let color = textureSampleLevel(readTexture, u_sampler, colorDisplacedUV, 0.0);
+
+  // Chromatic Aberration based on displacement amount
+  let displacementMagnitude = length(totalDisplacement);
+  let chromaticStrength = 5.0; // Stronger effect
+  let chromaticOffset = totalDisplacement * chromaticStrength;
+
+  let redUV = uv + totalDisplacement + chromaticOffset;
+  let greenUV = uv + totalDisplacement;
+  let blueUV = uv + totalDisplacement - chromaticOffset;
+
+  let redChannel = textureSampleLevel(readTexture, u_sampler, redUV, 0.0).r;
+  let greenChannel = textureSampleLevel(readTexture, u_sampler, greenUV, 0.0).g;
+  let blueChannel = textureSampleLevel(readTexture, u_sampler, blueUV, 0.0).b;
+  let alpha = textureSampleLevel(readTexture, u_sampler, greenUV, 0.0).a;
+
+  let color = vec4<f32>(redChannel, greenChannel, blueChannel, alpha);
   textureStore(writeTexture, global_id.xy, color);
 
   // Update depth texture for next frame

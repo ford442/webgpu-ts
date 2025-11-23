@@ -5,9 +5,10 @@
 @group(0) @binding(5) var non_filtering_sampler: sampler;
 
 struct Uniforms {
-  time: f32,
-  resolutionX: f32,
-  resolutionY: f32,
+  config: vec4<f32>,
+  zoom_config: vec4<f32>,
+  zoom_params: vec4<f32>,
+  ripples: array<vec4<f32>, 50>,
 };
 
 @group(0) @binding(3) var<uniform> u: Uniforms;
@@ -33,10 +34,10 @@ fn antialias_depth_sample(tex: texture_2d<f32>, samp: sampler, uv: vec2<f32>, te
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-  let resolution = vec2<f32>(u.resolutionX, u.resolutionY);
+  let resolution = u.config.zw;
   let uv = vec2<f32>(global_id.xy) / resolution;
   let pixelSize = 1.0 / resolution;
-  let time = u.time;
+  let time = u.config.x;
     
   // --- Parallax Logic (Unchanged) ---
   let static_depth_for_motion = textureSampleLevel(readDepthTexture, non_filtering_sampler, uv, 0.0).r;

@@ -1,31 +1,30 @@
 # WebGPU Fluid Simulation Agents
 
-This project simulates interactive, fluid-like behavior on an image using WebGPU. The simulation is managed by three primary agents: a main renderer, a velocity shader, and an advection shader.
+This project simulates interactive, fluid-like behavior on an image using WebGPU.
 
-## 1. The Renderer (`src/renderer/Renderer.ts`)
+## Architecture
+
+The simulation is built around a "ping-pong" texture system where compute shaders read the previous frame's state and write the new state.
+
+### 1. The Renderer (`src/renderer/Renderer.ts`)
 
 This is the main orchestrator, written in TypeScript.
 
-* **Role**: Manages all WebGPU resources, including textures, buffers, and pipelines.
-* **Interaction**: It runs a multi-pass rendering loop on every frame.
-* **Input**: Receives mouse coordinates (position, delta) and the current `RenderMode` from the React UI.
-* **Output**: Renders the final image to the HTML canvas.
-* **Key Logic**: For the "liquid-v3" mode, it manages a "ping-pong" texture system to update the simulation's state frame-by-frame.
+*   **Role**: Manages all WebGPU resources (textures, buffers, pipelines).
+*   **Dynamic Loading**: It loads available shaders from `public/shader-list.json`. This allows adding new effects by simply adding a `.wgsl` file and updating the JSON list.
+*   **Rendering**: It executes a compute pass (to update the liquid state) followed by a render pass (to draw the result to the screen).
 
-## 2. The Velocity Shader (`public/shaders/velocity.wgsl`)
+### 2. Compute Shaders (`public/shaders/liquid-*.wgsl`)
 
-This is a compute shader that simulates the physics of the fluid's motion.
+These are single-pass compute shaders that handle both the physics simulation (ripples, flow) and the visual distortion.
 
-* **Role**: To calculate the velocity (direction and speed) of the liquid at every point.
-* **Input**: Reads the velocity state from the previous frame and receives mouse data (position, delta) from a uniform buffer.
-* **Output**: Writes the new, updated velocity field to a state texture.
-* **Key Logic**: It applies friction to slow the liquid down and injects new velocity based on the user's mouse drag.
+*   **Input**: Reads the previous frame's color and depth textures, and receives user input (mouse position, time) via a Uniform Buffer.
+*   **Output**: Writes the distorted image to a storage texture (`writeTexture`) and updates the depth map (`writeDepthTexture`) for the next frame.
+*   **Standard Interface**: All compute shaders share a standardized `Uniforms` structure to ensuring compatibility with the Renderer.
 
-## 3. The Advection Shader (`public/shaders/advection.wgsl`)
+### 3. Shader Configuration (`public/shader-list.json`)
 
-This is a compute shader that moves the image's colors based on the fluid's motion.
+Defines the list of available shaders in the application.
 
-* **Role**: To create the visual "smearing" or "stirring" effect.
-* **Input**: Reads the final velocity field calculated by the velocity shader and the color state from the previous frame. It also has access to the original, undisturbed source image.
-* **Output**: Writes the new, distorted color field to a state texture.
-* **Key Logic**: For each pixel, it looks "upstream" (based on the velocity vector) to find what color should be pulled into that position. It also includes a small restoring force that gently pulls the colors back to their original positions over time.
+*   **Format**: JSON array of objects with `id`, `name`, and `url`.
+*   **Remote Loading**: Supports loading shaders from local paths (e.g., `shaders/liquid.wgsl`) or absolute URLs.

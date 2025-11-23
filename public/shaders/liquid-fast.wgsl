@@ -32,28 +32,36 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let motion = vec2<f32>(sin(uv.y * ambient_freq + time * 1.2), cos(uv.x * ambient_freq + time));
     ambientDisplacement = motion * base_ambient_strength * background_factor;
   }
-  
-  // --- Mouse-driven Ripples ---
+
+  // --- Mouse-driven Ripples (FAST VARIATION) ---
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
   let rippleCount = u32(u.config.y);
   for (var i: u32 = 0u; i < rippleCount; i = i + 1u) {
     let rippleData = u.ripples[i];
     let timeSinceClick = u.config.x - rippleData.z;
-    if (timeSinceClick > 0.0 && timeSinceClick < 3.0) {
+
+    // Shorter lifetime (1.5s instead of 3.0s)
+    if (timeSinceClick > 0.0 && timeSinceClick < 1.5) {
       let direction_vec = uv - rippleData.xy;
       let dist = length(direction_vec);
       if (dist > 0.0001) {
         let rippleOriginDepthFactor = 1.0 - textureSampleLevel(readDepthTexture, non_filtering_sampler, rippleData.xy, 0.0).r;
-        let ripple_speed = mix(1.0, 2.0, rippleOriginDepthFactor);
+
+        // Faster speed (3x base)
+        let ripple_speed = mix(3.0, 5.0, rippleOriginDepthFactor);
         let ripple_amplitude = mix(0.005, 0.015, rippleOriginDepthFactor);
-        let wave = sin(dist * 25.0 - timeSinceClick * ripple_speed);
-        let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / (3.0 * mix(0.5, 1.0, rippleOriginDepthFactor)));
+
+        // Higher frequency waves
+        let wave = sin(dist * 40.0 - timeSinceClick * ripple_speed * 10.0);
+
+        // Faster decay
+        let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick / (1.5 * mix(0.5, 1.0, rippleOriginDepthFactor)));
         let falloff = 1.0 / (dist * 20.0 + 1.0);
-        mouseDisplacement += (direction_vec / dist) * wave * ripple_amplitude * falloff;
+        mouseDisplacement += (direction_vec / dist) * wave * ripple_amplitude * falloff * attenuation;
       }
     }
   }
-  
+
   // --- Final Output ---
   let totalDisplacement = mouseDisplacement + ambientDisplacement;
   let colorDisplacedUV = uv + totalDisplacement;

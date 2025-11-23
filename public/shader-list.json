@@ -1,0 +1,42 @@
+[
+  {
+    "id": "liquid",
+    "name": "Liquid (Interactive)",
+    "url": "shaders/liquid.wgsl"
+  },
+  {
+    "id": "liquid-v1",
+    "name": "Liquid (Ambient)",
+    "url": "shaders/liquid-v1.wgsl"
+  },
+  {
+    "id": "liquid-zoom",
+    "name": "Liquid Zoom",
+    "url": "shaders/liquid-zoom.wgsl"
+  },
+  {
+    "id": "liquid-perspective",
+    "name": "Liquid Perspective",
+    "url": "shaders/liquid-perspective.wgsl"
+  },
+  {
+    "id": "liquid-viscous",
+    "name": "Liquid Viscous",
+    "url": "shaders/liquid-viscous.wgsl"
+  },
+  {
+    "id": "vortex",
+    "name": "Clean Vortex",
+    "url": "shaders/vortex.wgsl"
+  },
+  {
+    "id": "liquid-fast",
+    "name": "Liquid Fast",
+    "url": "shaders/liquid-fast.wgsl"
+  },
+  {
+    "id": "liquid-rgb",
+    "name": "Liquid RGB",
+    "url": "shaders/liquid-rgb.wgsl"
+  }
+]

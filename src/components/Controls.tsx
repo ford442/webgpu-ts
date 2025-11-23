@@ -1,11 +1,9 @@
-// src/components/Controls.tsx
-
 import React from 'react';
-import { RenderMode } from '../renderer/types';
+import { RenderMode, ShaderEntry } from '../renderer/types';
 
 interface ControlsProps {
-    mode: RenderMode; // ADD THIS LINE
-    setMode: (mode: RenderMode) => void; // ADD THIS LINE
+    mode: RenderMode;
+    setMode: (mode: RenderMode) => void;
     zoom: number;
     setZoom: (zoom: number) => void;
     panX: number;
@@ -19,36 +17,36 @@ interface ControlsProps {
     setAutoChangeDelay: (delay: number) => void;
     onLoadModel: () => void;
     isModelLoaded: boolean;
+    availableModes: ShaderEntry[];
 }
 
 const Controls: React.FC<ControlsProps> = ({
-    mode, setMode, // ADD THIS LINE
+    mode, setMode,
     zoom, setZoom,
     panX, setPanX,
     panY, setPanY,
     onNewImage,
     autoChangeEnabled, setAutoChangeEnabled,
     autoChangeDelay, setAutoChangeDelay,
-    onLoadModel, isModelLoaded
+    onLoadModel, isModelLoaded,
+    availableModes = []
 }) => {
-    // The previous logic for `isImageMode` is no longer needed since you are always showing these controls.
-
     return (
         <div className="controls">
             <div className="control-group">
                 <label htmlFor="mode-select">Render Mode:</label>
                  <select id="mode-select" value={mode} onChange={(e) => setMode(e.target.value as RenderMode)}>
-    <option value="vortex">Clean Vortex</option> {/* ADD THIS */}
-    <option value="liquid-perspective">Liquid Perspective</option>
-    <option value="liquid-vortex">Liquid Vortex</option>
-    <option value="liquid">Liquid (Interactive)</option>
-    <option value="liquid-viscous">Liquid Viscous</option>
-    <option value="liquid-zoom">Liquid Zoom</option>
-    <option value="shader">Galaxy Shader</option>
-                    <option value="image">Static Image</option>
-                    <option value="ripple">Ripple Effect</option>
-                    <option value="video">Video Texture</option>
-                    <option value="liquid-v1">Liquid (Ambient)</option>
+                    <optgroup label="Basic">
+                        <option value="image">Static Image</option>
+                        <option value="ripple">Ripple Effect</option>
+                        <option value="video">Video Texture</option>
+                        <option value="shader">Galaxy Shader</option>
+                    </optgroup>
+                    <optgroup label="Effects">
+                        {availableModes.map(entry => (
+                            <option key={entry.id} value={entry.id}>{entry.name}</option>
+                        ))}
+                    </optgroup>
                 </select>
             </div>
             <div className="control-group">
