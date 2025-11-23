@@ -64,7 +64,7 @@ export class Renderer {
         this.plasmaBalls.push({
             x, y, vx, vy,
             r, g, b,
-            radius: 0.02 + Math.random() * 0.03, // Base radius
+            radius: 0.05 + Math.random() * 0.08, // Bigger Base radius (0.05 - 0.13)
             age: 0,
             maxAge: 5.0 + Math.random() * 5.0, // Lives for 5-10 seconds
             seed: Math.random() * 100.0

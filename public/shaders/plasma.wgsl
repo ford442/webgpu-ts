@@ -80,25 +80,34 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
           // Displace distance based on noise and velocity direction
           let vel = ball.pos.zw;
           let velDir = normalize(vel);
+          let speed = length(vel);
           let time = u.config.x;
 
           // Noise offset
           // Animate noise with time and velocity
-          let noiseVal = fbm(uv * 10.0 - vel * time * 5.0 + vec2<f32>(ball.info.z));
+          // Increased frequency and speed for more chaos
+          let noiseVal = fbm(uv * 20.0 - vel * time * 8.0 + vec2<f32>(ball.info.z));
 
           // Distort the field
-          // Make it trail behind
+          // Make it trail behind significantly
           // dot(dvec, vel) is positive if we are in front, negative if behind
-          let trail = smoothstep(0.0, 1.0, -dot(normalize(dvec), velDir)); // 1.0 behind
+          let dotP = dot(normalize(dvec), velDir);
+          let trail = smoothstep(0.2, 1.0, -dotP); // 1.0 behind
 
-          let effectiveRadius = radius * (1.0 + 0.5 * noiseVal * trail);
+          // "Irregular whooshing"
+          // Stretch noise along velocity
+          // Increase effective radius more dramatically based on noise
+          let distortion = 1.0 + (1.5 * noiseVal * trail) + (0.5 * noiseVal);
+          let effectiveRadius = radius * distortion;
 
           // Metaball function: 1 / (dist^2) or similar gaussian
           // Using Gaussian for smoothness: exp(-k * dist^2)
-          let influence = exp(-100.0 * (dist * dist) / (effectiveRadius * effectiveRadius));
+          // Lower k for broader, softer blobs
+          let influence = exp(-40.0 * (dist * dist) / (effectiveRadius * effectiveRadius));
 
           plasmaField += influence;
-          plasmaColor += ball.color.rgb * influence;
+          // Boost color intensity
+          plasmaColor += ball.color.rgb * influence * 1.5;
 
           // Shadow Logic
           // If pixel is "offset" from ball center away from light, cast shadow
