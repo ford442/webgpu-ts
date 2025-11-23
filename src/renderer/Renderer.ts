@@ -25,8 +25,8 @@ export class Renderer {
     private dataTextureB!: GPUTexture;
     private dataTextureC!: GPUTexture;
     private extraBuffer!: GPUBuffer;
-    private fgSpeed: number = 0.05;
-    private bgSpeed: number = 0.01;
+    private fgSpeed: number = 0.08;
+    private bgSpeed: number = 0.0;
     private parallaxStrength: number = 2.0;
     private fogDensity: number = 0.7;
     private shaderList: ShaderEntry[] = [];
