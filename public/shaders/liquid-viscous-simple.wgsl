@@ -60,10 +60,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let angularVelocity = (1.0 - normalizedTime * normalizedTime) * 8.0;
 
         // Vortex strength (fixed mix)
-        let vortex_amplitude = 0.015;
+        let vortex_amplitude = 0.05;
 
         // Falloff
-        let falloff = 1.0 / (dist * 33.0 + 1.0);
+        let falloff = 1.0 / (dist * 15.0 + 1.0);
 
         // Attenuation
         let attenuation = 1.0 - smoothstep(0.0, 1.0, normalizedTime);
