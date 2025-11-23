@@ -48,5 +48,20 @@
     "id": "liquid-jelly",
     "name": "Liquid Jelly",
     "url": "shaders/liquid-jelly.wgsl"
+  },
+  {
+    "id": "liquid-rainbow",
+    "name": "Liquid Rainbow",
+    "url": "shaders/liquid-rainbow.wgsl"
+  },
+  {
+    "id": "liquid-oil",
+    "name": "Liquid Oil",
+    "url": "shaders/liquid-oil.wgsl"
+  },
+  {
+    "id": "liquid-glitch",
+    "name": "Liquid Glitch",
+    "url": "shaders/liquid-glitch.wgsl"
   }
 ]
