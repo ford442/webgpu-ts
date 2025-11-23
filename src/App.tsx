@@ -148,6 +148,12 @@ function App() {
       }
   }, [depthMapResult]);
 
+  const handleInit = useCallback(() => {
+    if (rendererRef.current) {
+        setAvailableModes(rendererRef.current.getAvailableModes());
+    }
+  }, []);
+
   return (
     <div id="app-container">
         <h1>WebGPU Liquid + Depth Effect</h1>
@@ -178,11 +184,7 @@ function App() {
             setMousePosition={setMousePosition}
             isMouseDown={isMouseDown}
             setIsMouseDown={setIsMouseDown}
-            onInit={() => {
-                if (rendererRef.current) {
-                    setAvailableModes(rendererRef.current.getAvailableModes());
-                }
-            }}
+            onInit={handleInit}
         />
         {depthMapResult && (
             <div className="debug-container">

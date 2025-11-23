@@ -55,6 +55,18 @@ export class Renderer {
         if (params.fogDensity !== undefined) this.fogDensity = params.fogDensity;
     }
 
+    public destroy(): void {
+        if (this.imageTexture) this.imageTexture.destroy();
+        if (this.videoTexture) this.videoTexture.destroy();
+        if (this.depthTextureRead) this.depthTextureRead.destroy();
+        if (this.depthTextureWrite) this.depthTextureWrite.destroy();
+        if (this.dataTextureA) this.dataTextureA.destroy();
+        if (this.dataTextureB) this.dataTextureB.destroy();
+        if (this.dataTextureC) this.dataTextureC.destroy();
+        if (this.writeTexture) this.writeTexture.destroy();
+        if (this.device) this.device.destroy();
+    }
+
     public async init(): Promise<boolean> {
         if (!navigator.gpu) return false;
         const adapter = await navigator.gpu.requestAdapter();
