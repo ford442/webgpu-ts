@@ -38,5 +38,15 @@
     "id": "liquid-rgb",
     "name": "Liquid RGB",
     "url": "shaders/liquid-rgb.wgsl"
+  },
+  {
+    "id": "liquid-metal",
+    "name": "Liquid Metal",
+    "url": "shaders/liquid-metal.wgsl"
+  },
+  {
+    "id": "liquid-jelly",
+    "name": "Liquid Jelly",
+    "url": "shaders/liquid-jelly.wgsl"
   }
 ]
