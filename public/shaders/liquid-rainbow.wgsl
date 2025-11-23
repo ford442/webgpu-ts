@@ -48,8 +48,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
   // Dynamic color splitting
   // We oscillate the channel offsets based on time and displacement intensity
-  let shift_speed = 2.0;
-  let shift_amount = 0.02 + magnitude * 0.5; // More displacement = more split
+  let shift_speed = 0.5;
+  let shift_amount = 0.005 + magnitude * 0.2; // More displacement = more split
 
   let r_offset = vec2<f32>(sin(currentTime * shift_speed), cos(currentTime * shift_speed)) * shift_amount;
   let g_offset = vec2<f32>(0.0, 0.0);

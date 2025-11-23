@@ -51,10 +51,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
   // --- Oil Swirl Logic ---
   // Continuous slow movement
-  let time = currentTime * 0.2;
+  let time = currentTime * 0.05;
   let noiseuv = uv * 3.0;
   let flow = flowPattern(noiseuv, time);
-  let ambientDisplacement = flow * 0.02;
+  let ambientDisplacement = flow * 0.01;
 
   // --- Mouse Ripples ---
   var mouseDisplacement = vec2<f32>(0.0, 0.0);
@@ -85,11 +85,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
   // Add interference pattern (oil slick colors)
   // Based on noise/displacement magnitude
-  let slick = length(totalDisplacement) * 20.0;
+  let slick = length(totalDisplacement) * 10.0;
   let interference = 0.5 + 0.5 * cos(slick + vec3<f32>(0.0, 2.0, 4.0)); // Rainbow bands
 
   // Mix
-  let finalColor = mix(color.rgb, interference, 0.2);
+  let finalColor = mix(color.rgb, interference, 0.1);
 
   textureStore(writeTexture, global_id.xy, vec4<f32>(finalColor, 1.0));
 

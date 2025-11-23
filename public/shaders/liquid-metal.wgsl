@@ -54,7 +54,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             let decay = 4.0;
 
             let phase = dist * freq - timeSinceClick * speed;
-            let attenuation = 1.0 / (1.0 + timeSinceClick * decay + dist * 10.0);
+            let attenuation = 1.0 / (1.0 + timeSinceClick * decay + dist * 40.0);
 
             // Height: sin wave
             let h = sin(phase) * attenuation;
@@ -96,7 +96,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // Specular Lighting
   // Construct normal from slope.
   // Slope is (dz/dx, dz/dy). Normal is (-slope.x, -slope.y, 1).
-  let normalStrength = 2.0; // Exaggerate geometry
+  let normalStrength = 3.0; // Exaggerate geometry
   let normal = normalize(vec3<f32>(-totalSlope.x * normalStrength, -totalSlope.y * normalStrength, 1.0));
 
   // Lighting source (Mouse follows? or Static?)
@@ -107,7 +107,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let viewDir = vec3<f32>(0.0, 0.0, 1.0);
   let halfDir = normalize(lightDir + viewDir);
   let NdotH = max(dot(normal, halfDir), 0.0);
-  let specular = pow(NdotH, 64.0); // Sharp, metallic highlight
+  let specular = pow(NdotH, 128.0); // Sharp, metallic highlight
 
   // Environment reflection approximation (chromatic fringe)
   let fringe = vec3<f32>(totalSlope.x, totalSlope.y, 0.0) * 0.05;

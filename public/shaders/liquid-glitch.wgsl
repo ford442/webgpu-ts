@@ -27,7 +27,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // --- Pixelation / Glitch Grid ---
   // Determine block size dynamically based on mouse activity?
   // Let's keep it constant for the "glitch" look.
-  let blockSize = vec2<f32>(32.0, 32.0); // Pixels per block
+  let blockSize = vec2<f32>(16.0, 16.0); // Pixels per block
   let blockUV = floor(uv * resolution / blockSize) * blockSize / resolution;
 
   // Use block center for calculations to keep blocks uniform
@@ -46,7 +46,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
       // Digital noise burst
       if (dist > 0.0001) {
         let speed = 5.0;
-        let wave = step(0.5, sin(dist * 50.0 - timeSinceClick * speed)); // Square wave!
+        let wave = step(0.8, sin(dist * 50.0 - timeSinceClick * speed)); // Square wave!
         let attenuation = 1.0 - smoothstep(0.0, 1.0, timeSinceClick);
 
         // Randomize direction per block
@@ -67,9 +67,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let displacedUV = uv + mouseDisplacement; // Apply block offset to pixel UV
 
   // Chromatic Aberration (Vertical only, like VHS)
-  let r = textureSampleLevel(readTexture, u_sampler, displacedUV + vec2(0.005, 0.0), 0.0).r;
+  let r = textureSampleLevel(readTexture, u_sampler, displacedUV + vec2(0.01, 0.0), 0.0).r;
   let g = textureSampleLevel(readTexture, u_sampler, displacedUV, 0.0).g;
-  let b = textureSampleLevel(readTexture, u_sampler, displacedUV - vec2(0.005, 0.0), 0.0).b;
+  let b = textureSampleLevel(readTexture, u_sampler, displacedUV - vec2(0.01, 0.0), 0.0).b;
 
   // Scanlines
   let scanline = sin(uv.y * resolution.y * 0.5) * 0.1;

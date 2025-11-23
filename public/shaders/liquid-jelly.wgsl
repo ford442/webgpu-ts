@@ -38,8 +38,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
           let dist = length(direction_vec);
 
           // Elastic Bounce Logic
-          let bounce_freq = 12.0;
-          let decay = 3.0;
+          let bounce_freq = 8.0;
+          let decay = 2.0;
           let amplitude = 0.05; // Strong bulge
           let radius = 0.15;
 
@@ -47,7 +47,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
           let bounce = sin(timeSinceClick * bounce_freq) * exp(-timeSinceClick * decay);
 
           // Spatial shape: Smooth blob
-          let shape = smoothstep(radius, 0.0, dist);
+          let shape = smoothstep(radius * 1.5, 0.0, dist);
 
           // Displacement: Push/Pull
           // Pushing outward makes the image look magnified/bulged.
