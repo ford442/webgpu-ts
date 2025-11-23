@@ -54,6 +54,9 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanora
             if (onPanoramaReady) onPanoramaReady(panoInstance);
 
             // --- POLLING FOR VALID CANVAS ---
+            // Keep checking because Google Maps might replace the canvas when moving
+            let lastCanvas: HTMLCanvasElement | null = null;
+
             checkForCanvas = window.setInterval(() => {
                 if (panoRef.current) {
                     const canvases = panoRef.current.getElementsByTagName('canvas');
@@ -61,12 +64,12 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanora
                         const canvas = canvases[0];
                         // Only accept if it has real dimensions (fixes the 1px stripe issue)
                         if (canvas.width > 100 && canvas.height > 100) {
-                            console.log(`[StreetView] Canvas ready: ${canvas.width}x${canvas.height}`);
-                            onCanvasReady(canvas);
-                            setCanvasFound(true);
-                            if (checkForCanvas) {
-                                clearInterval(checkForCanvas);
-                                checkForCanvas = null;
+                            // If it's a different canvas element, notify the parent
+                            if (canvas !== lastCanvas) {
+                                console.log(`[StreetView] New canvas detected: ${canvas.width}x${canvas.height}`);
+                                lastCanvas = canvas;
+                                onCanvasReady(canvas);
+                                setCanvasFound(true);
                             }
                         }
                     }
