@@ -209,10 +209,10 @@ export class Renderer {
         };
 
         const [skyCode, terrainCode, treeCode, waterCode] = await Promise.all([
-            loadShader('/shaders/sky.wgsl'),
-            loadShader('/shaders/terrain.wgsl'),
-            loadShader('/shaders/tree.wgsl'),
-            loadShader('/shaders/water.wgsl')
+            loadShader('./shaders/sky.wgsl'),
+            loadShader('./shaders/terrain.wgsl'),
+            loadShader('./shaders/tree.wgsl'),
+            loadShader('./shaders/water.wgsl')
         ]);
 
         const layout = 'auto';
