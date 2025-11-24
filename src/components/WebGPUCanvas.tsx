@@ -39,6 +39,9 @@ const WebGPUCanvas: React.FC = () => {
         return () => {
             window.removeEventListener('resize', handleResize);
             cancelAnimationFrame(animationFrameId.current);
+            if (rendererRef.current) {
+                rendererRef.current.destroy();
+            }
         };
     }, []);
     
