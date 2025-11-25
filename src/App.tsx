@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WebGPUCanvas from './components/WebGPUCanvas';
 import Controls from './components/Controls';
 import { Renderer } from './renderer/Renderer';
-import { RenderMode } from './renderer/types';
+import { RenderMode, ShaderEntry } from './renderer/types';
 import { pipeline, env } from '@xenova/transformers';
 import './style.css';
 
@@ -24,6 +24,7 @@ function App() {
   const [farthestPoint, setFarthestPoint] = useState({ x: 0.5, y: 0.5 });
   const [mousePosition, setMousePosition] = useState({ x: -1, y: -1 });
   const [isMouseDown, setIsMouseDown] = useState(false);
+  const [availableModes, setAvailableModes] = useState<ShaderEntry[]>([]);
 
   const rendererRef = useRef<Renderer | null>(null);
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -147,6 +148,12 @@ function App() {
       }
   }, [depthMapResult]);
 
+  const handleInit = useCallback(() => {
+    if (rendererRef.current) {
+        setAvailableModes(rendererRef.current.getAvailableModes());
+    }
+  }, []);
+
   return (
     <div id="app-container">
         <h1>WebGPU Liquid + Depth Effect</h1>
@@ -164,6 +171,7 @@ function App() {
             setAutoChangeDelay={setAutoChangeDelay}
             onLoadModel={loadModel}
             isModelLoaded={!!depthEstimator}
+            availableModes={availableModes}
         />
         <WebGPUCanvas
             rendererRef={rendererRef}
@@ -176,6 +184,7 @@ function App() {
             setMousePosition={setMousePosition}
             isMouseDown={isMouseDown}
             setIsMouseDown={setIsMouseDown}
+            onInit={handleInit}
         />
         {depthMapResult && (
             <div className="debug-container">
