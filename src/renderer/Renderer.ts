@@ -45,10 +45,10 @@ export class Renderer {
 
     // URLs
     private urls = {
-        sky: 'https://img.noahcohn.us/agent/sky.png',
-        ground: 'https://img.noahcohn.us/agent/ground.png',
-        bark: 'https://img.noahcohn.us/agent/bark.png',
-        branch: 'https://img.noahcohn.us/agent/branch.png'
+        sky: 'https://img.noahcohn.com/agent/sky.png',
+        ground: 'https://img.noahcohn.com/agent/ground.png',
+        bark: 'https://img.noahcohn.com/agent/bark.png',
+        branch: 'https://img.noahcohn.com/agent/branch.png'
     };
 
     constructor(canvas: HTMLCanvasElement) {
