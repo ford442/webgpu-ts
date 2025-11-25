@@ -109,8 +109,8 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanora
                     position: 'absolute',
                     top: 0,
                     left: 0,
-                    // Keep a tiny non-zero opacity so the browser continues to rasterize the canvas
-                    opacity: 0.01,
+                    // Keep opacity at 1 so we get valid pixel data; hiding is handled by z-index in App.tsx
+                    opacity: 1,
                     pointerEvents: 'auto',
                     zIndex: 1,
                 }}
