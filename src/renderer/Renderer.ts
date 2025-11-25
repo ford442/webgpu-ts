@@ -2,6 +2,7 @@ import { mat4, vec3 } from 'gl-matrix';
 import { Camera } from './Camera';
 import { Geometry, Mesh } from './Geometry';
 import { InputHandler } from './InputHandler';
+import { PhysicsEngine } from './Physics';
 
 export class Renderer {
     private canvas: HTMLCanvasElement;
@@ -11,8 +12,10 @@ export class Renderer {
 
     private camera: Camera;
     private inputHandler: InputHandler;
+    private physicsEngine: PhysicsEngine;
 
     private ready = false;
+    private lastTime: number = 0;
 
     // Pipelines
     private skyPipeline!: GPURenderPipeline;
@@ -65,6 +68,8 @@ export class Renderer {
                 this.treePositions.push(vec3.fromValues(x, 0, z));
             }
         }
+
+        this.physicsEngine = new PhysicsEngine(this.treePositions);
     }
 
     public async init(): Promise<boolean> {
@@ -278,23 +283,29 @@ export class Renderer {
         } as GPUBlendComponent);
     }
 
+    public destroy() {
+        this.inputHandler.destroy();
+    }
+
     public render() {
         if (!this.ready || !this.device) return;
 
-        const dt = 0.016;
+        const now = performance.now();
+        if (this.lastTime === 0) this.lastTime = now;
+        const dt = Math.min((now - this.lastTime) / 1000, 0.1);
+        this.lastTime = now;
+
         const mouseDelta = this.inputHandler.getMouseDelta();
-        if (this.inputHandler.keys['KeyW']) this.camera.processKeyboard('FORWARD', dt);
-        if (this.inputHandler.keys['KeyS']) this.camera.processKeyboard('BACKWARD', dt);
-        if (this.inputHandler.keys['KeyA']) this.camera.processKeyboard('LEFT', dt);
-        if (this.inputHandler.keys['KeyD']) this.camera.processKeyboard('RIGHT', dt);
-        
         if (Math.abs(mouseDelta.x) > 0 || Math.abs(mouseDelta.y) > 0) {
             this.camera.processMouseMovement(mouseDelta.x, mouseDelta.y);
         }
 
+        // Update Camera Physics/Movement
+        this.camera.update(dt, this.inputHandler, this.physicsEngine);
+
         const view = this.camera.getViewMatrix();
         const projection = this.camera.getProjectionMatrix();
-        const time = performance.now() / 1000.0;
+        const time = now / 1000.0;
         
         const uniformData = new Float32Array(40);
         uniformData.set(view as Float32Array, 0);

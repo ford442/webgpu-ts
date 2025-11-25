@@ -1,4 +1,6 @@
 import { mat4, vec3, glMatrix } from 'gl-matrix';
+import { InputHandler } from './InputHandler';
+import { PhysicsEngine } from './Physics';
 
 const toRadian = glMatrix.toRadian;
 
@@ -16,6 +18,25 @@ export class Camera {
     private aspect: number;
     private near: number;
     private far: number;
+
+    // Physics State
+    private walkVelocity: vec3 = vec3.create();
+    private impactVelocity: vec3 = vec3.create();
+    private verticalVelocity: number = 0;
+
+    public isGrounded: boolean = false;
+    public isDebug: boolean = false;
+    private debugToggleLatch: boolean = false;
+
+    private eyeHeight: number = 2.0; // Player height
+
+    // Constants
+    private walkSpeed: number = 10.0;
+    private flySpeed: number = 20.0;
+    private jumpForce: number = 8.0;
+    private gravity: number = 20.0;
+    private dodgeForce: number = 15.0;
+    private impactDamping: number = 0.90; // Decay per frame
 
     constructor(position: vec3 = vec3.fromValues(0, 0, 0), aspect: number = 1.0) {
         this.position = position;
@@ -45,50 +66,16 @@ export class Camera {
 
     public getProjectionMatrix(): mat4 {
         const projection = mat4.create();
-        // Use perspectiveZO for WebGPU (0..1 depth range) if available, otherwise manual or standard
-        // gl-matrix 3.x has perspectiveZO
         if ((mat4 as any).perspectiveZO) {
              (mat4 as any).perspectiveZO(projection, toRadian(this.fov), this.aspect, this.near, this.far);
         } else {
             mat4.perspective(projection, toRadian(this.fov), this.aspect, this.near, this.far);
-            // Convert -1..1 to 0..1?
-            // T = translate(0, 0, 1) * scale(1, 1, 0.5)
-            // Or just assume the user installed a version that supports it or I accept clipping.
         }
         return projection;
     }
 
     public updateAspect(aspect: number) {
         this.aspect = aspect;
-    }
-
-    public processKeyboard(direction: 'FORWARD' | 'BACKWARD' | 'LEFT' | 'RIGHT' | 'UP' | 'DOWN', deltaTime: number, speed: number = 10.0) {
-        const velocity = speed * deltaTime;
-        const moveVec = vec3.create();
-
-        if (direction === 'FORWARD') {
-            vec3.scale(moveVec, this.front, velocity);
-            vec3.add(this.position, this.position, moveVec);
-        }
-        if (direction === 'BACKWARD') {
-            vec3.scale(moveVec, this.front, velocity);
-            vec3.sub(this.position, this.position, moveVec);
-        }
-        if (direction === 'LEFT') {
-            vec3.scale(moveVec, this.right, velocity);
-            vec3.sub(this.position, this.position, moveVec);
-        }
-        if (direction === 'RIGHT') {
-            vec3.scale(moveVec, this.right, velocity);
-            vec3.add(this.position, this.position, moveVec);
-        }
-        // Flight controls for debugging/easy movement
-        if (direction === 'UP') {
-            this.position[1] += velocity;
-        }
-        if (direction === 'DOWN') {
-            this.position[1] -= velocity;
-        }
     }
 
     public processMouseMovement(xoffset: number, yoffset: number, constrainPitch: boolean = true) {
@@ -105,6 +92,163 @@ export class Camera {
         }
 
         this.updateCameraVectors();
+    }
+
+    // New Update Method replacing processKeyboard
+    public update(dt: number, input: InputHandler, physics: PhysicsEngine) {
+        // Toggle Debug
+        if (input.isKeyDown('Backquote')) {
+            if (!this.debugToggleLatch) {
+                this.isDebug = !this.isDebug;
+                this.verticalVelocity = 0;
+                vec3.set(this.walkVelocity, 0, 0, 0);
+                vec3.set(this.impactVelocity, 0, 0, 0);
+                this.debugToggleLatch = true;
+                console.log("Debug Mode:", this.isDebug);
+            }
+        } else {
+            this.debugToggleLatch = false;
+        }
+
+        if (this.isDebug) {
+            this.updateDebug(dt, input);
+        } else {
+            this.updateWalk(dt, input, physics);
+        }
+    }
+
+    private updateDebug(dt: number, input: InputHandler) {
+        const speed = this.flySpeed * dt;
+        const moveVec = vec3.create();
+
+        // Right Click: Forward
+        if (input.isMouseButtonDown(2)) {
+            vec3.scale(moveVec, this.front, speed);
+            vec3.add(this.position, this.position, moveVec);
+        }
+        // S: Backward
+        if (input.isKeyDown('KeyS')) {
+            vec3.scale(moveVec, this.front, speed);
+            vec3.sub(this.position, this.position, moveVec);
+        }
+        // A: Left
+        if (input.isKeyDown('KeyA')) {
+            vec3.scale(moveVec, this.right, speed);
+            vec3.sub(this.position, this.position, moveVec);
+        }
+        // D: Right
+        if (input.isKeyDown('KeyD')) {
+            vec3.scale(moveVec, this.right, speed);
+            vec3.add(this.position, this.position, moveVec);
+        }
+        // W: Up
+        if (input.isKeyDown('KeyW')) {
+            this.position[1] += speed;
+        }
+        // Shift: Down
+        if (input.isKeyDown('ShiftLeft')) {
+            this.position[1] -= speed;
+        }
+    }
+
+    private updateWalk(dt: number, input: InputHandler, physics: PhysicsEngine) {
+        // 1. Calculate Input Direction (Horizontal)
+        const inputDir = vec3.create();
+        const flatFront = vec3.fromValues(this.front[0], 0, this.front[2]);
+        vec3.normalize(flatFront, flatFront);
+        const flatRight = vec3.fromValues(this.right[0], 0, this.right[2]);
+        vec3.normalize(flatRight, flatRight);
+
+        // Forward (Right Click)
+        if (input.isMouseButtonDown(2)) {
+            vec3.add(inputDir, inputDir, flatFront);
+        }
+        // Backward (S)
+        if (input.isKeyDown('KeyS')) {
+            vec3.sub(inputDir, inputDir, flatFront);
+        }
+        // Right (D)
+        if (input.isKeyDown('KeyD')) {
+            vec3.add(inputDir, inputDir, flatRight);
+        }
+        // Left (A)
+        if (input.isKeyDown('KeyA')) {
+            vec3.sub(inputDir, inputDir, flatRight);
+        }
+
+        if (vec3.length(inputDir) > 0) {
+            vec3.normalize(inputDir, inputDir);
+        }
+
+        // 2. Dodge (Double Tap)
+        const addDodge = (dir: vec3) => {
+            const impulse = vec3.create();
+            vec3.scale(impulse, dir, this.dodgeForce);
+            vec3.add(this.impactVelocity, this.impactVelocity, impulse);
+        };
+
+        if (input.consumeDoubleTap('KeyA')) addDodge(vec3.fromValues(-flatRight[0], 0, -flatRight[2]));
+        if (input.consumeDoubleTap('KeyD')) addDodge(flatRight);
+        if (input.consumeDoubleTap('KeyS')) addDodge(vec3.fromValues(-flatFront[0], 0, -flatFront[2]));
+        if (input.consumeDoubleTap('Mouse2')) addDodge(flatFront);
+
+
+        // 3. Update Velocities
+
+        // Impact Decay
+        vec3.scale(this.impactVelocity, this.impactVelocity, this.impactDamping);
+
+        // Walk Velocity
+        if (this.isGrounded) {
+             // Snappy Movement: Set directly
+             vec3.scale(this.walkVelocity, inputDir, this.walkSpeed);
+
+             // Jump
+             if (input.isKeyDown('Space')) {
+                 this.verticalVelocity = this.jumpForce;
+                 this.isGrounded = false;
+                 // Add small forward momentum if moving?
+             }
+        } else {
+             // No Air Control: walkVelocity remains constant (momentum)
+             // Should we apply drag? Maybe slight air drag.
+             vec3.scale(this.walkVelocity, this.walkVelocity, 0.99);
+        }
+
+        // Gravity
+        this.verticalVelocity -= this.gravity * dt;
+
+        // 4. Integrate Position
+        const totalVel = vec3.create();
+        vec3.add(totalVel, this.walkVelocity, this.impactVelocity);
+
+        const moveStep = vec3.create();
+        vec3.scale(moveStep, totalVel, dt);
+
+        // Apply Horizontal
+        vec3.add(this.position, this.position, moveStep);
+
+        // Apply Vertical
+        this.position[1] += this.verticalVelocity * dt;
+
+        // 5. Collision
+
+        // Trees (Horizontal)
+        // If we hit a tree, we should stop/slide.
+        physics.resolveTreeCollisions(this.position);
+
+        // Bounds
+        physics.constrainToBounds(this.position);
+
+        // Terrain (Vertical)
+        const groundH = physics.getGroundHeight(this.position[0], this.position[2]);
+        if (this.position[1] < groundH + this.eyeHeight) {
+            this.position[1] = groundH + this.eyeHeight;
+            this.verticalVelocity = 0;
+            this.isGrounded = true;
+        } else {
+            this.isGrounded = false;
+        }
     }
 
     private updateCameraVectors() {
