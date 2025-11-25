@@ -68,5 +68,10 @@
     "id": "liquid-viscous-simple",
     "name": "Liquid Viscous (Simple)",
     "url": "shaders/liquid-viscous-simple.wgsl"
+  },
+  {
+    "id": "plasma",
+    "name": "Plasma Ball",
+    "url": "shaders/plasma.wgsl"
   }
 ]

@@ -31,6 +31,15 @@ export class Renderer {
     private fogDensity: number = 0.7;
     private shaderList: ShaderEntry[] = [];
 
+    // Plasma Mode State
+    private plasmaBalls: {
+        x: number, y: number, vx: number, vy: number,
+        r: number, g: number, b: number, radius: number,
+        age: number, maxAge: number, seed: number
+    }[] = [];
+    private plasmaBuffer!: GPUBuffer;
+    private MAX_PLASMA_BALLS = 50;
+
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
     }
@@ -41,6 +50,99 @@ export class Renderer {
 
     public addRipplePoint(x: number, y: number) {
         this.ripplePoints.push({x, y, startTime: performance.now() / 1000.0});
+    }
+
+    public firePlasma(x: number, y: number, vx: number, vy: number) {
+        if (this.plasmaBalls.length >= this.MAX_PLASMA_BALLS) return;
+
+        // Random colors (fire/plasma palette: red, orange, yellow, sometimes blue/purple)
+        // Let's do a mix.
+        const r = 0.8 + Math.random() * 0.2;
+        const g = Math.random() * 0.6;
+        const b = Math.random() * 0.2;
+
+        this.plasmaBalls.push({
+            x, y, vx, vy,
+            r, g, b,
+            radius: 0.05 + Math.random() * 0.08, // Bigger Base radius (0.05 - 0.13)
+            age: 0,
+            maxAge: 5.0 + Math.random() * 5.0, // Lives for 5-10 seconds
+            seed: Math.random() * 100.0
+        });
+    }
+
+    private updatePlasma(dt: number) {
+        // 1. Update positions and age
+        for (let i = this.plasmaBalls.length - 1; i >= 0; i--) {
+            const ball = this.plasmaBalls[i];
+            ball.x += ball.vx * dt;
+            ball.y += ball.vy * dt;
+            ball.age += dt;
+
+            // Gravity? Maybe slight gravity or just drag?
+            // "Strands or wisps" might imply some drag.
+            ball.vx *= 0.99;
+            ball.vy *= 0.99;
+
+            if (ball.age > ball.maxAge ||
+                ball.x < -0.5 || ball.x > 1.5 ||
+                ball.y < -0.5 || ball.y > 1.5) {
+                // Remove if too old or far off screen
+                this.plasmaBalls.splice(i, 1);
+            }
+        }
+
+        // 2. Collisions (Ball vs Ball)
+        for (let i = 0; i < this.plasmaBalls.length; i++) {
+            for (let j = i + 1; j < this.plasmaBalls.length; j++) {
+                const b1 = this.plasmaBalls[i];
+                const b2 = this.plasmaBalls[j];
+
+                const dx = b2.x - b1.x;
+                const dy = b2.y - b1.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const minDist = b1.radius + b2.radius;
+
+                if (dist < minDist && dist > 0.0001) {
+                    // Elastic collision approximation
+                    // Normalize normal vector
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+
+                    // Relative velocity
+                    const dvx = b1.vx - b2.vx;
+                    const dvy = b1.vy - b2.vy;
+
+                    // Speed along normal
+                    const normalVel = dvx * nx + dvy * ny;
+
+                    // If moving away, ignore
+                    if (normalVel < 0) continue;
+
+                    // Impulse (assume equal mass for simplicity)
+                    // j = -(1 + e) * v_rel_norm / (1/m1 + 1/m2)
+                    // e = 1 (elastic)
+                    // m1=m2=1
+                    // j = -2 * normalVel / 2 = -normalVel
+
+                    const impulse = -normalVel; // restitution 1.0
+
+                    b1.vx += impulse * nx;
+                    b1.vy += impulse * ny;
+                    b2.vx -= impulse * nx;
+                    b2.vy -= impulse * ny;
+
+                    // Separate to prevent sticking
+                    const overlap = minDist - dist;
+                    const separationX = nx * overlap * 0.5;
+                    const separationY = ny * overlap * 0.5;
+                    b1.x -= separationX;
+                    b1.y -= separationY;
+                    b2.x += separationX;
+                    b2.y += separationY;
+                }
+            }
+        }
     }
 
     public updateZoomParams(params: {
@@ -227,6 +329,11 @@ export class Renderer {
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
         });
         this.device.queue.writeBuffer(this.extraBuffer, 0, initialExtraData);
+
+        this.plasmaBuffer = this.device.createBuffer({
+            size: this.MAX_PLASMA_BALLS * 48, // 3 * vec4<f32> (16 bytes) = 48 bytes per ball
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
     }
 
     private async createPipelines(): Promise<void> {
@@ -282,6 +389,7 @@ export class Renderer {
                 { binding: 9, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'float' as GPUTextureSampleType } },
                 { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' as GPUBufferBindingType } },
                 { binding: 11, visibility: GPUShaderStage.COMPUTE, sampler: { type: 'comparison' as GPUSamplerBindingType } },
+                { binding: 12, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' as GPUBufferBindingType } },
             ],
         });
 
@@ -307,7 +415,7 @@ export class Renderer {
     }
 
     private createBindGroups(): void {
-        if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTextureA|| !this.dataTextureB || !this.dataTextureC || !this.extraBuffer || !this.computeUniformBuffer) return;
+        if (!this.imageTexture || !this.nonFilteringSampler || !this.comparisonSampler || !this.depthTextureRead || !this.depthTextureWrite || !this.dataTextureA|| !this.dataTextureB || !this.dataTextureC || !this.extraBuffer || !this.computeUniformBuffer || !this.plasmaBuffer) return;
 
         if (this.videoTexture) {
             this.bindGroups.set('galaxy', this.device.createBindGroup({
@@ -365,6 +473,7 @@ export class Renderer {
             {binding: 9, resource: this.dataTextureC.createView()},
             {binding: 10, resource: {buffer: this.extraBuffer}},
             {binding: 11, resource: this.comparisonSampler},
+            {binding: 12, resource: {buffer: this.plasmaBuffer}},
         ];
 
         const computeBindGroup = this.device.createBindGroup({
@@ -405,6 +514,39 @@ export class Renderer {
         const isComputeMode = this.shaderList.some(s => s.id === mode);
 
         if (isComputeMode) {
+            // Plasma Physics Update
+            if (mode === 'plasma') {
+                // Calculate dt (roughly)
+                // We don't have precise dt here, let's assume 60fps or measure it?
+                // The render loop uses performance.now(), but we don't track lastFrameTime in class.
+                // But render is called from animate() which runs at rAF.
+                // Let's assume 16ms or use a static small step for stability.
+                this.updatePlasma(0.016);
+
+                // Write to Buffer
+                const plasmaData = new Float32Array(this.MAX_PLASMA_BALLS * 12); // 12 floats per ball
+                for (let i = 0; i < this.plasmaBalls.length; i++) {
+                    const b = this.plasmaBalls[i];
+                    const offset = i * 12;
+                    // vec4 1: x, y, vx, vy
+                    plasmaData[offset + 0] = b.x;
+                    plasmaData[offset + 1] = b.y;
+                    plasmaData[offset + 2] = b.vx;
+                    plasmaData[offset + 3] = b.vy;
+                    // vec4 2: r, g, b, radius
+                    plasmaData[offset + 4] = b.r;
+                    plasmaData[offset + 5] = b.g;
+                    plasmaData[offset + 6] = b.b;
+                    plasmaData[offset + 7] = b.radius;
+                    // vec4 3: age, maxAge, seed, unused
+                    plasmaData[offset + 8] = b.age;
+                    plasmaData[offset + 9] = b.maxAge;
+                    plasmaData[offset + 10] = b.seed;
+                    plasmaData[offset + 11] = 0.0;
+                }
+                this.device.queue.writeBuffer(this.plasmaBuffer, 0, plasmaData);
+            }
+
             const computePass = commandEncoder.beginComputePass();
             const computeBG = this.bindGroups.get('compute');
 
@@ -421,7 +563,12 @@ export class Renderer {
 
                 const uniformArray = new Float32Array(12 + this.MAX_RIPPLES * 4);
                 uniformArray.set([currentTime, this.ripplePoints.length, this.canvas.width, this.canvas.height], 0);
-                uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4);
+                uniformArray.set([currentTime, farthestPoint.x, farthestPoint.y, 0], 4); // Re-using this slot for mouse info if needed?
+
+                // For plasma mode, we might want to pass the number of active balls or other config
+                // But we can just deduce it from the buffer (age > maxAge is dead)
+                // or pass it in config.y (rippleCount) if we wanted, but here we are using ripplePoints for standard ripples.
+                // Plasma balls are separate.
 
                 const zoomParams = new Float32Array([
                     this.fgSpeed,
