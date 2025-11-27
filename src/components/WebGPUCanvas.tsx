@@ -31,14 +31,16 @@ const WebGPUCanvas: React.FC<WebGPUCanvasProps> = ({ mode, source, zoom, panX, p
         (async () => {
             const success = await renderer.init();
             if (success) {
-                currentRendererRef.current = renderer;
+                if (rendererRef) {
+                    (rendererRef as React.MutableRefObject<Renderer | null>).current = renderer;
+                }
             }
         })();
         
         return () => {
             cancelAnimationFrame(animationFrameId.current);
         };
-    }, []);
+    }, [rendererRef]);
     
     useEffect(() => {
         let active = true;

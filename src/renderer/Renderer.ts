@@ -1,7 +1,7 @@
 import { RenderMode } from './types';
 
 export class Renderer {
-    private canvas: HTMLCanvasElement;
+    public canvas: HTMLCanvasElement;
     private device!: GPUDevice;
     private context!: GPUCanvasContext;
     private presentationFormat!: GPUTextureFormat;
