@@ -112,31 +112,9 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanora
                     // Keep opacity at 1 so we get valid pixel data; hiding is handled by z-index in App.tsx
                     opacity: 1,
                     pointerEvents: 'auto',
-                    zIndex: 1,
                 }}
             />
 
-            {/* Navigation Overlay */}
-            <div style={{
-                position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)',
-                zIndex: 100, display: 'flex', gap: 10, pointerEvents: 'auto'
-            }}>
-                <button className="control-btn" onClick={handleMoveForward}>Forward</button>
-                <button className="control-btn" onClick={() => panorama?.setZoom(panorama.getZoom() + 1)}>+</button>
-                <button className="control-btn" onClick={() => panorama?.setZoom(panorama.getZoom() - 1)}>-</button>
-            </div>
-
-            <style>{`
-                .control-btn {
-                    padding: 8px 16px;
-                    background: rgba(0,0,0,0.6);
-                    color: white;
-                    border: 1px solid #444;
-                    border-radius: 4px;
-                    cursor: pointer;
-                }
-                .control-btn:hover { background: rgba(0,0,0,0.8); }
-            `}</style>
         </div>
     );
 };
