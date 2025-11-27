@@ -20,6 +20,7 @@ function App() {
     const [isConnected, setIsConnected] = useState(false);
     const [panorama, setPanorama] = useState<google.maps.StreetViewPanorama | null>(null);
     const [isCruiseMode, setIsCruiseMode] = useState(false);
+    const [isInteractingWithMap, setIsInteractingWithMap] = useState(false);
 
     const GOOGLE_MAPS_KEY = "AIzaSyABKwxIeRZX7VcFIejGkpSplxST_E0-Xn0";
     const rendererRef = useRef<Renderer | null>(null);
@@ -90,6 +91,7 @@ function App() {
                 onZoom={handleZoom}
                 onMove={handleMove}
                 onRightClickMove={handleRightClickMove}
+                onInteractionChange={setIsInteractingWithMap}
             />
 
             <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: isConnected ? 0 : 2 }}>
@@ -100,7 +102,7 @@ function App() {
                 />
             </div>
 
-            <div data-testid="webgpu-canvas-container" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: isConnected ? 2 : 0, pointerEvents: isConnected ? 'auto' : 'none', opacity: isConnected ? 1 : 0 }}>
+            <div data-testid="webgpu-canvas-container" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: isConnected ? 2 : 0, pointerEvents: isInteractingWithMap ? 'none' : (isConnected ? 'auto' : 'none'), opacity: isConnected ? 1 : 0 }}>
                 <WebGPUCanvas
                     rendererRef={rendererRef}
                     mode={mode}
