@@ -1,7 +1,7 @@
 import { RenderMode } from './types';
 
 export class Renderer {
-    private canvas: HTMLCanvasElement;
+    public canvas: HTMLCanvasElement;
     private device!: GPUDevice;
     private context!: GPUCanvasContext;
     private presentationFormat!: GPUTextureFormat;
@@ -10,6 +10,8 @@ export class Renderer {
     private sampler!: GPUSampler;
     private texture!: GPUTexture; // static image texture
     private videoTexture?: GPUTexture; // dynamic texture for video/canvas frames
+    private videoTextureWidth: number = 0;
+    private videoTextureHeight: number = 0;
     private uniformBuffer!: GPUBuffer;
 
     constructor(canvas: HTMLCanvasElement) {
@@ -89,6 +91,8 @@ export class Renderer {
             format: 'rgba8unorm',
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
+        this.videoTextureWidth = width;
+        this.videoTextureHeight = height;
     }
 
     // Helper to update bind group when texture changes
@@ -184,7 +188,7 @@ export class Renderer {
                 // Resize/Create dynamic video texture if dimensions changed
                 // Note: GPUTexture does not expose width/height directly in the spec, but existing code
                 // used checks against texture.width/height; to be defensive, recreate unconditionally if absent
-                if (!this.videoTexture) {
+                if (!this.videoTexture || this.videoTextureWidth !== srcWidth || this.videoTextureHeight !== srcHeight) {
                     this.createVideoTexture(srcWidth, srcHeight);
                     // Rebind so shader uses the videoTexture immediately
                     this.updateBindGroup();

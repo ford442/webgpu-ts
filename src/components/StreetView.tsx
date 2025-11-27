@@ -54,6 +54,9 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanora
             if (onPanoramaReady) onPanoramaReady(panoInstance);
 
             // --- POLLING FOR VALID CANVAS ---
+            // Keep checking because Google Maps might replace the canvas when moving
+            let lastCanvas: HTMLCanvasElement | null = null;
+
             checkForCanvas = window.setInterval(() => {
                 if (panoRef.current) {
                     const canvases = panoRef.current.getElementsByTagName('canvas');
@@ -61,12 +64,12 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanora
                         const canvas = canvases[0];
                         // Only accept if it has real dimensions (fixes the 1px stripe issue)
                         if (canvas.width > 100 && canvas.height > 100) {
-                            console.log(`[StreetView] Canvas ready: ${canvas.width}x${canvas.height}`);
-                            onCanvasReady(canvas);
-                            setCanvasFound(true);
-                            if (checkForCanvas) {
-                                clearInterval(checkForCanvas);
-                                checkForCanvas = null;
+                            // If it's a different canvas element, notify the parent
+                            if (canvas !== lastCanvas) {
+                                console.log(`[StreetView] New canvas detected: ${canvas.width}x${canvas.height}`);
+                                lastCanvas = canvas;
+                                onCanvasReady(canvas);
+                                setCanvasFound(true);
                             }
                         }
                     }
@@ -106,34 +109,12 @@ const StreetView: React.FC<StreetViewProps> = ({ onCanvasReady, apiKey, onPanora
                     position: 'absolute',
                     top: 0,
                     left: 0,
-                    // Keep a tiny non-zero opacity so the browser continues to rasterize the canvas
-                    opacity: 0.01,
+                    // Keep opacity at 1 so we get valid pixel data; hiding is handled by z-index in App.tsx
+                    opacity: 1,
                     pointerEvents: 'auto',
-                    zIndex: 1,
                 }}
             />
 
-            {/* Navigation Overlay */}
-            <div style={{
-                position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)',
-                zIndex: 100, display: 'flex', gap: 10, pointerEvents: 'auto'
-            }}>
-                <button className="control-btn" onClick={handleMoveForward}>Forward</button>
-                <button className="control-btn" onClick={() => panorama?.setZoom(panorama.getZoom() + 1)}>+</button>
-                <button className="control-btn" onClick={() => panorama?.setZoom(panorama.getZoom() - 1)}>-</button>
-            </div>
-
-            <style>{`
-                .control-btn {
-                    padding: 8px 16px;
-                    background: rgba(0,0,0,0.6);
-                    color: white;
-                    border: 1px solid #444;
-                    border-radius: 4px;
-                    cursor: pointer;
-                }
-                .control-btn:hover { background: rgba(0,0,0,0.8); }
-            `}</style>
         </div>
     );
 };
