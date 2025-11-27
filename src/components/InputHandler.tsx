@@ -6,12 +6,13 @@ interface InputHandlerProps {
     onZoom: (deltaZ: number) => void;
     onMove: (direction: 'forward' | 'backward' | 'left' | 'right') => void;
     onRightClickMove: () => void; // Specific callback for right-click forward movement
+    onInteractionChange: (isInteracting: boolean) => void;
 
     // State from the parent to control behavior
     isEnabled: boolean; // Controls whether the handler is active
 }
 
-const InputHandler: React.FC<InputHandlerProps> = ({ onPan, onZoom, onMove, onRightClickMove, isEnabled }) => {
+const InputHandler: React.FC<InputHandlerProps> = ({ onPan, onZoom, onMove, onRightClickMove, onInteractionChange, isEnabled }) => {
     const isMouseDownRef = useRef(false);
 
     useEffect(() => {
@@ -20,12 +21,14 @@ const InputHandler: React.FC<InputHandlerProps> = ({ onPan, onZoom, onMove, onRi
         const handleMouseDown = (e: MouseEvent) => {
             if (e.button === 0) { // Left mouse button
                 isMouseDownRef.current = true;
+                onInteractionChange(true);
             }
         };
 
         const handleMouseUp = (e: MouseEvent) => {
             if (e.button === 0) { // Left mouse button
                 isMouseDownRef.current = false;
+                onInteractionChange(false);
             }
         };
 
